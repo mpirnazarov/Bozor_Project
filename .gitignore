@@ -1,0 +1,71 @@
+# Environment
+.env
+.env.local
+.env.production
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Node.js
+node_modules/
+dist/
+build/
+.next/
+.cache/
+*.log
+npm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Docker
+.docker/
+
+# Logs
+logs/
+*.log
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+postgres_data/
+redis_data/
+# Demo uchun seed DB — repoga kiritiladi (Railway startup_seed o'qiydi)
+!backend/bazar.db
+!data/bazar.db
+
+# SSL
+nginx/ssl/*.pem
+nginx/ssl/*.key
+
+# Uploaded files
+uploads/
+
+# Test
+.tox/
+.nox/
+
+# Yaratilgan fayllar
+.python-version
+poetry.lock
+package-lock.json

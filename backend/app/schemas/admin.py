@@ -1,0 +1,69 @@
+"""Admin endpointlari uchun schemas."""
+from datetime import datetime
+from decimal import Decimal
+
+from pydantic import BaseModel, ConfigDict
+
+from app.schemas.dashboard import Period, ServicesBreakdown
+
+
+class DashboardUpdate(BaseModel):
+    """Admin dashboard summalarini yangilaydi (har biri alohida)."""
+
+    total: int
+    paid: int
+    services: ServicesBreakdown
+    period: Period | None = None
+
+
+class ShopUpdate(BaseModel):
+    """Magazin maydonlarini tahrirlash (faqat berilganlari yangilanadi)."""
+
+    pavilion_code: str | None = None
+    pavilion_id: int | None = None
+    inn: str | None = None
+    shop_type: str | None = None
+    purpose: str | None = None
+    monthly_rent: Decimal | None = None
+    is_active: bool | None = None
+
+
+class PavilionUpdate(BaseModel):
+    """Pavilion (xarita) maydonlarini tahrirlash."""
+
+    display_name: str | None = None
+    display_text: str | None = None
+    pavilion_type: str | None = None
+    polygon_points: str | None = None
+    fill_color: str | None = None
+    fill_opacity: float | None = None
+    stroke_color: str | None = None
+    stroke_width: float | None = None
+    label_x: float | None = None
+    label_y: float | None = None
+    label_rotation: float | None = None
+    is_active: bool | None = None
+    display_order: int | None = None
+    meta: dict | None = None
+
+
+class ImportResult(BaseModel):
+    """Excel import natijasi."""
+
+    rows_read: int
+    inserted: int
+    updated: int
+    skipped: int
+    errors: list[str] = []
+
+
+class AuditLogOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: int | None
+    action: str
+    resource_type: str | None
+    resource_id: str | None
+    changes: dict | None
+    created_at: datetime

@@ -1,0 +1,77 @@
+"""Pavilions endpoint — /api/pavilions."""
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database import get_db
+from app.deps import CurrentUser
+from app.models import Pavilion, Shop
+from app.schemas.billing import ShopOut
+from app.schemas.pavilion import PavilionDetailOut, PavilionOut
+from app.services.billing_service import compute_batch_status
+
+router = APIRouter()
+
+
+@router.get("", response_model=list[PavilionOut])
+async def list_pavilions(
+    _user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    include_inactive: bool = Query(False),
+) -> list[Pavilion]:
+    """Barcha pavilionlar (xarita uchun)."""
+    stmt = select(Pavilion).order_by(Pavilion.display_order)
+    if not include_inactive:
+        stmt = stmt.where(Pavilion.is_active.is_(True))
+    result = await db.execute(stmt)
+    return list(result.scalars())
+
+
+@router.get("/{pavilion_id}", response_model=PavilionDetailOut)
+async def get_pavilion(
+    pavilion_id: int,
+    _user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> PavilionDetailOut:
+    """Bitta pavilion + magazinlar soni."""
+    pav = await db.get(Pavilion, pavilion_id)
+    if pav is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Pavilion topilmadi")
+
+    count = await db.scalar(
+        select(func.count()).select_from(Shop).where(Shop.pavilion_id == pavilion_id)
+    )
+    detail = PavilionDetailOut.model_validate(pav)
+    detail.shop_count = count or 0
+    return detail
+
+
+@router.get("/{pavilion_id}/shops")
+async def get_pavilion_shops(
+    pavilion_id: int,
+    _user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    year: int = Query(2026),
+    month: int = Query(5, ge=1, le=12),
+) -> dict:
+    """Pavilion magazinlari + billing statusi (xarita tile ranglari uchun)."""
+    pav = await db.get(Pavilion, pavilion_id)
+    if pav is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Pavilion topilmadi")
+
+    result = await db.execute(
+        select(Shop).where(Shop.pavilion_id == pavilion_id, Shop.is_active.is_(True))
+    )
+    shops = list(result.scalars())
+    shop_ids = [s.shop_id for s in shops]
+    billing = await compute_batch_status(db, shop_ids, year, month)
+
+    return {
+        "pavilion_id": pavilion_id,
+        "year": year,
+        "month": month,
+        "shops": [ShopOut.model_validate(s) for s in shops],
+        "billing": billing,
+    }

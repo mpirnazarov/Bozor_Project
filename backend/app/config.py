@@ -1,0 +1,87 @@
+"""Application configuration using pydantic-settings."""
+from functools import lru_cache
+from typing import Literal
+
+from pydantic import Field, computed_field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    """Application settings — environment variables'dan o'qiladi."""
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+        extra="ignore",
+    )
+
+    # Database (Railway "postgresql://" beradi — biz asyncpg'ga normalizatsiya qilamiz)
+    DATABASE_URL: str = Field(
+        default="postgresql+asyncpg://orikzor:changeme@localhost:5432/orikzor",
+    )
+
+    # Redis
+    REDIS_URL: str = "redis://localhost:6379/0"
+
+    # JWT
+    JWT_SECRET_KEY: str = Field(min_length=32)
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 1 kun
+
+    # Environment
+    ENVIRONMENT: Literal["development", "production", "testing"] = "development"
+
+    # CORS
+    ALLOWED_ORIGINS: str = "http://localhost:3000"
+
+    # Cookie: cross-domain deploy (frontend != backend domeni) uchun "none"
+    # bo'lishi kerak. Bitta domen yoki dev'da "lax".
+    COOKIE_SAMESITE: Literal["lax", "none", "strict"] = "lax"
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def allowed_origins_list(self) -> list[str]:
+        return [o.strip() for o in self.ALLOWED_ORIGINS.split(",") if o.strip()]
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def database_url_async(self) -> str:
+        """DATABASE_URL'ni asyncpg drayveriga normalizatsiya qiladi.
+
+        Railway/Heroku 'postgresql://' yoki 'postgres://' beradi — bularni
+        'postgresql+asyncpg://' ga aylantiramiz.
+        """
+        url = self.DATABASE_URL
+        if url.startswith("postgres://"):
+            url = "postgresql://" + url[len("postgres://") :]
+        if url.startswith("postgresql://"):
+            url = "postgresql+asyncpg://" + url[len("postgresql://") :]
+        return url
+
+    # Google Sheets (yerto'la uchun)
+    SHEETS_CSV_URL: str = ""
+    SHEETS_CACHE_TTL_SECONDS: int = 3600
+
+    # Initial admin (faqat birinchi marta yaratish uchun)
+    INITIAL_ADMIN_USERNAME: str = "admin"
+    INITIAL_ADMIN_PASSWORD: str = ""
+    INITIAL_USER_USERNAME: str = "orikzor"
+    INITIAL_USER_PASSWORD: str = ""
+
+    @property
+    def is_development(self) -> bool:
+        return self.ENVIRONMENT == "development"
+
+    @property
+    def is_production(self) -> bool:
+        return self.ENVIRONMENT == "production"
+
+
+@lru_cache
+def get_settings() -> Settings:
+    """Cached settings — har safar qaytadan o'qilmasin."""
+    return Settings()
+
+
+settings = get_settings()
