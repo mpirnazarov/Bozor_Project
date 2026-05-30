@@ -40,10 +40,13 @@ export function MapView({ onSelectPavilion }: Props) {
     <div className="card overflow-hidden">
       <svg
         viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-        className="block h-auto w-full"
-        style={{ background: "#e8eef3", minHeight: 360 }}
+        width="100%"
+        className="block"
+        style={{ background: "#e8eef3", display: "block", height: "auto" }}
+        preserveAspectRatio="xMidYMid meet"
       >
-        {/* Xarita foni — map.jpg public papkaga qo'yiladi (ixtiyoriy) */}
+        {/* Xarita foni — map.jpg public papkaga qo'yiladi (ixtiyoriy).
+            Rasm yo'q bo'lsa ham polygonlar ko'rinadi. */}
         <image
           href="/map.jpg"
           x="0"
@@ -51,6 +54,9 @@ export function MapView({ onSelectPavilion }: Props) {
           width={VIEW_W}
           height={VIEW_H}
           preserveAspectRatio="xMidYMid meet"
+          onError={(e) => {
+            (e.target as SVGImageElement).style.display = "none";
+          }}
         />
 
         {pavilions.map((p) => {
