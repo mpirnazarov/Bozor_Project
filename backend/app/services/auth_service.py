@@ -51,6 +51,7 @@ async def create_user(
     role: str = UserRole.USER.value,
     full_name: str | None = None,
     email: str | None = None,
+    market_id: int | None = None,
 ) -> User:
     """
     Yangi foydalanuvchi yaratadi.
@@ -67,6 +68,7 @@ async def create_user(
         role=role,
         full_name=full_name,
         email=email,
+        market_id=market_id,
         is_active=True,
     )
     db.add(user)

@@ -5,7 +5,7 @@ from fastapi import Cookie, Depends, Header, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.user import User, UserRole
+from app.models.user import User
 from app.services.auth_service import get_user_by_id
 from app.utils.security import decode_token
 
@@ -65,8 +65,8 @@ CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
 async def require_admin(user: CurrentUser) -> User:
-    """Faqat admin rolidagi foydalanuvchilarga ruxsat beradi."""
-    if user.role != UserRole.ADMIN.value:
+    """Boshqaruv huquqi (super_admin, market_admin yoki eski admin)."""
+    if not user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Bu amal uchun admin huquqi kerak",
@@ -77,28 +77,52 @@ async def require_admin(user: CurrentUser) -> User:
 AdminUser = Annotated[User, Depends(require_admin)]
 
 
+async def require_super_admin(user: CurrentUser) -> User:
+    """Faqat super_admin (hamma bozor / super dashboard)."""
+    if not user.is_super_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bu amal uchun super admin huquqi kerak",
+        )
+    return user
+
+
+SuperAdminUser = Annotated[User, Depends(require_super_admin)]
+
+
 # === Multi-bozor: market resolver ===
 async def get_current_market(
+    user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
-    market: str = "orikzor",
+    market: str | None = None,
 ) -> "Market":
-    """So'rovdagi ?market=<slug> bo'yicha bozorni aniqlaydi.
+    """So'rovdagi bozorni aniqlaydi va kirish huquqini tekshiradi.
 
-    Default 'orikzor' — shu sababli mavjud (bitta bozorli) so'rovlar
-    o'zgarishsiz ishlaydi. Kelajakda har bozor o'z slug'i bilan chaqiriladi.
+    - super_admin: istalgan ?market=<slug> ni ko'radi (default orikzor)
+    - market_admin/viewer: faqat o'ziga biriktirilgan bozor (?market e'tiborsiz)
     """
     from sqlalchemy import select
 
     from app.models.market import Market as MarketModel
 
-    result = await db.execute(
-        select(MarketModel).where(MarketModel.slug == market)
-    )
+    # Super bo'lmagan foydalanuvchi — faqat o'z bozori
+    if not user.is_super_admin and user.market_id is not None:
+        m = await db.get(MarketModel, user.market_id)
+        if m is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Sizning bozoringiz topilmadi",
+            )
+        return m
+
+    # Super admin yoki market_id biriktirilmagan — slug bo'yicha (default orikzor)
+    slug = market or "orikzor"
+    result = await db.execute(select(MarketModel).where(MarketModel.slug == slug))
     m = result.scalar_one_or_none()
     if m is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Bozor topilmadi: {market}",
+            detail=f"Bozor topilmadi: {slug}",
         )
     return m
 

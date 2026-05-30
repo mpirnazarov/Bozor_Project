@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.deps import CurrentUser
+from app.deps import CurrentUser, SuperAdminUser
 from app.models.market import Market
 from app.schemas.market import MarketOut, SuperDashboardOut
 
@@ -32,7 +32,7 @@ async def list_markets(
 
 @router.get("/super/dashboard", response_model=SuperDashboardOut)
 async def super_dashboard(
-    _user: CurrentUser,
+    _admin: SuperAdminUser,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SuperDashboardOut:
     """Barcha bozorlar yig'ma dashboardi (super dashboard).

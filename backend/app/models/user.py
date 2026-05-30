@@ -2,15 +2,20 @@
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import Boolean, DateTime, Integer, String, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
 
 
 class UserRole(str, Enum):
+    # Eski rollar (orqaga moslik uchun saqlanadi)
     USER = "user"
     ADMIN = "admin"
+    # Multi-bozor rollari
+    SUPER_ADMIN = "super_admin"      # hamma bozor + super dashboard
+    MARKET_ADMIN = "market_admin"    # faqat o'z bozori, to'liq boshqaruv
+    MARKET_VIEWER = "market_viewer"  # faqat o'z bozori, ko'rish
 
 
 class User(Base):
@@ -20,6 +25,10 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(20), nullable=False, default=UserRole.USER.value)
+    # Qaysi bozorga biriktirilgan (super_admin uchun NULL — hammaga ruxsat)
+    market_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("markets.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -34,5 +43,14 @@ class User(Base):
         return f"<User {self.username} ({self.role})>"
 
     @property
+    def is_super_admin(self) -> bool:
+        return self.role == UserRole.SUPER_ADMIN.value
+
+    @property
     def is_admin(self) -> bool:
-        return self.role == UserRole.ADMIN.value
+        """To'liq boshqaruv huquqi (super_admin, market_admin, eski admin)."""
+        return self.role in (
+            UserRole.ADMIN.value,
+            UserRole.SUPER_ADMIN.value,
+            UserRole.MARKET_ADMIN.value,
+        )

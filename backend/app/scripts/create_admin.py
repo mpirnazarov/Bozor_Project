@@ -17,7 +17,9 @@ from app.models.user import UserRole
 from app.services.auth_service import create_user, get_user_by_username
 
 
-async def _ensure_user(username: str, password: str, role: str) -> None:
+async def _ensure_user(
+    username: str, password: str, role: str, market_id: int | None = None
+) -> None:
     """Foydalanuvchi yo'q bo'lsa yaratadi, bor bo'lsa o'tkazib yuboradi."""
     if not username or not password:
         label = username or "(bo'sh)"
@@ -29,7 +31,7 @@ async def _ensure_user(username: str, password: str, role: str) -> None:
         if existing is not None:
             print(f"⏭  '{username}' allaqachon mavjud, o'tkazildi")
             return
-        user = await create_user(db, username, password, role=role)
+        user = await create_user(db, username, password, role=role, market_id=market_id)
         print(f"✅ Yaratildi: {user.username} (role={user.role}, id={user.id})")
 
 
@@ -40,15 +42,18 @@ async def _run(args: argparse.Namespace) -> None:
         return
 
     # Aks holda .env dagi boshlang'ich foydalanuvchilar
+    # admin -> super_admin (hamma bozor)
     await _ensure_user(
         settings.INITIAL_ADMIN_USERNAME,
         settings.INITIAL_ADMIN_PASSWORD,
-        UserRole.ADMIN.value,
+        UserRole.SUPER_ADMIN.value,
     )
+    # orikzor -> market_admin (Orikzor bozori, market_id=1)
     await _ensure_user(
         settings.INITIAL_USER_USERNAME,
         settings.INITIAL_USER_PASSWORD,
-        UserRole.USER.value,
+        UserRole.MARKET_ADMIN.value,
+        market_id=1,
     )
 
 
@@ -59,7 +64,7 @@ def main() -> None:
     parser.add_argument(
         "--role",
         default=UserRole.USER.value,
-        choices=[UserRole.USER.value, UserRole.ADMIN.value],
+        choices=[r.value for r in UserRole],
         help="Rol (default: user)",
     )
     args = parser.parse_args()

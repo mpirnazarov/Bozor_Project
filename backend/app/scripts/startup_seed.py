@@ -1,8 +1,9 @@
 """Ishga tushganda ma'lumotlarni avtomatik yuklash (demo uchun).
 
-- Pavilion seed va settings doim yuklanadi (idempotent upsert).
-- Agar DB'da magazin yo'q bo'lsa va bazar.db mavjud bo'lsa — to'liq SQLite
-  migratsiyasini ishga tushiradi.
+MUHIM: seed FAQAT birinchi marta (jadval bo'sh bo'lganda) ishlaydi.
+Mavjud pavilion/magazinlar QAYTA YOZILMAYDI — shu sababli admin panelda
+qilingan o'zgarishlar (region joylashuvi va h.k.) har deploy'da saqlanib qoladi.
+
 Bu skript xato bo'lsa ham serverni to'xtatmaydi (demo qulayligi uchun).
 """
 import asyncio
@@ -11,12 +12,12 @@ from pathlib import Path
 from sqlalchemy import func, select
 
 from app.database import AsyncSessionLocal
-from app.models import Shop
+from app.models import Pavilion, Shop
 
 
-async def _shop_count() -> int:
+async def _count(model) -> int:
     async with AsyncSessionLocal() as db:
-        return await db.scalar(select(func.count()).select_from(Shop)) or 0
+        return await db.scalar(select(func.count()).select_from(model)) or 0
 
 
 def _find_sqlite() -> Path | None:
@@ -33,24 +34,32 @@ def _find_sqlite() -> Path | None:
 
 async def _run() -> None:
     try:
-        count = await _shop_count()
+        shop_count = await _count(Shop)
+        pav_count = await _count(Pavilion)
     except Exception as e:  # noqa: BLE001
         print(f"⚠ startup_seed: DB tekshirib bo'lmadi ({e}) — o'tkazildi")
         return
 
-    if count > 0:
-        print(f"ℹ startup_seed: {count} ta magazin allaqachon bor — import o'tkazildi")
-        # Pavilion/settings baribir yangilab qo'yamiz (idempotent)
-        await _seed_only()
+    # Magazinlar allaqachon bor — HECH NARSANI qayta yozmaymiz.
+    # (pavilionlar ham mavjud, admin o'zgarishlari saqlanadi)
+    if shop_count > 0:
+        print(
+            f"ℹ startup_seed: {shop_count} magazin, {pav_count} pavilion mavjud — "
+            "seed o'tkazildi (admin o'zgarishlari saqlanadi)"
+        )
+        # Faqat pavilion umuman bo'lmasa (g'alati holat) — bir marta seed
+        if pav_count == 0:
+            await _seed_pavilions_only()
         return
 
+    # Bu yerga faqat BIRINCHI deploy'da (DB butunlay bo'sh) yetib kelamiz
     sqlite_path = _find_sqlite()
     if sqlite_path is None:
-        print("ℹ startup_seed: bazar.db topilmadi — faqat pavilion/settings seed")
-        await _seed_only()
+        print("ℹ startup_seed: bazar.db topilmadi — faqat pavilion seed (birinchi marta)")
+        await _seed_pavilions_only()
         return
 
-    print(f"→ startup_seed: to'liq migratsiya ({sqlite_path})")
+    print(f"→ startup_seed: BIRINCHI to'liq migratsiya ({sqlite_path})")
     from app.scripts.migrate_from_sqlite import _run as migrate_run
 
     try:
@@ -59,18 +68,15 @@ async def _run() -> None:
         print(f"⚠ startup_seed: migratsiya xatosi ({e})")
 
 
-async def _seed_only() -> None:
-    """Faqat pavilion va settings seed (magazinlarsiz)."""
-    from app.scripts.migrate_from_sqlite import (
-        _migrate_pavilions,
-        _migrate_settings,
-    )
+async def _seed_pavilions_only() -> None:
+    """Faqat pavilion va settings seed — FAQAT bo'sh bo'lganda chaqiriladi."""
+    from app.scripts.migrate_from_sqlite import _migrate_pavilions, _migrate_settings
 
     try:
         async with AsyncSessionLocal() as db:
             await _migrate_pavilions(db)
             await _migrate_settings(db)
-        print("✅ startup_seed: pavilion + settings yangilandi")
+        print("✅ startup_seed: pavilion + settings birinchi marta yuklandi")
     except Exception as e:  # noqa: BLE001
         print(f"⚠ startup_seed: seed xatosi ({e})")
 

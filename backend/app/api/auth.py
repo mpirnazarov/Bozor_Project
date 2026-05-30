@@ -47,7 +47,20 @@ async def login(
     token = create_access_token(subject=user.id, extra_claims={"role": user.role})
     _set_auth_cookie(response, token)
 
-    return TokenResponse(access_token=token, user=UserOut.model_validate(user))
+    user_out = await _user_out_with_market(db, user)
+    return TokenResponse(access_token=token, user=user_out)
+
+
+async def _user_out_with_market(db: AsyncSession, user) -> UserOut:
+    """UserOut yaratadi va market_slug ni to'ldiradi (auto-routing uchun)."""
+    out = UserOut.model_validate(user)
+    if user.market_id is not None:
+        from app.models.market import Market
+
+        m = await db.get(Market, user.market_id)
+        if m is not None:
+            out.market_slug = m.slug
+    return out
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
@@ -57,6 +70,9 @@ async def logout(response: Response) -> None:
 
 
 @router.get("/me", response_model=UserOut)
-async def me(user: CurrentUser) -> UserOut:
+async def me(
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> UserOut:
     """Joriy foydalanuvchi ma'lumotlari."""
-    return UserOut.model_validate(user)
+    return await _user_out_with_market(db, user)
