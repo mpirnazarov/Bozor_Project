@@ -3,7 +3,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2, Save, X, MousePointer2 } from "lucide-react";
 import { getPavilions } from "@/api/pavilions";
 import { createPavilion, updatePavilion, deletePavilion } from "@/api/admin";
-import type { Pavilion } from "@/types/api";
 
 const VIEW_W = 1568;
 const VIEW_H = 1109;

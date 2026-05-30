@@ -1,5 +1,5 @@
 import { apiClient } from "./client";
-import type { Dashboard, ServicesBreakdown } from "@/types/api";
+import type { Dashboard, Pavilion, ServicesBreakdown } from "@/types/api";
 
 export interface DashboardUpdate {
   total: number;
@@ -53,7 +53,6 @@ export async function importExcel(
 }
 
 // === Pavilion (xarita region) boshqaruvi ===
-import type { Pavilion } from "@/types/api";
 
 export interface PavilionInput {
   display_name: string;
