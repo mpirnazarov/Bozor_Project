@@ -6,6 +6,7 @@ from enum import Enum
 from sqlalchemy import (
     CheckConstraint,
     DateTime,
+    ForeignKey,
     Index,
     Integer,
     Numeric,
@@ -39,6 +40,10 @@ class MonthlyBalance(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     inn: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    market_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("markets.id", ondelete="CASCADE"),
+        default=1, nullable=False, index=True,
+    )
     year: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     month: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     category: Mapped[str] = mapped_column(String(20), nullable=False)

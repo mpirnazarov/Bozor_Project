@@ -1,5 +1,5 @@
 """Pavilion model — xaritadagi polygonlar."""
-from sqlalchemy import Boolean, Float, Integer, String, Text
+from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -10,6 +10,10 @@ class Pavilion(Base):
     __tablename__ = "pavilions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    market_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("markets.id", ondelete="CASCADE"),
+        default=1, nullable=False, index=True,
+    )
     display_name: Mapped[str] = mapped_column(String(100), nullable=False)
     display_text: Mapped[str | None] = mapped_column(String(10), nullable=True)
     pavilion_type: Mapped[str | None] = mapped_column(String(50), nullable=True)

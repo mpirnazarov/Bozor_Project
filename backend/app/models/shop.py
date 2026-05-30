@@ -22,6 +22,10 @@ class Shop(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     shop_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
+    market_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("markets.id", ondelete="CASCADE"),
+        default=1, nullable=False, index=True,
+    )
     pavilion_code: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     pavilion_id: Mapped[int | None] = mapped_column(
         ForeignKey("pavilions.id", ondelete="SET NULL"), nullable=True

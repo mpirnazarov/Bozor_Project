@@ -28,6 +28,25 @@ class ShopUpdate(BaseModel):
     is_active: bool | None = None
 
 
+class PavilionCreate(BaseModel):
+    """Yangi pavilion (region) yaratish — admin xarita muharriridan."""
+
+    display_name: str
+    display_text: str | None = None
+    pavilion_type: str | None = "block"
+    polygon_points: str  # "x1,y1 x2,y2 ..." (ko'p qirrali)
+    fill_color: str = "#d4a373"
+    fill_opacity: float = 0.5
+    stroke_color: str = "#b45309"
+    stroke_width: float = 3
+    label_x: float | None = None
+    label_y: float | None = None
+    label_rotation: float = 0
+    is_active: bool = True
+    display_order: int = 0
+    meta: dict = {}
+
+
 class PavilionUpdate(BaseModel):
     """Pavilion (xarita) maydonlarini tahrirlash."""
 

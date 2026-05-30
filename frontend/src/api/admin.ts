@@ -51,3 +51,40 @@ export async function importExcel(
   });
   return data;
 }
+
+// === Pavilion (xarita region) boshqaruvi ===
+import type { Pavilion } from "@/types/api";
+
+export interface PavilionInput {
+  display_name: string;
+  display_text?: string | null;
+  pavilion_type?: string | null;
+  polygon_points: string;
+  fill_color?: string;
+  fill_opacity?: number;
+  stroke_color?: string;
+  stroke_width?: number;
+  label_x?: number | null;
+  label_y?: number | null;
+  label_rotation?: number;
+  is_active?: boolean;
+  display_order?: number;
+  meta?: Record<string, unknown>;
+}
+
+export async function createPavilion(payload: PavilionInput): Promise<Pavilion> {
+  const { data } = await apiClient.post<Pavilion>("/admin/pavilions", payload);
+  return data;
+}
+
+export async function updatePavilion(
+  id: number,
+  payload: Partial<PavilionInput>,
+): Promise<Pavilion> {
+  const { data } = await apiClient.put<Pavilion>(`/admin/pavilions/${id}`, payload);
+  return data;
+}
+
+export async function deletePavilion(id: number): Promise<void> {
+  await apiClient.delete(`/admin/pavilions/${id}`);
+}

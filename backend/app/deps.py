@@ -75,3 +75,35 @@ async def require_admin(user: CurrentUser) -> User:
 
 
 AdminUser = Annotated[User, Depends(require_admin)]
+
+
+# === Multi-bozor: market resolver ===
+async def get_current_market(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    market: str = "orikzor",
+) -> "Market":
+    """So'rovdagi ?market=<slug> bo'yicha bozorni aniqlaydi.
+
+    Default 'orikzor' — shu sababli mavjud (bitta bozorli) so'rovlar
+    o'zgarishsiz ishlaydi. Kelajakda har bozor o'z slug'i bilan chaqiriladi.
+    """
+    from sqlalchemy import select
+
+    from app.models.market import Market as MarketModel
+
+    result = await db.execute(
+        select(MarketModel).where(MarketModel.slug == market)
+    )
+    m = result.scalar_one_or_none()
+    if m is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Bozor topilmadi: {market}",
+        )
+    return m
+
+
+# Type alias (import oxirida — sirkular importdan qochish uchun)
+from app.models.market import Market  # noqa: E402
+
+CurrentMarket = Annotated[Market, Depends(get_current_market)]

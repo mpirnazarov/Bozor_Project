@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.deps import CurrentUser
+from app.deps import CurrentMarket, CurrentUser
 from app.models import Pavilion, Shop
 from app.schemas.billing import ShopOut
 from app.schemas.pavilion import PavilionDetailOut, PavilionOut
@@ -18,11 +18,16 @@ router = APIRouter()
 @router.get("", response_model=list[PavilionOut])
 async def list_pavilions(
     _user: CurrentUser,
+    market: CurrentMarket,
     db: Annotated[AsyncSession, Depends(get_db)],
     include_inactive: bool = Query(False),
 ) -> list[Pavilion]:
-    """Barcha pavilionlar (xarita uchun)."""
-    stmt = select(Pavilion).order_by(Pavilion.display_order)
+    """Tanlangan bozorning pavilionlari (xarita uchun)."""
+    stmt = (
+        select(Pavilion)
+        .where(Pavilion.market_id == market.id)
+        .order_by(Pavilion.display_order)
+    )
     if not include_inactive:
         stmt = stmt.where(Pavilion.is_active.is_(True))
     result = await db.execute(stmt)

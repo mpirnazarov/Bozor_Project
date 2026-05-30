@@ -2,11 +2,11 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.deps import AdminUser
+from app.deps import AdminUser, CurrentMarket
 from app.models import (
     DASHBOARD_SETTINGS_KEY,
     AuditLog,
@@ -18,6 +18,7 @@ from app.schemas.admin import (
     AuditLogOut,
     DashboardUpdate,
     ImportResult,
+    PavilionCreate,
     PavilionUpdate,
     ShopUpdate,
 )
@@ -103,6 +104,52 @@ async def update_pavilion(
     await db.commit()
     await db.refresh(pav)
     return pav
+
+
+@router.post("/pavilions", response_model=PavilionOut, status_code=status.HTTP_201_CREATED)
+async def create_pavilion(
+    payload: PavilionCreate,
+    admin: AdminUser,
+    market: CurrentMarket,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> Pavilion:
+    """Yangi pavilion (region) yaratish — admin xarita muharriridan.
+
+    ?market=<slug> bilan qaysi bozorga tegishliligi aniqlanadi (default orikzor).
+    """
+    # Keyingi bo'sh ID ni topamiz (max + 1, kamida 100 dan boshlanadi
+    # yangi qo'lda chizilganlar uchun, seed ID'lar bilan chalkashmasin)
+    max_id = await db.scalar(select(func.max(Pavilion.id)))
+    new_id = max(int(max_id or 0) + 1, 100)
+
+    data = payload.model_dump()
+    meta = data.pop("meta", {})
+    pav = Pavilion(id=new_id, market_id=market.id, meta=meta, **data)
+    db.add(pav)
+
+    await write_audit(
+        db, admin.id, "create_pavilion", "pavilion", str(new_id), data
+    )
+    await db.commit()
+    await db.refresh(pav)
+    return pav
+
+
+@router.delete("/pavilions/{pavilion_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_pavilion(
+    pavilion_id: int,
+    admin: AdminUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
+    """Pavilionni o'chirish (faqat qo'lda qo'shilganlar, ID >= 100)."""
+    pav = await db.get(Pavilion, pavilion_id)
+    if pav is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Pavilion topilmadi")
+    await write_audit(
+        db, admin.id, "delete_pavilion", "pavilion", str(pavilion_id), None
+    )
+    await db.delete(pav)
+    await db.commit()
 
 
 @router.post("/import/excel", response_model=ImportResult)

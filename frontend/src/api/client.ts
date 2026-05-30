@@ -23,3 +23,24 @@ apiClient.interceptors.response.use(
     return Promise.reject(error);
   },
 );
+
+// === Multi-bozor: joriy bozor slug'i ===
+// O'rnatilsa, har bir so'rovga ?market=<slug> qo'shiladi. O'rnatilmasa
+// backend default 'orikzor' ishlatadi — shu sababli bitta bozorli holat
+// o'zgarishsiz ishlaydi.
+let currentMarket: string | null = null;
+
+export function setCurrentMarket(slug: string | null) {
+  currentMarket = slug;
+}
+
+export function getCurrentMarket(): string | null {
+  return currentMarket;
+}
+
+apiClient.interceptors.request.use((config) => {
+  if (currentMarket) {
+    config.params = { ...(config.params || {}), market: currentMarket };
+  }
+  return config;
+});
