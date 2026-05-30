@@ -71,6 +71,8 @@ export function MapView({ onSelectPavilion }: Props) {
   }
 
   function handlePointerDown(e: React.PointerEvent) {
+    // Pointer'ni ushlab olamiz — drag faqat xarita ichida qoladi, sahifa surilmaydi
+    (e.currentTarget as SVGSVGElement).setPointerCapture(e.pointerId);
     pan.current = {
       active: true, moved: false,
       sx: e.clientX, sy: e.clientY, ox: vb.x, oy: vb.y,
@@ -78,6 +80,7 @@ export function MapView({ onSelectPavilion }: Props) {
   }
   function handlePointerMove(e: React.PointerEvent) {
     if (!pan.current.active) return;
+    e.preventDefault();
     const rect = svgRef.current!.getBoundingClientRect();
     const dx = ((e.clientX - pan.current.sx) / rect.width) * vb.w;
     const dy = ((e.clientY - pan.current.sy) / rect.height) * vb.h;
@@ -90,7 +93,12 @@ export function MapView({ onSelectPavilion }: Props) {
     ny = Math.min(Math.max(0, ny), VIEW_H - vb.h);
     setVb((prev) => ({ ...prev, x: nx, y: ny }));
   }
-  function handlePointerUp() {
+  function handlePointerUp(e: React.PointerEvent) {
+    try {
+      (e.currentTarget as SVGSVGElement).releasePointerCapture(e.pointerId);
+    } catch {
+      // pointer allaqachon bo'shatilgan bo'lishi mumkin
+    }
     pan.current.active = false;
   }
 

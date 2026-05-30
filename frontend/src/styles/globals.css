@@ -11,6 +11,11 @@
 
 * { -webkit-tap-highlight-color: transparent; }
 
+html, body {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
 body {
   margin: 0;
   font-family: "Plus Jakarta Sans", system-ui, sans-serif;
