@@ -1,12 +1,10 @@
-import { useState, type ReactNode } from "react";
+import { useState, useRef, useEffect, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Info, RefreshCw, Wallet, CheckCircle2, AlertTriangle, TrendingUp } from "lucide-react";
+import { Info, RefreshCw, Wallet, CheckCircle2, AlertTriangle, TrendingUp, X } from "lucide-react";
 import { getDashboard } from "@/api/dashboard";
 import { fmtUZS } from "@/lib/utils";
-import { Modal } from "@/components/ui/Modal";
 
 export function HeaderStats() {
-  const [showBreakdown, setShowBreakdown] = useState(false);
   const [live, setLive] = useState(false);
 
   const { data, isLoading, refetch, isFetching } = useQuery({
@@ -78,13 +76,10 @@ export function HeaderStats() {
             </div>
           }
           action={
-            <button
-              onClick={() => setShowBreakdown(true)}
-              className="grid h-5 w-5 place-items-center rounded-full bg-status-paid/12 text-status-paid transition-colors hover:bg-status-paid/20"
-              title="Tushum tarkibi"
-            >
-              <Info size={12} />
-            </button>
+            <BreakdownPopover
+              items={breakdownItems}
+              total={data?.paid ?? 0}
+            />
           }
         />
         <StatCard
@@ -100,28 +95,6 @@ export function HeaderStats() {
           }
         />
       </div>
-
-      <Modal
-        open={showBreakdown}
-        onClose={() => setShowBreakdown(false)}
-        title="To'langan summa tarkibi"
-        maxWidth="max-w-md"
-      >
-        <div className="divide-y divide-slate-100">
-          {breakdownItems.map((it) => (
-            <div key={it.name} className="flex items-center justify-between py-2.5">
-              <span className="text-sm font-medium text-ink-soft">{it.name}</span>
-              <span className="tabnum text-sm font-bold text-ink">{fmtUZS(it.amount)}</span>
-            </div>
-          ))}
-        </div>
-        <div className="mt-3 flex items-center justify-between rounded-xl bg-status-paid/8 px-3 py-3">
-          <span className="text-sm font-extrabold text-ink">Jami to'langan</span>
-          <span className="tabnum text-base font-extrabold text-status-paid">
-            {fmtUZS(data?.paid ?? 0)}
-          </span>
-        </div>
-      </Modal>
     </>
   );
 }
@@ -146,7 +119,9 @@ function StatCard({
   const t = TONE[tone] ?? TONE.brand;
   return (
     <div className={`stat-card ring-1 ${t.ring}`}>
-      <div className={`pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full bg-gradient-to-br ${t.glow} to-transparent blur-2xl`} />
+      <div className="stat-glow">
+        <div className={`absolute -right-8 -top-8 h-28 w-28 rounded-full bg-gradient-to-br ${t.glow} to-transparent blur-2xl`} />
+      </div>
       <div className="relative flex items-start justify-between">
         <div className={`grid h-10 w-10 place-items-center rounded-xl ${t.iconBg} shadow-sm`}>
           {icon}
@@ -160,6 +135,72 @@ function StatCard({
         {loading ? <span className="skeleton inline-block h-7 w-32" /> : fmtUZS(value ?? 0)}
       </div>
       {footer && <div className="relative mt-3 text-[11px] font-semibold">{footer}</div>}
+    </div>
+  );
+}
+
+// Lokal popover — "Tushum tarkibi" (butun ekranli modal o'rniga)
+function BreakdownPopover({
+  items,
+  total,
+}: {
+  items: { name: string; amount: number }[];
+  total: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="grid h-5 w-5 place-items-center rounded-full bg-status-paid/12 text-status-paid transition-colors hover:bg-status-paid/20"
+        title="Tushum tarkibi"
+      >
+        <Info size={12} />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-7 z-40 w-64 animate-scale-in rounded-2xl border border-white/60 bg-white/95 p-3 shadow-float backdrop-blur-xl">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-xs font-bold text-ink">Tushum tarkibi</span>
+            <button
+              onClick={() => setOpen(false)}
+              className="grid h-5 w-5 place-items-center rounded-full text-ink-faint transition-colors hover:bg-slate-100 hover:text-ink"
+            >
+              <X size={13} />
+            </button>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {items.map((it) => (
+              <div key={it.name} className="flex items-center justify-between py-1.5">
+                <span className="text-xs font-medium text-ink-soft">{it.name}</span>
+                <span className="tabnum text-xs font-bold text-ink">{fmtUZS(it.amount)}</span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 flex items-center justify-between rounded-xl bg-status-paid/8 px-2.5 py-2">
+            <span className="text-xs font-extrabold text-ink">Jami</span>
+            <span className="tabnum text-sm font-extrabold text-status-paid">{fmtUZS(total)}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
