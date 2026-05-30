@@ -19,38 +19,43 @@ export function AdminPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-xl font-extrabold text-slate-800">Admin panel</h1>
-        <Link to="/" className="btn-ghost">
+      <div className="mb-5 flex items-center justify-between">
+        <div>
+          <div className="eyebrow">Boshqaruv</div>
+          <h1 className="font-display text-2xl font-extrabold text-ink">Admin panel</h1>
+        </div>
+        <Link to="/" className="btn-ghost px-3.5 py-2">
           <ArrowLeft size={16} /> Asosiy sahifa
         </Link>
       </div>
 
       <Tabs.Root value={tab} onValueChange={setTab}>
-        <Tabs.List className="mb-4 flex flex-wrap gap-1 border-b border-slate-200">
+        <Tabs.List className="mb-5 inline-flex flex-wrap gap-1 rounded-2xl border border-white/60 bg-white/70 p-1 shadow-soft backdrop-blur">
           {TABS.map((t) => (
             <Tabs.Trigger
               key={t.value}
               value={t.value}
-              className="border-b-2 border-transparent px-4 py-2 text-sm font-semibold text-slate-500 transition-colors data-[state=active]:border-brand data-[state=active]:text-brand"
+              className="rounded-xl px-4 py-2 text-sm font-semibold text-ink-soft transition-all hover:text-ink data-[state=active]:bg-brand-grad data-[state=active]:text-white data-[state=active]:shadow-glow"
             >
               {t.label}
             </Tabs.Trigger>
           ))}
         </Tabs.List>
 
-        <Tabs.Content value="dashboard">
-          <DashboardEditor />
-        </Tabs.Content>
-        <Tabs.Content value="map">
-          <MapEditor />
-        </Tabs.Content>
-        <Tabs.Content value="import">
-          <ExcelImport />
-        </Tabs.Content>
-        <Tabs.Content value="audit">
-          <AuditLogView />
-        </Tabs.Content>
+        <div className="animate-fade-up">
+          <Tabs.Content value="dashboard">
+            <DashboardEditor />
+          </Tabs.Content>
+          <Tabs.Content value="map">
+            <MapEditor />
+          </Tabs.Content>
+          <Tabs.Content value="import">
+            <ExcelImport />
+          </Tabs.Content>
+          <Tabs.Content value="audit">
+            <AuditLogView />
+          </Tabs.Content>
+        </div>
       </Tabs.Root>
     </div>
   );

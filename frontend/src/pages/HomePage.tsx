@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { LogOut, Settings } from "lucide-react";
+import { LogOut, Settings, Store } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { HeaderStats } from "@/components/Dashboard/HeaderStats";
 import { InnSearch } from "@/components/INN/InnSearch";
@@ -15,6 +15,7 @@ import type { Pavilion } from "@/types/api";
 export function HomePage() {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
+  const isAdmin = ["admin", "super_admin", "market_admin"].includes(user?.role ?? "");
 
   const [activePavilion, setActivePavilion] = useState<Pavilion | null>(null);
   const [activeShop, setActiveShop] = useState<string | null>(null);
@@ -28,36 +29,41 @@ export function HomePage() {
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
+      <header className="sticky top-0 z-20 border-b border-white/60 bg-white/70 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
-          <div>
-            <h1 className="text-lg font-extrabold text-slate-800">
-              O'rikzor Savdo Kompleksi
-            </h1>
-            <p className="text-xs text-slate-400">Bozor boshqaruv tizimi</p>
-          </div>
           <div className="flex items-center gap-3">
-            <span className="text-sm text-slate-500">
-              {user?.username}
-              {user?.role === "admin" && (
-                <span className="ml-1 rounded bg-brand/10 px-1.5 py-0.5 text-xs font-bold text-brand">
+            <div className="grid h-11 w-11 place-items-center rounded-xl bg-brand-grad shadow-glow">
+              <Store className="text-white" size={22} strokeWidth={2.2} />
+            </div>
+            <div>
+              <h1 className="font-display text-base font-extrabold leading-tight text-ink">
+                O'rikzor Savdo Kompleksi
+              </h1>
+              <p className="text-xs text-ink-faint">Bozor boshqaruv tizimi</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2 rounded-full bg-white/60 py-1 pl-3 pr-1.5 ring-1 ring-slate-200/70">
+              <span className="text-sm font-semibold text-ink-soft">{user?.username}</span>
+              {isAdmin && (
+                <span className="rounded-full bg-brand-grad px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
                   admin
                 </span>
               )}
-            </span>
-            {user?.role === "admin" && (
-              <Link to="/admin" className="btn-ghost" title="Admin panel">
+            </div>
+            {isAdmin && (
+              <Link to="/admin" className="btn-ghost px-2.5 py-2" title="Admin panel">
                 <Settings size={16} />
               </Link>
             )}
-            <button onClick={() => logout()} className="btn-ghost" title="Chiqish">
+            <button onClick={() => logout()} className="btn-ghost px-2.5 py-2" title="Chiqish">
               <LogOut size={16} />
             </button>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl space-y-4 px-4 py-5">
+      <main className="mx-auto max-w-6xl space-y-5 px-4 py-6">
         <HeaderStats />
         <InnSearch onSelectInn={setActiveInn} />
         <MapView onSelectPavilion={setActivePavilion} />

@@ -1,9 +1,18 @@
 // Backend Pydantic schemalariga mos TypeScript tiplari
 
+export type UserRole =
+  | "user"
+  | "admin"
+  | "super_admin"
+  | "market_admin"
+  | "market_viewer";
+
 export interface User {
   id: number;
   username: string;
-  role: "user" | "admin";
+  role: UserRole;
+  market_id: number | null;
+  market_slug: string | null;
   full_name: string | null;
   email: string | null;
   is_active: boolean;

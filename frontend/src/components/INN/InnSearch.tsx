@@ -18,14 +18,12 @@ export function InnSearch({ onSelectInn }: Props) {
   });
 
   return (
-    <div className="relative w-full max-w-md">
+    <div className="card relative p-4">
+      <div className="eyebrow mb-2">Kontragent qidiruv</div>
       <div className="relative">
-        <Search
-          size={16}
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-        />
+        <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-faint" />
         <input
-          className="input pl-9"
+          className="input pl-10"
           placeholder="INN yoki nom bo'yicha qidirish..."
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -35,26 +33,24 @@ export function InnSearch({ onSelectInn }: Props) {
       </div>
 
       {active && q.trim().length >= 2 && (
-        <div className="absolute z-30 mt-1 max-h-72 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg">
+        <div className="absolute left-4 right-4 z-30 mt-1.5 max-h-72 overflow-y-auto rounded-2xl border border-white/60 bg-white/95 shadow-float backdrop-blur-xl animate-scale-in">
           {isFetching && (
-            <div className="px-3 py-3 text-sm text-slate-400">Qidirilmoqda...</div>
+            <div className="px-4 py-3.5 text-sm text-ink-faint">Qidirilmoqda...</div>
           )}
           {!isFetching && data?.length === 0 && (
-            <div className="px-3 py-3 text-sm text-slate-400">Topilmadi</div>
+            <div className="px-4 py-3.5 text-sm text-ink-faint">Topilmadi</div>
           )}
           {data?.map((r) => (
             <button
               key={r.inn}
               onMouseDown={() => onSelectInn(r.inn)}
-              className="flex w-full items-center justify-between gap-3 border-b border-slate-50 px-3 py-2.5 text-left last:border-0 hover:bg-slate-50"
+              className="flex w-full items-center justify-between gap-3 border-b border-slate-50 px-4 py-3 text-left transition-colors last:border-0 hover:bg-brand-50"
             >
               <div className="min-w-0">
-                <div className="truncate text-sm font-semibold text-slate-700">
-                  {r.name}
-                </div>
-                <div className="font-mono text-xs text-slate-400">INN: {r.inn}</div>
+                <div className="truncate text-sm font-semibold text-ink">{r.name}</div>
+                <div className="font-mono text-xs text-ink-faint">INN: {r.inn}</div>
               </div>
-              <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">
+              <span className="shrink-0 rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-bold text-brand">
                 {r.shop_count} ta
               </span>
             </button>
