@@ -38,6 +38,9 @@ export function MapView({ onSelectPavilion }: Props) {
 
   return (
     <div className="card overflow-hidden">
+      <div className="bg-brand/10 px-3 py-1 text-xs font-semibold text-brand">
+        Xarita v2 · {pavilions.length} ta pavilion yuklandi
+      </div>
       <svg
         viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
         width="100%"
@@ -75,9 +78,10 @@ export function MapView({ onSelectPavilion }: Props) {
                   key={i}
                   points={pts}
                   fill={p.fill_color}
-                  fillOpacity={p.fill_opacity}
+                  fillOpacity={Math.max(p.fill_opacity ?? 0.45, 0.5)}
                   stroke={p.stroke_color}
-                  strokeWidth={p.stroke_width}
+                  strokeWidth={Math.max(p.stroke_width ?? 3, 3)}
+                  vectorEffect="non-scaling-stroke"
                 />
               ))}
               {p.label_x != null && p.label_y != null && (
