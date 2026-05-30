@@ -51,6 +51,7 @@ class MarketSummary(BaseModel):
     total: float
     paid: float
     debt: float
+    is_demo: bool = False
 
 
 class SuperDashboardOut(BaseModel):

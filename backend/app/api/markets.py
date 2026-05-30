@@ -45,13 +45,28 @@ async def super_dashboard(
     )
     markets = list(result.scalars())
 
+    # Orikzor (real bozor) summalarini settings.dashboard_stats'dan olamiz —
+    # bu admin tahrirlagan, asosiy dashboard ko'rsatadigan real qiymatlar.
+    from app.models.settings import DASHBOARD_SETTINGS_KEY, Setting
+
+    real_setting = await db.get(Setting, DASHBOARD_SETTINGS_KEY)
+    real_stats = (
+        real_setting.value if real_setting and isinstance(real_setting.value, dict) else {}
+    )
+
     per_market = []
     total = 0.0
     total_paid = 0.0
     for m in markets:
         stats = m.dashboard_stats or {}
-        t = float(stats.get("total", 0) or 0)
-        p = float(stats.get("paid", 0) or 0)
+        is_demo = bool(stats.get("is_demo"))
+        # Demo bo'lmagan real bozor (Orikzor) — settings'dan, aks holda market stats
+        if not is_demo and m.slug == "orikzor":
+            t = float(real_stats.get("total", stats.get("total", 0)) or 0)
+            p = float(real_stats.get("paid", stats.get("paid", 0)) or 0)
+        else:
+            t = float(stats.get("total", 0) or 0)
+            p = float(stats.get("paid", 0) or 0)
         total += t
         total_paid += p
         per_market.append(
@@ -62,6 +77,7 @@ async def super_dashboard(
                 "total": t,
                 "paid": p,
                 "debt": t - p,
+                "is_demo": is_demo,
             }
         )
 

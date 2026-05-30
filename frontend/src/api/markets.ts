@@ -19,6 +19,7 @@ export interface MarketSummary {
   total: number;
   paid: number;
   debt: number;
+  is_demo?: boolean;
 }
 
 export interface SuperDashboard {
