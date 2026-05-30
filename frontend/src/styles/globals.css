@@ -52,7 +52,7 @@ body {
   .input {
     @apply w-full rounded-xl border border-slate-200/90 bg-white/80 px-3.5 py-2.5
       text-sm text-ink outline-none transition-all placeholder:text-ink-faint
-      focus:border-brand focus:bg-white focus:ring-4 focus:ring-brand/12;
+      focus:border-brand focus:bg-white focus:ring-4 focus:ring-[rgba(0,102,255,0.12)];
   }
   .card {
     @apply rounded-2xl border border-white/60 bg-white/90 shadow-card backdrop-blur-sm;
