@@ -48,9 +48,12 @@ class User(Base):
 
     @property
     def is_admin(self) -> bool:
-        """To'liq boshqaruv huquqi (super_admin, market_admin, eski admin)."""
+        """Bozor ma'lumotlarini tahrirlash huquqi (bozor admini yoki eski admin).
+
+        DIQQAT: super_admin bu yerda YO'Q — u barcha bozorlarni faqat KO'RADI,
+        tahrir qila olmaydi. Super dashboard uchun alohida require_super_admin bor.
+        """
         return self.role in (
             UserRole.ADMIN.value,
-            UserRole.SUPER_ADMIN.value,
             UserRole.MARKET_ADMIN.value,
         )

@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
-import { LogOut, Settings, Store } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
+import { LogOut, Settings, Store, ArrowLeft, Info } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { HeaderStats } from "@/components/Dashboard/HeaderStats";
 import { InnSearch } from "@/components/INN/InnSearch";
@@ -15,7 +15,12 @@ import type { Pavilion } from "@/types/api";
 export function HomePage() {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
-  const isAdmin = ["admin", "super_admin", "market_admin"].includes(user?.role ?? "");
+  // Bozor sahifasida admin tugmasi/tahrir faqat o'sha bozor admini uchun.
+  // Super admin bu yerda FAQAT ko'ruvchi — tahrir qila olmaydi, admin tugmasi ko'rinmaydi.
+  const isMarketAdmin = ["admin", "market_admin"].includes(user?.role ?? "");
+  const isSuperAdmin = user?.role === "super_admin";
+  const [searchParams] = useSearchParams();
+  const isDemo = searchParams.get("demo") === "1";
 
   const [activePavilion, setActivePavilion] = useState<Pavilion | null>(null);
   const [activeShop, setActiveShop] = useState<string | null>(null);
@@ -45,13 +50,25 @@ export function HomePage() {
           <div className="flex items-center gap-2.5">
             <div className="flex items-center gap-2 rounded-full bg-white/60 py-1 pl-3 pr-1.5 ring-1 ring-slate-200/70">
               <span className="text-sm font-semibold text-ink-soft">{user?.username}</span>
-              {isAdmin && (
+              {isMarketAdmin && (
                 <span className="rounded-full bg-brand-grad px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
                   admin
                 </span>
               )}
+              {isSuperAdmin && (
+                <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-ink-soft">
+                  ko'rish
+                </span>
+              )}
             </div>
-            {isAdmin && (
+            {/* Super admin uchun — boshqaruv markaziga qaytish */}
+            {isSuperAdmin && (
+              <Link to="/super" className="btn-ghost px-3 py-2" title="Boshqaruv markazi">
+                <ArrowLeft size={16} /> Markaz
+              </Link>
+            )}
+            {/* Admin tugmasi FAQAT bozor admini uchun (super admin uchun emas) */}
+            {isMarketAdmin && (
               <Link to="/admin" className="btn-ghost px-2.5 py-2" title="Admin panel">
                 <Settings size={16} />
               </Link>
@@ -64,6 +81,12 @@ export function HomePage() {
       </header>
 
       <main className="mx-auto max-w-6xl space-y-5 px-4 py-6">
+        {isDemo && (
+          <div className="flex items-center gap-2.5 rounded-2xl border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700">
+            <Info size={16} />
+            Bu bozor uchun vaqtinchalik (namuna) ma'lumot ko'rsatilmoqda. Real ma'lumotlar keyinroq ulanadi.
+          </div>
+        )}
         <HeaderStats />
         <InnSearch onSelectInn={setActiveInn} />
         <MapView onSelectPavilion={setActivePavilion} />
