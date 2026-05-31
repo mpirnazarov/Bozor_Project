@@ -7,15 +7,25 @@ from fastapi.responses import JSONResponse
 
 from app.api import admin, auth, billing, dashboard, inn, markets, owner, pavilions, settings as settings_api, shops, yertola
 from app.config import settings
+from app.middleware.security import LoginRateLimitMiddleware, SecurityHeadersMiddleware
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup va shutdown hodisalari."""
-    # Startup
+    # Production xavfsizlik tekshiruvi — xavfli sozlama bilan ishga tushmaslik
+    if settings.is_production:
+        weak = {"changeme", "secret", "test", "dev"}
+        secret = settings.JWT_SECRET_KEY or ""
+        if len(secret) < 32 or secret.lower() in weak:
+            raise RuntimeError(
+                "XAVFSIZLIK: production'da kuchli JWT_SECRET_KEY (>=32 belgi) majburiy"
+            )
+        # Cross-domain cookie 'none' bo'lsa, u faqat HTTPS (secure) bilan ishlaydi
+        # — bu _set_auth_cookie'da production'da avtomatik ta'minlanadi.
+        print("🔐 Production xavfsizlik tekshiruvi o'tdi")
     print(f"🚀 Orikzor backend starting (env: {settings.ENVIRONMENT})")
     yield
-    # Shutdown
     print("👋 Orikzor backend shutting down")
 
 
@@ -28,13 +38,20 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS
+# Xavfsizlik sarlavhalari (har javobga)
+app.add_middleware(SecurityHeadersMiddleware, is_production=settings.is_production)
+
+# Login brute-force himoyasi (IP-asosli rate limit)
+app.add_middleware(LoginRateLimitMiddleware)
+
+# CORS — faqat ruxsat etilgan origin'lar, aniq metod va sarlavhalar
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins_list,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
+    max_age=600,
 )
 
 

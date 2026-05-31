@@ -1,7 +1,6 @@
 """Admin endpointlari — /api/admin/* (hammasi require_admin)."""
 from typing import Annotated
 
-import httpx
 from pydantic import BaseModel
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
@@ -32,11 +31,15 @@ from app.schemas.dashboard import DashboardOut
 from app.schemas.pavilion import PavilionOut
 from app.services.audit_describe import action_label, build_summary, resource_label
 from app.services.audit_service import write_audit
+from app.utils.safe_fetch import UnsafeUrlError, fetch_url_safely
 from app.services.dashboard_service import get_dashboard_from_settings
 from app.services.import_service import import_balances_xlsx
 from app.services.shop_import_service import import_shops_csv
 
 router = APIRouter()
+
+# Yuklanadigan fayl maksimal hajmi (10 MB)
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
 
 class _HideBody(BaseModel):
@@ -219,6 +222,8 @@ async def import_excel(
     if not file.filename or not file.filename.lower().endswith((".xlsx", ".xlsm")):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Faqat .xlsx fayl")
     content = await file.read()
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Fayl juda katta (10 MB chegarasi)")
     result = await import_balances_xlsx(db, content, year, month)
     await write_audit(
         db, admin.id, "import_excel", "monthly_balances", file.filename,
@@ -239,6 +244,8 @@ async def import_shops_file(
     if not file.filename or not file.filename.lower().endswith((".csv", ".tsv", ".txt")):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Faqat .csv fayl")
     content = await file.read()
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Fayl juda katta (10 MB chegarasi)")
     result = await import_shops_csv(db, content, market_id=market.id, source=file.filename)
     await write_audit(
         db, admin.id, "import_shops_csv", "shops", file.filename,
@@ -264,13 +271,10 @@ async def import_shops_gsheet(
     Havola CSV ko'rinishida bo'lishi kerak (masalan .../pub?output=csv).
     """
     url = body.url.strip()
-    if not url.startswith("http"):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "To'g'ri URL kiriting")
     try:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=30) as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
-            content = resp.content
+        content = await fetch_url_safely(url)
+    except UnsafeUrlError as e:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e)) from e
     except Exception as e:  # noqa: BLE001
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST, f"Havoladan yuklab bo'lmadi: {e}"
