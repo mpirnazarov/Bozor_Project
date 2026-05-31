@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.settings import THEME_SETTINGS_KEY, Setting
+from app.models.settings import HIDE_UNMATCHED_KEY, THEME_SETTINGS_KEY, Setting
 
 router = APIRouter()
 
@@ -23,3 +23,11 @@ async def get_theme(db: Annotated[AsyncSession, Depends(get_db)]) -> dict:
     elif s and isinstance(s.value, str):
         theme = s.value
     return {"theme": theme if theme in ("light", "dark") else "light"}
+
+
+@router.get("/hide-unmatched")
+async def get_hide_unmatched(db: Annotated[AsyncSession, Depends(get_db)]) -> dict:
+    """Topilmagan magazinlar berkitilganmi (default: false)."""
+    s = await db.get(Setting, HIDE_UNMATCHED_KEY)
+    hidden = bool(s.value.get("hidden")) if s and isinstance(s.value, dict) else False
+    return {"hidden": hidden}

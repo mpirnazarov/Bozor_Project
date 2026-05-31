@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Plus, Trash2, Save, X, MousePointer2, Maximize2, Minimize2,
-  ZoomIn, ZoomOut,
+  ZoomIn, ZoomOut, EyeOff,
 } from "lucide-react";
 import { getPavilions } from "@/api/pavilions";
 import { createPavilion, updatePavilion, deletePavilion } from "@/api/admin";
@@ -44,6 +44,9 @@ export function MapEditor() {
   const [name, setName] = useState("");
   const [labelText, setLabelText] = useState("");
   const [shopPrefix, setShopPrefix] = useState("");
+  const [showLabel, setShowLabel] = useState(true);
+  const [isHidden, setIsHidden] = useState(false);
+  const [hiddenListOpen, setHiddenListOpen] = useState(false);
   const [fillColor, setFillColor] = useState("#d4a373");
   const [strokeColor, setStrokeColor] = useState("#b45309");
   const [dragIdx, setDragIdx] = useState<number | null>(null);
@@ -63,6 +66,8 @@ export function MapEditor() {
     setName(p.display_name);
     setLabelText(p.display_text ?? "");
     setShopPrefix((p.meta?.shop_prefix as string | undefined) ?? "");
+    setShowLabel(p.meta?.show_label !== false);
+    setIsHidden(p.meta?.is_hidden === true);
     setFillColor(p.fill_color);
     setStrokeColor(p.stroke_color);
   }, [selectedId, pavilions]);
@@ -163,10 +168,26 @@ export function MapEditor() {
     setName("");
     setLabelText("");
     setShopPrefix("");
+    setShowLabel(true);
+    setIsHidden(false);
     setFillColor("#d4a373");
     setStrokeColor("#b45309");
     setMode("draw");
     setMsg("");
+  }
+
+  // Berkitilgan region chizishni boshlash (oddiy userga ko'rinmas, oq)
+  function startNewHidden() {
+    setSelectedId(null);
+    setPoints([]);
+    setName("");
+    setLabelText("");
+    setShopPrefix("");
+    setShowLabel(false);
+    setIsHidden(true);
+    setMode("draw");
+    setMsg("");
+    setHiddenListOpen(false);
   }
 
   function removePoint(idx: number) {
@@ -194,20 +215,24 @@ export function MapEditor() {
 
   async function handleSave() {
     if (points.length < 3) { setMsg("Kamida 3 ta nuqta kerak"); return; }
-    if (!name.trim()) { setMsg("Nom kiriting"); return; }
+    if (!isHidden && !name.trim()) { setMsg(t("editor.name")); return; }
     setSaving(true);
     setMsg("");
     const c = centroid(points);
     const payload = {
-      display_name: name.trim(),
-      display_text: labelText.trim() || null,
+      display_name: isHidden ? (name.trim() || "Berkitilgan") : name.trim(),
+      display_text: isHidden ? null : (labelText.trim() || null),
       polygon_points: pointsToStr(points),
-      fill_color: fillColor,
-      stroke_color: strokeColor,
+      fill_color: isHidden ? "#ffffff" : fillColor,
+      stroke_color: isHidden ? "#ffffff" : strokeColor,
       label_x: c.x,
       label_y: c.y,
       is_active: true,
-      meta: { shop_prefix: shopPrefix.trim() || undefined },
+      meta: {
+        shop_prefix: isHidden ? undefined : (shopPrefix.trim() || undefined),
+        show_label: showLabel,
+        is_hidden: isHidden,
+      },
     };
     try {
       if (selectedId != null) {
@@ -254,6 +279,42 @@ export function MapEditor() {
         <button className="btn-ghost" onClick={startNew}>
           <Plus size={15} /> {t("editor.newRegion")}
         </button>
+
+        {/* Region berkitish — nomsiz, oq, bosilmaydigan region */}
+        <div className="relative">
+          <button className="btn-ghost" onClick={() => setHiddenListOpen((v) => !v)}>
+            <EyeOff size={15} /> {t("editor.hideRegion")}
+          </button>
+          {hiddenListOpen && (
+            <div className="absolute left-0 z-50 mt-1 w-60 rounded-xl border border-white/60 bg-white/95 p-1 shadow-float backdrop-blur-xl">
+              <button
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-brand hover:bg-brand-50"
+                onClick={startNewHidden}
+              >
+                <Plus size={14} /> {t("editor.newHidden")}
+              </button>
+              <div className="my-1 border-t border-slate-100" />
+              <div className="px-3 py-1 text-[11px] font-bold uppercase text-ink-faint">
+                {t("editor.hiddenList")}
+              </div>
+              <div className="max-h-48 overflow-y-auto">
+                {(pavilions ?? []).filter((p) => p.meta?.is_hidden === true).map((p) => (
+                  <button
+                    key={p.id}
+                    className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-50"
+                    onClick={() => { setSelectedId(p.id); setMode("select"); setHiddenListOpen(false); }}
+                  >
+                    <span>#{p.id}</span>
+                    <span className="text-xs text-ink-faint">{t("editor.region")}</span>
+                  </button>
+                ))}
+                {(pavilions ?? []).filter((p) => p.meta?.is_hidden === true).length === 0 && (
+                  <div className="px-3 py-2 text-xs text-ink-faint">{t("common.notFound")}</div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
         {mode === "draw" && (
           <span className="rounded-lg bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
             {t("editor.drawMode")}
@@ -316,14 +377,16 @@ export function MapEditor() {
               if (p.id === selectedId) return null;
               const pts = parsePoints(p.polygon_points);
               if (pts.length < 3) return null;
+              const hidden = p.meta?.is_hidden === true;
               return (
                 <polygon
                   key={p.id}
                   points={pointsToStr(pts)}
-                  fill={p.fill_color}
-                  fillOpacity={0.35}
-                  stroke={p.stroke_color}
+                  fill={hidden ? "#ffffff" : p.fill_color}
+                  fillOpacity={hidden ? 0.7 : 0.35}
+                  stroke={hidden ? "#94a3b8" : p.stroke_color}
                   strokeWidth={2}
+                  strokeDasharray={hidden ? "6 4" : undefined}
                   vectorEffect="non-scaling-stroke"
                   style={{ cursor: "pointer" }}
                   onClick={(e) => {
@@ -383,20 +446,34 @@ export function MapEditor() {
             <div className="text-xs font-bold text-ink-soft">
               {selectedId != null ? `${t("editor.region")} #${selectedId}` : t("editor.newRegion")}
             </div>
-            <input className="input" placeholder={t("editor.name")} value={name} onChange={(e) => setName(e.target.value)} />
-            <input className="input" placeholder={t("editor.label")} value={labelText} onChange={(e) => setLabelText(e.target.value)} />
-            <div>
-              <input className="input font-mono" placeholder={t("editor.prefix")} value={shopPrefix} onChange={(e) => setShopPrefix(e.target.value)} />
-              <div className="mt-1 text-[11px] text-ink-faint">
-                {t("editor.prefixHint")}
+
+            {isHidden ? (
+              <div className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-ink-soft">
+                {t("editor.hiddenBanner")}
               </div>
-            </div>
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-ink-soft">{t("editor.fill")}</span>
-              <input type="color" value={fillColor} onChange={(e) => setFillColor(e.target.value)} />
-              <span className="text-ink-soft">{t("editor.stroke")}</span>
-              <input type="color" value={strokeColor} onChange={(e) => setStrokeColor(e.target.value)} />
-            </div>
+            ) : (
+              <>
+                <input className="input" placeholder={t("editor.name")} value={name} onChange={(e) => setName(e.target.value)} />
+                <input className="input" placeholder={t("editor.label")} value={labelText} onChange={(e) => setLabelText(e.target.value)} />
+                <div>
+                  <input className="input font-mono" placeholder={t("editor.prefix")} value={shopPrefix} onChange={(e) => setShopPrefix(e.target.value)} />
+                  <div className="mt-1 text-[11px] text-ink-faint">
+                    {t("editor.prefixHint")}
+                  </div>
+                </div>
+                {/* Belgi ko'rsatish tick */}
+                <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-ink-soft">
+                  <input type="checkbox" className="h-4 w-4 accent-brand" checked={showLabel} onChange={(e) => setShowLabel(e.target.checked)} />
+                  {t("editor.showLabel")}
+                </label>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-ink-soft">{t("editor.fill")}</span>
+                  <input type="color" value={fillColor} onChange={(e) => setFillColor(e.target.value)} />
+                  <span className="text-ink-soft">{t("editor.stroke")}</span>
+                  <input type="color" value={strokeColor} onChange={(e) => setStrokeColor(e.target.value)} />
+                </div>
+              </>
+            )}
             <div className="text-xs text-ink-faint">{t("editor.points")}: {points.length}</div>
             <button className="btn-primary w-full" onClick={handleSave} disabled={saving}>
               <Save size={15} /> {saving ? t("common.saving") : t("common.save")}

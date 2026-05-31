@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { RefreshCw, EyeOff, Eye } from "lucide-react";
 import { getDashboard } from "@/api/dashboard";
-import { updateDashboard } from "@/api/admin";
+import { updateDashboard, getHideUnmatched, setHideUnmatched } from "@/api/admin";
 import { fmtUZS } from "@/lib/utils";
+import { useT } from "@/i18n/useT";
 
 interface FormState {
   total: number;
@@ -26,9 +28,43 @@ const FIELDS: { key: keyof FormState; label: string }[] = [
 
 export function DashboardEditor() {
   const qc = useQueryClient();
+  const t = useT();
   const { data } = useQuery({ queryKey: ["dashboard", false], queryFn: () => getDashboard(false) });
   const [form, setForm] = useState<FormState | null>(null);
   const [saved, setSaved] = useState(false);
+  const [computing, setComputing] = useState(false);
+
+  // Topilmagan magazinlarni berkitish holati
+  const { data: hideUnmatched } = useQuery({
+    queryKey: ["hide-unmatched"],
+    queryFn: getHideUnmatched,
+  });
+  const hideMutation = useMutation({
+    mutationFn: (v: boolean) => setHideUnmatched(v),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["hide-unmatched"] });
+      qc.invalidateQueries({ queryKey: ["pavilion-shops"] });
+    },
+  });
+
+  // "Real hisobla" — monthly_balances'dan jonli hisoblab, formani to'ldiradi
+  async function computeReal() {
+    setComputing(true);
+    try {
+      const live = await getDashboard(true);
+      setForm({
+        total: live.total,
+        paid: live.paid,
+        rent: live.services.rent,
+        arava: live.services.arava,
+        xojatxona: live.services.xojatxona,
+        parking: live.services.parking,
+        boshqa: live.services.boshqa,
+      });
+    } finally {
+      setComputing(false);
+    }
+  }
 
   useEffect(() => {
     if (data && !form) {
@@ -77,6 +113,22 @@ export function DashboardEditor() {
         Bu qiymatlar serverda saqlanadi va o'zgartirilganda barcha
         foydalanuvchilarning asosiy sahifasida ko'rinadi.
       </p>
+
+      {/* Boshqaruv tugmalari */}
+      <div className="flex flex-wrap items-center gap-2">
+        <button className="btn-ghost" onClick={computeReal} disabled={computing}>
+          <RefreshCw size={15} className={computing ? "animate-spin" : ""} />
+          {computing ? t("common.loading") : t("admin.computeReal")}
+        </button>
+        <button
+          className={hideUnmatched ? "btn-primary" : "btn-ghost"}
+          onClick={() => hideMutation.mutate(!hideUnmatched)}
+          disabled={hideMutation.isPending}
+        >
+          {hideUnmatched ? <EyeOff size={15} /> : <Eye size={15} />}
+          {hideUnmatched ? t("admin.hideUnmatchedOn") : t("admin.hideUnmatched")}
+        </button>
+      </div>
 
       <div className="card divide-y divide-slate-100 p-4">
         {FIELDS.map((f) => (

@@ -34,3 +34,7 @@ DASHBOARD_SETTINGS_KEY = "dashboard_stats"
 # Ilova mavzusi (light/dark) shu kalit ostida saqlanadi. Admin o'zgartiradi,
 # barcha foydalanuvchilar shu mavzuni ko'radi.
 THEME_SETTINGS_KEY = "app_theme"
+
+# Topilmagan (bazada balansi yo'q) magazinlarni berkitish. Admin yoqsa,
+# region modalida no_data magazinlar va "Topilmadi" filtri ko'rinmaydi.
+HIDE_UNMATCHED_KEY = "hide_unmatched"

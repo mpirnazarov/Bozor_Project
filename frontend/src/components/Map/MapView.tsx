@@ -197,6 +197,26 @@ export function MapView({ onSelectPavilion }: Props) {
           const extra = (meta.extra_polygons as string[] | undefined) ?? [];
           const fontSize = (meta.label_font_size as number | undefined) ?? 20;
           const allPolys = [p.polygon_points, ...extra].filter(Boolean) as string[];
+          const isHidden = meta.is_hidden === true;
+          const showLabel = meta.show_label !== false; // default true
+
+          // Berkitilgan region — oq, chegarasiz, nomsiz, bosilmaydigan
+          if (isHidden) {
+            return (
+              <g key={p.id} style={{ pointerEvents: "none" }}>
+                {allPolys.map((pts, i) => (
+                  <polygon
+                    key={i}
+                    points={pts}
+                    fill="#ffffff"
+                    fillOpacity={1}
+                    stroke="none"
+                  />
+                ))}
+              </g>
+            );
+          }
+
           return (
             <g
               key={p.id}
@@ -221,7 +241,7 @@ export function MapView({ onSelectPavilion }: Props) {
                   style={{ filter: "drop-shadow(0 0 1px rgba(0,0,0,0.6))" }}
                 />
               ))}
-              {p.label_x != null && p.label_y != null && (
+              {showLabel && p.label_x != null && p.label_y != null && (
                 <text
                   x={p.label_x}
                   y={p.label_y}

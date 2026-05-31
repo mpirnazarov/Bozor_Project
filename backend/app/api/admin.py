@@ -13,6 +13,7 @@ from app.deps import AdminUser, CurrentMarket
 from app.models import (
     DASHBOARD_SETTINGS_KEY,
     THEME_SETTINGS_KEY,
+    HIDE_UNMATCHED_KEY,
     AuditLog,
     Pavilion,
     Setting,
@@ -34,6 +35,29 @@ from app.services.import_service import import_balances_xlsx
 from app.services.shop_import_service import import_shops_csv
 
 router = APIRouter()
+
+
+class _HideBody(BaseModel):
+    hidden: bool
+
+
+@router.put("/hide-unmatched")
+async def update_hide_unmatched(
+    body: _HideBody,
+    admin: AdminUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    """Topilmagan magazinlarni berkitish/ko'rsatish (DB'da saqlanadi)."""
+    setting = await db.get(Setting, HIDE_UNMATCHED_KEY)
+    if setting is None:
+        setting = Setting(key=HIDE_UNMATCHED_KEY, value={"hidden": body.hidden}, updated_by=admin.id)
+        db.add(setting)
+    else:
+        setting.value = {"hidden": body.hidden}
+        setting.updated_by = admin.id
+    await write_audit(db, admin.id, "update_hide_unmatched", "settings", HIDE_UNMATCHED_KEY, {"hidden": body.hidden})
+    await db.commit()
+    return {"hidden": body.hidden}
 
 
 class _ThemeBody(BaseModel):

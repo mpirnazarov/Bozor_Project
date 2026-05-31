@@ -1,17 +1,16 @@
 import { useState, useRef, useEffect, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Info, RefreshCw, Wallet, CheckCircle2, AlertTriangle, TrendingUp, X } from "lucide-react";
+import { Info, Wallet, CheckCircle2, AlertTriangle, TrendingUp, X } from "lucide-react";
 import { getDashboard } from "@/api/dashboard";
 import { fmtUZS } from "@/lib/utils";
 import { useT } from "@/i18n/useT";
 
 export function HeaderStats() {
-  const [live, setLive] = useState(false);
   const t = useT();
 
-  const { data, isLoading, refetch, isFetching } = useQuery({
-    queryKey: ["dashboard", live],
-    queryFn: () => getDashboard(live),
+  const { data, isLoading } = useQuery({
+    queryKey: ["dashboard"],
+    queryFn: () => getDashboard(false),
   });
 
   const services = data?.services;
@@ -34,17 +33,6 @@ export function HeaderStats() {
           <div className="eyebrow">{t("home.overview")}</div>
           <h2 className="font-display text-lg font-bold text-ink">{t("home.financial")}</h2>
         </div>
-        <button
-          onClick={() => {
-            setLive((v) => !v);
-            setTimeout(() => refetch(), 0);
-          }}
-          className={live ? "btn-primary px-3.5 py-2" : "btn-ghost px-3.5 py-2"}
-          title="monthly_balances'dan real hisoblash"
-        >
-          <RefreshCw size={14} className={isFetching ? "animate-spin" : ""} />
-          {live ? t("home.realData") : t("home.computeReal")}
-        </button>
       </div>
 
       <div className="stagger grid gap-3 sm:grid-cols-3">

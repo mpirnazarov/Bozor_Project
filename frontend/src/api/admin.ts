@@ -124,3 +124,14 @@ export async function setTheme(theme: "light" | "dark"): Promise<"light" | "dark
   const { data } = await apiClient.put<{ theme: "light" | "dark" }>("/admin/theme", { theme });
   return data.theme;
 }
+
+// === Topilmagan magazinlarni berkitish ===
+export async function getHideUnmatched(): Promise<boolean> {
+  const { data } = await apiClient.get<{ hidden: boolean }>("/settings/hide-unmatched");
+  return data.hidden;
+}
+
+export async function setHideUnmatched(hidden: boolean): Promise<boolean> {
+  const { data } = await apiClient.put<{ hidden: boolean }>("/admin/hide-unmatched", { hidden });
+  return data.hidden;
+}

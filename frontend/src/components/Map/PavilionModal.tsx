@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { getPavilionShops } from "@/api/pavilions";
+import { getHideUnmatched } from "@/api/admin";
 import { STATUS_COLORS, fmtUZS } from "@/lib/utils";
 import { Modal, Spinner } from "@/components/ui/Modal";
 import { useT } from "@/i18n/useT";
@@ -69,13 +70,20 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
     enabled: !!pavilionId,
   });
 
+  const { data: hideUnmatched } = useQuery({
+    queryKey: ["hide-unmatched"],
+    queryFn: getHideUnmatched,
+  });
+
   const computed = useMemo(() => {
     if (!data) return [];
-    return data.shops.map((s) => {
+    const list = data.shops.map((s) => {
       const r = statusForService(data.billing[s.shop_id], service);
       return { shop: s, ...r };
     });
-  }, [data, service]);
+    // Topilmagan berkitilgan bo'lsa — no_data magazinlarni chiqarib tashlaymiz
+    return hideUnmatched ? list.filter((c) => c.status !== "no_data") : list;
+  }, [data, service, hideUnmatched]);
 
   // Tepadagi summalar HAR DOIM umumiy (barcha xizmatlar bo'yicha) bo'ladi.
   // MUHIM: balans INN (kontragent) darajasida saqlanadi. Bitta INN'ga bir
@@ -173,7 +181,7 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
           <div className="mb-3">
             <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-ink-faint">{t("pav.paymentStatus")}</div>
             <div className="flex flex-wrap items-center gap-1.5">
-              {STATUS_FILTERS.map((f) => (
+              {STATUS_FILTERS.filter((f) => !(hideUnmatched && f.key === "no_data")).map((f) => (
                 <button
                   key={f.key}
                   onClick={() => setStatusFilter(f.key)}
