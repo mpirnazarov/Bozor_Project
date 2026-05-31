@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.deps import CurrentUser, SuperAdminUser
 from app.models.market import Market
-from app.schemas.market import MarketOut, SuperDashboardOut
+from app.schemas.market import MarketOut, MarketUpdate, SuperDashboardOut
 
 router = APIRouter()
 
@@ -101,3 +101,38 @@ async def get_market(
     if m is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Bozor topilmadi")
     return m
+
+
+@router.put("/{market_id:int}", response_model=MarketOut)
+async def update_market(
+    market_id: int,
+    payload: MarketUpdate,
+    _admin: SuperAdminUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> Market:
+    """Bozor ma'lumotini tahrirlash (faqat super admin)."""
+    market = await db.get(Market, market_id)
+    if market is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Bozor topilmadi")
+    data = payload.model_dump(exclude_unset=True)
+    for field, value in data.items():
+        setattr(market, field, value)
+    await db.commit()
+    await db.refresh(market)
+    return market
+
+
+@router.post("/{market_id:int}/toggle", response_model=MarketOut)
+async def toggle_market(
+    market_id: int,
+    _admin: SuperAdminUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> Market:
+    """Bozorni vaqtincha o'chirish / yoqish (is_active)."""
+    market = await db.get(Market, market_id)
+    if market is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Bozor topilmadi")
+    market.is_active = not market.is_active
+    await db.commit()
+    await db.refresh(market)
+    return market

@@ -6,6 +6,7 @@ import { LoginPage } from "@/pages/LoginPage";
 import { HomePage } from "@/pages/HomePage";
 import { AdminPage } from "@/pages/AdminPage";
 import { SuperDashboardPage } from "@/pages/SuperDashboardPage";
+import { SuperAdminPage } from "@/pages/SuperAdminPage";
 
 const ADMIN_ROLES = ["admin", "super_admin", "market_admin"];
 
@@ -57,6 +58,14 @@ export function AppRoutes() {
         element={
           <Protected superOnly>
             <SuperDashboardPage />
+          </Protected>
+        }
+      />
+      <Route
+        path="/super/markets"
+        element={
+          <Protected superOnly>
+            <SuperAdminPage />
           </Protected>
         }
       />

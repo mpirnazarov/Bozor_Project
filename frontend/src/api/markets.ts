@@ -43,3 +43,19 @@ export async function getSuperDashboard(): Promise<SuperDashboard> {
   const { data } = await apiClient.get<SuperDashboard>("/markets/super/dashboard");
   return data;
 }
+
+export interface MarketUpdatePayload {
+  name?: string;
+  is_active?: boolean;
+  display_order?: number;
+}
+
+export async function updateMarket(id: number, payload: MarketUpdatePayload): Promise<Market> {
+  const { data } = await apiClient.put<Market>(`/markets/${id}`, payload);
+  return data;
+}
+
+export async function toggleMarket(id: number): Promise<Market> {
+  const { data } = await apiClient.post<Market>(`/markets/${id}/toggle`, {});
+  return data;
+}

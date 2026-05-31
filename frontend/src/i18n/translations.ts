@@ -30,6 +30,7 @@ const uz: Dict = {
   "common.notFound": "Topilmadi",
   "common.back": "Asosiy sahifa",
   "common.logout": "Chiqish",
+  "common.edit": "Tahrirlash",
   "common.refresh": "Yangilash",
 
   // Login
@@ -183,6 +184,15 @@ const uz: Dict = {
   // Theme / lang
   "ui.dark": "Dark",
   "ui.light": "Light",
+  "superadmin.title": "Super admin",
+  "superadmin.markets": "Bozorlar boshqaruvi",
+  "superadmin.toDashboard": "Dashboardga",
+  "superadmin.openDashboard": "Dashboardni ochish",
+  "superadmin.view": "Ko'rish",
+  "superadmin.disable": "O'chirish",
+  "superadmin.enable": "Yoqish",
+  "superadmin.disabled": "O'chirilgan",
+  "superadmin.order": "Tartib",
   "ui.language": "Til",
 };
 
@@ -204,6 +214,7 @@ const ru: Dict = {
   "common.notFound": "Не найдено",
   "common.back": "Главная",
   "common.logout": "Выйти",
+  "common.edit": "Редактировать",
   "common.refresh": "Обновить",
 
   "login.title": "Торговый комплекс",
@@ -346,6 +357,15 @@ const ru: Dict = {
 
   "ui.dark": "Тёмная",
   "ui.light": "Светлая",
+  "superadmin.title": "Супер админ",
+  "superadmin.markets": "Управление рынками",
+  "superadmin.toDashboard": "К дашборду",
+  "superadmin.openDashboard": "Открыть дашборд",
+  "superadmin.view": "Просмотр",
+  "superadmin.disable": "Отключить",
+  "superadmin.enable": "Включить",
+  "superadmin.disabled": "Отключён",
+  "superadmin.order": "Порядок",
   "ui.language": "Язык",
 };
 
@@ -367,6 +387,7 @@ const en: Dict = {
   "common.notFound": "Not found",
   "common.back": "Home",
   "common.logout": "Log out",
+  "common.edit": "Edit",
   "common.refresh": "Refresh",
 
   "login.title": "Trade Complex",
@@ -509,6 +530,15 @@ const en: Dict = {
 
   "ui.dark": "Dark",
   "ui.light": "Light",
+  "superadmin.title": "Super admin",
+  "superadmin.markets": "Markets management",
+  "superadmin.toDashboard": "To dashboard",
+  "superadmin.openDashboard": "Open dashboard",
+  "superadmin.view": "View",
+  "superadmin.disable": "Disable",
+  "superadmin.enable": "Enable",
+  "superadmin.disabled": "Disabled",
+  "superadmin.order": "Order",
   "ui.language": "Language",
 };
 

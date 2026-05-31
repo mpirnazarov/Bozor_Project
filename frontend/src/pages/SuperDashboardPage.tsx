@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import {
   LayoutGrid, LogOut, Wallet, CheckCircle2, AlertTriangle, Store,
   ArrowRight, Sun, Moon, Maximize, RefreshCw, TrendingUp,
-  List, LayoutDashboard, Activity, Trophy, ArrowUpRight,
+  List, LayoutDashboard, Activity, Trophy, ArrowUpRight, Settings,
 } from "lucide-react";
 import { getSuperDashboard, type MarketSummary } from "@/api/markets";
 import { setCurrentMarket } from "@/api/client";
@@ -121,6 +121,9 @@ export function SuperDashboardPage() {
               </div>
             </div>
             <LanguageSwitcher dark={dark} />
+            <IconBtn t={c} onClick={() => navigate("/super/markets")} title={t("superadmin.markets")}>
+              <Settings size={18} />
+            </IconBtn>
             <IconBtn t={c} onClick={() => refetch()} title={t("common.refresh")}>
               <RefreshCw size={18} className={isFetching ? "animate-spin" : ""} />
             </IconBtn>
@@ -283,17 +286,18 @@ function MarketList({
 }
 
 function MarketCard({
-  m, t, onOpen,
+  m, t: c, onOpen,
 }: {
   m: MarketSummary; t: any;
   onOpen: (slug: string, demo?: boolean) => void;
 }) {
+  const t = useT();
   const pct = m.total ? Math.round((m.paid / m.total) * 100) : 0;
   return (
     <button
       onClick={() => onOpen(m.slug, m.is_demo)}
       className="group relative overflow-hidden rounded-2xl border p-5 text-left transition-all duration-300 hover:-translate-y-1"
-      style={{ background: t.panel, borderColor: t.panelBorder }}
+      style={{ background: c.panel, borderColor: c.panelBorder }}
     >
       <div className="mb-3 flex items-center gap-2.5">
         <div className="grid h-9 w-9 place-items-center rounded-lg bg-brand/15 text-brand"><Store size={17} /></div>
@@ -303,15 +307,15 @@ function MarketCard({
         )}
       </div>
       <div className="mb-1 font-display text-xl font-extrabold tabnum">{fmtUZS(m.total)}</div>
-      <div className="mb-3 h-1.5 overflow-hidden rounded-full" style={{ background: t.track }}>
+      <div className="mb-3 h-1.5 overflow-hidden rounded-full" style={{ background: c.track }}>
         <div className="h-full rounded-full bg-status-paid transition-all duration-700" style={{ width: `${pct}%` }} />
       </div>
-      <div className="flex items-center justify-between text-xs" style={{ color: t.sub }}>
+      <div className="flex items-center justify-between text-xs" style={{ color: c.sub }}>
         <span className="text-status-paid">{fmtUZS(m.paid)}</span>
         <span className="text-status-unpaid">{fmtUZS(m.debt)}</span>
       </div>
       {m.is_demo ? (
-        <div className="mt-3 inline-flex items-center gap-1 text-xs font-bold" style={{ color: t.faint }}>
+        <div className="mt-3 inline-flex items-center gap-1 text-xs font-bold" style={{ color: c.faint }}>
           {t("super.demoPreview")} <ArrowRight size={13} className="transition-transform group-hover:translate-x-1" />
         </div>
       ) : (
