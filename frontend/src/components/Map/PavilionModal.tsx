@@ -77,22 +77,27 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
     });
   }, [data, service]);
 
-  // Tepadagi summalar HAR DOIM umumiy (barcha xizmatlar bo'yicha) bo'ladi —
-  // xizmat filtri faqat magazin ranglari/ro'yxatini o'zgartiradi, summani emas.
+  // Tepadagi summalar HAR DOIM umumiy (barcha xizmatlar bo'yicha) bo'ladi.
+  // MUHIM: balans INN (kontragent) darajasida saqlanadi. Bitta INN'ga bir
+  // nechta do'kon tegishli bo'lishi mumkin — shuning uchun har INN balansini
+  // FAQAT BIR MARTA qo'shamiz (noyob INN bo'yicha), aks holda Jami takrorlanib oshib ketadi.
   const totals = useMemo(() => {
     if (!data) return { due: 0, paid: 0, debt: 0 };
-    return data.shops.reduce(
-      (acc, s) => {
-        const b = data.billing[s.shop_id];
-        if (b) {
-          acc.due += Number(b.total_due);
-          acc.paid += Number(b.total_paid);
-          acc.debt += Number(b.total_debt);
-        }
-        return acc;
-      },
-      { due: 0, paid: 0, debt: 0 },
-    );
+    const seenInn = new Set<string>();
+    const acc = { due: 0, paid: 0, debt: 0 };
+    for (const s of data.shops) {
+      const b = data.billing[s.shop_id];
+      if (!b) continue;
+      const inn = b.inn ?? s.inn ?? null;
+      // INN bo'lsa — bir marta; INN yo'q (noyob) bo'lsa — alohida hisoblanadi
+      const key = inn ?? `__noinn_${s.shop_id}`;
+      if (seenInn.has(key)) continue;
+      seenInn.add(key);
+      acc.due += Number(b.total_due);
+      acc.paid += Number(b.total_paid);
+      acc.debt += Number(b.total_debt);
+    }
+    return acc;
   }, [data]);
 
   // Har holat bo'yicha magazin soni (filtr yonida ko'rsatish uchun)
