@@ -3,6 +3,7 @@
 export type UserRole =
   | "user"
   | "admin"
+  | "owner"
   | "super_admin"
   | "market_admin"
   | "market_viewer";
