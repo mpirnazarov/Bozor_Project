@@ -28,6 +28,8 @@ class Market(Base):
     # Shu bozorning dashboard summalari (admin tahrirlaydi)
     dashboard_stats: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Owner tomonidan to'lov qilinmagani uchun vaqtincha bloklangan
+    support_blocked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     display_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(

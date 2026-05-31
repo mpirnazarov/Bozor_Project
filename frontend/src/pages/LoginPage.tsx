@@ -20,9 +20,14 @@ export function LoginPage() {
     try {
       await login(username.trim(), password);
       const user = useAuthStore.getState().user;
-      navigate(user?.role === "super_admin" ? "/super" : "/", { replace: true });
-    } catch {
-      setError(t("login.error"));
+      navigate(
+        user?.role === "owner" ? "/owner" : user?.role === "super_admin" ? "/super" : "/",
+        { replace: true },
+      );
+    } catch (err: any) {
+      // Server xabari bo'lsa (masalan bloklangan bozor) — o'shani ko'rsatamiz
+      const detail = err?.response?.data?.detail;
+      setError(typeof detail === "string" && detail ? detail : t("login.error"));
     }
   }
 

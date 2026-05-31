@@ -13,6 +13,7 @@ class UserRole(str, Enum):
     USER = "user"
     ADMIN = "admin"
     # Multi-bozor rollari
+    OWNER = "owner"                  # dastur egasi — bozorlar CRUD + tex-podderjka to'lovlari
     SUPER_ADMIN = "super_admin"      # hamma bozor + super dashboard
     MARKET_ADMIN = "market_admin"    # faqat o'z bozori, to'liq boshqaruv
     MARKET_VIEWER = "market_viewer"  # faqat o'z bozori, ko'rish
@@ -45,6 +46,11 @@ class User(Base):
     @property
     def is_super_admin(self) -> bool:
         return self.role == UserRole.SUPER_ADMIN.value
+
+    @property
+    def is_owner(self) -> bool:
+        """Dastur egasi — eng yuqori huquq (bozorlar CRUD, tex-podderjka)."""
+        return self.role == UserRole.OWNER.value
 
     @property
     def is_admin(self) -> bool:

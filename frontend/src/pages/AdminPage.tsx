@@ -10,12 +10,14 @@ import { MapEditor } from "@/components/Admin/MapEditor";
 import { ShopsManager } from "@/components/Admin/ShopsManager";
 import { ExcelImport } from "@/components/Admin/ExcelImport";
 import { AuditLogView } from "@/components/Admin/AuditLogView";
+import { DocumentsView } from "@/components/Admin/DocumentsView";
 
 const TABS = [
   { value: "dashboard", tkey: "admin.tab.dashboard" },
   { value: "map", tkey: "admin.tab.map" },
   { value: "shops", tkey: "admin.tab.shops" },
   { value: "import", tkey: "admin.tab.import" },
+  { value: "documents", tkey: "admin.tab.documents" },
   { value: "audit", tkey: "admin.tab.audit" },
 ];
 
@@ -64,6 +66,9 @@ export function AdminPage() {
           </Tabs.Content>
           <Tabs.Content value="import">
             <ExcelImport />
+          </Tabs.Content>
+          <Tabs.Content value="documents">
+            <DocumentsView />
           </Tabs.Content>
           <Tabs.Content value="audit">
             <AuditLogView />

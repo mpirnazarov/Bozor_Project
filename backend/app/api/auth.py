@@ -44,6 +44,17 @@ async def login(
             detail="Login yoki parol noto'g'ri",
         )
 
+    # Tex-podderjka uchun to'lov qilinmagani sababli bloklangan bozor
+    if user.market_id is not None:
+        from app.models.market import Market
+
+        m = await db.get(Market, user.market_id)
+        if m is not None and m.support_blocked and not user.is_owner:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="To'lov qilinmagani sababli vaqtincha o'chirildi, tizim administratoriga aloqaga chiqing",
+            )
+
     token = create_access_token(subject=user.id, extra_claims={"role": user.role})
     _set_auth_cookie(response, token)
 

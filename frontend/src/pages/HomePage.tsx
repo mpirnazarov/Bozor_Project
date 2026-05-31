@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { LogOut, Settings, Store, ArrowLeft, Info } from "lucide-react";
+import { LogOut, Settings, Store, ArrowLeft, Info, AlertTriangle } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { useT } from "@/i18n/useT";
 import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
@@ -11,6 +11,7 @@ import { PavilionModal } from "@/components/Map/PavilionModal";
 import { ShopDetailModal } from "@/components/Map/ShopDetailModal";
 import { useQuery } from "@tanstack/react-query";
 import { getInn } from "@/api/inn";
+import { getMarketSupportStatus } from "@/api/owner";
 import { Modal } from "@/components/ui/Modal";
 import type { Pavilion } from "@/types/api";
 
@@ -23,6 +24,11 @@ export function HomePage() {
   const isSuperAdmin = user?.role === "super_admin";
   const [searchParams] = useSearchParams();
   const isDemo = searchParams.get("demo") === "1";
+  const { data: supportStatus } = useQuery({
+    queryKey: ["support-status"],
+    queryFn: getMarketSupportStatus,
+    retry: false,
+  });
   const t = useT();
 
   const [activePavilion, setActivePavilion] = useState<Pavilion | null>(null);
@@ -85,6 +91,12 @@ export function HomePage() {
       </header>
 
       <main className="mx-auto max-w-6xl space-y-5 px-4 py-6">
+        {supportStatus?.needs_warning && (
+          <div className="flex items-center gap-2.5 rounded-2xl border-2 border-status-unpaid/50 bg-status-unpaid/10 px-4 py-3 text-sm font-bold text-status-unpaid animate-fade-in">
+            <AlertTriangle size={18} className="shrink-0" />
+            Bozor ma'muriyati tizim tex-podderjkasi uchun to'lov qilishi kerak, aks holda tizim ishlashi to'xtatiladi.
+          </div>
+        )}
         {isDemo && (
           <div className="flex items-center gap-2.5 rounded-2xl border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700">
             <Info size={16} />

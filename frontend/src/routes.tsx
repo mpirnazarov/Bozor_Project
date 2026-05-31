@@ -7,6 +7,7 @@ import { HomePage } from "@/pages/HomePage";
 import { AdminPage } from "@/pages/AdminPage";
 import { SuperDashboardPage } from "@/pages/SuperDashboardPage";
 import { SuperAdminPage } from "@/pages/SuperAdminPage";
+import { OwnerPage } from "@/pages/OwnerPage";
 
 const ADMIN_ROLES = ["admin", "super_admin", "market_admin"];
 
@@ -14,10 +15,12 @@ function Protected({
   children,
   adminOnly,
   superOnly,
+  ownerOnly,
 }: {
   children: ReactNode;
   adminOnly?: boolean;
   superOnly?: boolean;
+  ownerOnly?: boolean;
 }) {
   const user = useAuthStore((s) => s.user);
   const initialized = useAuthStore((s) => s.initialized);
@@ -30,6 +33,7 @@ function Protected({
     );
   }
   if (!user) return <Navigate to="/login" replace />;
+  if (ownerOnly && user.role !== "owner") return <Navigate to="/" replace />;
   if (superOnly && user.role !== "super_admin") return <Navigate to="/" replace />;
   if (adminOnly && !ADMIN_ROLES.includes(user.role)) return <Navigate to="/" replace />;
   return <>{children}</>;
@@ -37,8 +41,9 @@ function Protected({
 
 export function AppRoutes() {
   const user = useAuthStore((s) => s.user);
-  // Login bo'lgan super_admin uchun default sahifa super dashboard
-  const homeForUser = user?.role === "super_admin" ? "/super" : "/";
+  // Login bo'lgan foydalanuvchi uchun default sahifa roliga qarab
+  const homeForUser =
+    user?.role === "owner" ? "/owner" : user?.role === "super_admin" ? "/super" : "/";
   return (
     <Routes>
       <Route
@@ -58,6 +63,14 @@ export function AppRoutes() {
         element={
           <Protected superOnly>
             <SuperDashboardPage />
+          </Protected>
+        }
+      />
+      <Route
+        path="/owner"
+        element={
+          <Protected ownerOnly>
+            <OwnerPage />
           </Protected>
         }
       />

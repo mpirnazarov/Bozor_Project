@@ -112,6 +112,7 @@ const uz: Dict = {
   "admin.tab.map": "Xarita muharriri",
   "admin.tab.shops": "Magazinlar",
   "admin.tab.import": "Excel import",
+  "admin.tab.documents": "Hujjatlar",
   "admin.tab.audit": "Audit log",
 
   // Map editor
@@ -291,6 +292,7 @@ const ru: Dict = {
   "admin.tab.map": "Редактор карты",
   "admin.tab.shops": "Магазины",
   "admin.tab.import": "Импорт Excel",
+  "admin.tab.documents": "Документы",
   "admin.tab.audit": "Журнал",
 
   "editor.intro": "Нарисуйте регион (блок) на карте. Укажите префикс ID магазинов для каждого региона.",
@@ -466,6 +468,7 @@ const en: Dict = {
   "admin.tab.map": "Map editor",
   "admin.tab.shops": "Shops",
   "admin.tab.import": "Excel import",
+  "admin.tab.documents": "Documents",
   "admin.tab.audit": "Audit log",
 
   "editor.intro": "Draw a region (block) on the map. Enter a shop ID prefix for each region.",

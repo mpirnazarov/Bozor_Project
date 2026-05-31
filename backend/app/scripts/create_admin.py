@@ -55,6 +55,12 @@ async def _run(args: argparse.Namespace) -> None:
         UserRole.MARKET_ADMIN.value,
         market_id=1,
     )
+    # owner -> dastur egasi (bozorlar CRUD + tex-podderjka). market_id yo'q.
+    await _ensure_user(
+        "owner",
+        "Owner_2026!",
+        UserRole.OWNER.value,
+    )
 
 
 def main() -> None:

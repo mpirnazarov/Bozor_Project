@@ -90,6 +90,19 @@ async def require_super_admin(user: CurrentUser) -> User:
 SuperAdminUser = Annotated[User, Depends(require_super_admin)]
 
 
+async def require_owner(user: CurrentUser) -> User:
+    """Faqat dastur egasi (owner) — bozorlar CRUD va tex-podderjka."""
+    if not user.is_owner:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bu amal uchun dastur egasi (owner) huquqi kerak",
+        )
+    return user
+
+
+OwnerUser = Annotated[User, Depends(require_owner)]
+
+
 # === Multi-bozor: market resolver ===
 async def get_current_market(
     user: CurrentUser,

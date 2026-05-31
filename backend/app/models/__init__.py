@@ -8,12 +8,14 @@ from app.models.monthly_balance import (
     MonthlyBalance,
 )
 from app.models.pavilion import Pavilion
+from app.models.support_payment import SupportPayment, SUPPORT_MONTHLY_FEE, SUPPORT_FREE_MONTHS, SUPPORT_DUE_DAY
 from app.models.settings import DASHBOARD_SETTINGS_KEY, HIDE_UNMATCHED_KEY, THEME_SETTINGS_KEY, Setting
 from app.models.shop import Shop
 from app.models.user import User, UserRole
 
 __all__ = [
     "User",
+    "SupportPayment",
     "UserRole",
     "Market",
     "Counterparty",
