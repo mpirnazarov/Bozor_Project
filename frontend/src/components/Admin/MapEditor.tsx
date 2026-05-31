@@ -50,6 +50,8 @@ export function MapEditor() {
   const [fillColor, setFillColor] = useState("#d4a373");
   const [strokeColor, setStrokeColor] = useState("#b45309");
   const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [labelPos, setLabelPos] = useState<Pt | null>(null);
+  const [draggingLabel, setDraggingLabel] = useState(false);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
 
@@ -68,6 +70,9 @@ export function MapEditor() {
     setShopPrefix((p.meta?.shop_prefix as string | undefined) ?? "");
     setShowLabel(p.meta?.show_label !== false);
     setIsHidden(p.meta?.is_hidden === true);
+    setLabelPos(
+      p.label_x != null && p.label_y != null ? { x: p.label_x, y: p.label_y } : null,
+    );
     setFillColor(p.fill_color);
     setStrokeColor(p.stroke_color);
   }, [selectedId, pavilions]);
@@ -123,6 +128,11 @@ export function MapEditor() {
     pan.current = { active: mode !== "draw", moved: false, sx: e.clientX, sy: e.clientY, ox: vb.x, oy: vb.y };
   }
   function handleSvgPointerMove(e: React.PointerEvent) {
+    if (draggingLabel) {
+      const p = toSvgCoords(e.clientX, e.clientY);
+      setLabelPos(p);
+      return;
+    }
     if (dragIdx != null) {
       const p = toSvgCoords(e.clientX, e.clientY);
       setPoints((prev) => prev.map((pt, i) => (i === dragIdx ? p : pt)));
@@ -151,6 +161,7 @@ export function MapEditor() {
     try { (e.currentTarget as SVGSVGElement).releasePointerCapture(e.pointerId); } catch { /* noop */ }
     pan.current.active = false;
     setDragIdx(null);
+    setDraggingLabel(false);
   }
 
   function handleSvgClick(e: React.MouseEvent) {
@@ -168,6 +179,7 @@ export function MapEditor() {
     setShopPrefix("");
     setShowLabel(true);
     setIsHidden(false);
+    setLabelPos(null);
     setFillColor("#d4a373");
     setStrokeColor("#b45309");
     setMode("draw");
@@ -183,6 +195,7 @@ export function MapEditor() {
     setShopPrefix("");
     setShowLabel(false);
     setIsHidden(true);
+    setLabelPos(null);
     setMode("draw");
     setMsg("");
     setHiddenListOpen(false);
@@ -216,15 +229,16 @@ export function MapEditor() {
     if (!isHidden && !name.trim()) { setMsg(t("editor.name")); return; }
     setSaving(true);
     setMsg("");
-    const c = centroid(points);
+    // Belgi joylashuvi: agar admin surib o'rnatgan bo'lsa — o'shani, aks holda markaz
+    const labelPoint = labelPos ?? centroid(points);
     const payload = {
       display_name: isHidden ? (name.trim() || "Berkitilgan") : name.trim(),
       display_text: isHidden ? null : (labelText.trim() || null),
       polygon_points: pointsToStr(points),
       fill_color: isHidden ? "#ffffff" : fillColor,
       stroke_color: isHidden ? "#ffffff" : strokeColor,
-      label_x: c.x,
-      label_y: c.y,
+      label_x: labelPoint.x,
+      label_y: labelPoint.y,
       is_active: true,
       meta: {
         shop_prefix: isHidden ? undefined : (shopPrefix.trim() || undefined),
@@ -436,6 +450,26 @@ export function MapEditor() {
                 onDoubleClick={(e) => { e.stopPropagation(); removePoint(i); }}
               />
             ))}
+
+            {/* Belgi (label) — suriladigan. Faqat ko'rinadigan, berkitilmagan regionda */}
+            {!isHidden && showLabel && points.length >= 3 && (() => {
+              const lp = labelPos ?? centroid(points);
+              return (
+                <g
+                  style={{ cursor: "move" }}
+                  onPointerDown={(e) => { e.stopPropagation(); setDraggingLabel(true); }}
+                >
+                  {/* ushlash doirasi */}
+                  <circle cx={lp.x} cy={lp.y} r={16 / zoom} fill="#0066ff" fillOpacity={0.15}
+                    stroke="#0066ff" strokeWidth={2} strokeDasharray="3 2" vectorEffect="non-scaling-stroke" />
+                  <text x={lp.x} y={lp.y} fontSize={20} fontWeight="700" fill="#0066ff"
+                    textAnchor="middle" dominantBaseline="middle"
+                    style={{ pointerEvents: "none", userSelect: "none" }}>
+                    {labelText || name || "•"}
+                  </text>
+                </g>
+              );
+            })()}
           </svg>
         </div>
 
