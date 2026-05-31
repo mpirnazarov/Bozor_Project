@@ -10,6 +10,8 @@ import { getSuperDashboard, type MarketSummary } from "@/api/markets";
 import { setCurrentMarket } from "@/api/client";
 import { useAuthStore } from "@/store/authStore";
 import { fmtUZS } from "@/lib/utils";
+import { useT } from "@/i18n/useT";
+import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 
 type Theme = "dark" | "light";
 type ViewMode = "list" | "cards";
@@ -19,6 +21,7 @@ export function SuperDashboardPage() {
   const logout = useAuthStore((s) => s.logout);
   const [theme, setTheme] = useState<Theme>("dark");
   const [view, setView] = useState<ViewMode>("list");
+  const t = useT();
 
   const { data, isLoading, isError, dataUpdatedAt, refetch, isFetching } = useQuery({
     queryKey: ["super-dashboard"],
@@ -93,17 +96,17 @@ export function SuperDashboardPage() {
               <LayoutGrid className="text-white" size={28} strokeWidth={2.2} />
             </div>
             <div>
-              <h1 className="font-display text-2xl font-extrabold leading-tight lg:text-3xl">Boshqaruv Markazi</h1>
+              <h1 className="font-display text-2xl font-extrabold leading-tight lg:text-3xl">{t("super.title")}</h1>
               <div className="flex items-center gap-2 text-sm" style={{ color: t.sub }}>
                 <span className="inline-flex items-center gap-1.5">
                   <span className="relative flex h-2 w-2">
                     <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-status-paid opacity-75" />
                     <span className="relative inline-flex h-2 w-2 rounded-full bg-status-paid" />
                   </span>
-                  Jonli nazorat
+                  {t("super.live")}
                 </span>
                 <span style={{ color: t.faint }}>·</span>
-                <span>{data.markets.length} ta bozor</span>
+                <span>{data.markets.length} {t("super.markets")}</span>
               </div>
             </div>
           </div>
@@ -117,16 +120,17 @@ export function SuperDashboardPage() {
                 {now.toLocaleDateString("uz-UZ", { weekday: "long", day: "numeric", month: "long" })}
               </div>
             </div>
-            <IconBtn t={t} onClick={() => refetch()} title="Yangilash">
+            <LanguageSwitcher dark={dark} />
+            <IconBtn t={t} onClick={() => refetch()} title={t("common.refresh")}>
               <RefreshCw size={18} className={isFetching ? "animate-spin" : ""} />
             </IconBtn>
-            <IconBtn t={t} onClick={() => setTheme(dark ? "light" : "dark")} title="Tema">
+            <IconBtn t={t} onClick={() => setTheme(dark ? "light" : "dark")} title="Theme">
               {dark ? <Sun size={18} /> : <Moon size={18} />}
             </IconBtn>
-            <IconBtn t={t} onClick={toggleFullscreen} title="To'liq ekran">
+            <IconBtn t={t} onClick={toggleFullscreen} title={t("super.fullscreen")}>
               <Maximize size={18} />
             </IconBtn>
-            <IconBtn t={t} onClick={() => logout()} title="Chiqish">
+            <IconBtn t={t} onClick={() => logout()} title={t("common.logout")}>
               <LogOut size={18} />
             </IconBtn>
           </div>
@@ -134,30 +138,30 @@ export function SuperDashboardPage() {
 
         {/* Katta ko'rsatkichlar */}
         <div className="mb-5 grid gap-4 lg:grid-cols-3">
-          <BigStat t={t} dark={dark} label="Jami summa" value={fmtUZS(data.total)}
+          <BigStat t={t} dark={dark} label={t("home.totalSum")} value={fmtUZS(data.total)}
             icon={<Wallet size={22} />} accent="#0066ff"
-            sub={<span className="inline-flex items-center gap-1"><TrendingUp size={13} /> {data.markets.length} ta bozor yig'masi</span>} />
-          <BigStat t={t} dark={dark} label="To'langan" value={fmtUZS(data.paid)}
+            sub={<span className="inline-flex items-center gap-1"><TrendingUp size={13} /> {data.markets.length} {t("super.markets")}</span>} />
+          <BigStat t={t} dark={dark} label={t("home.paidSum")} value={fmtUZS(data.paid)}
             icon={<CheckCircle2 size={22} />} accent="#16a34a"
-            sub={<span>{paidPct}% to'lov darajasi</span>} />
-          <BigStat t={t} dark={dark} label="Qarzdorlik" value={fmtUZS(data.debt)}
+            sub={<span>{paidPct}% {t("super.colRate").toLowerCase()}</span>} />
+          <BigStat t={t} dark={dark} label={t("home.debtSum")} value={fmtUZS(data.debt)}
             icon={<AlertTriangle size={22} />} accent="#dc2626"
-            sub={<span>{debtPct}% undirilishi kerak</span>} />
+            sub={<span>{debtPct}% {t("home.mustCollect")}</span>} />
         </div>
 
         {/* Analitika qatori: donut + bar + reyting */}
         <div className="mb-5 grid gap-4 lg:grid-cols-3">
-          <Panel t={t} title="To'lov holati" icon={<Activity size={14} />}>
+          <Panel t={t} title={t("super.paymentStatus")} icon={<Activity size={14} />}>
             <div className="flex items-center gap-5">
               <Donut paidPct={paidPct} dark={dark} />
               <div className="space-y-3">
-                <Legend color="#16a34a" label="To'langan" value={`${paidPct}%`} sub={fmtUZS(data.paid)} t={t} />
-                <Legend color="#dc2626" label="Qarz" value={`${debtPct}%`} sub={fmtUZS(data.debt)} t={t} />
+                <Legend color="#16a34a" label={t("home.paidSum")} value={`${paidPct}%`} sub={fmtUZS(data.paid)} t={t} />
+                <Legend color="#dc2626" label={t("common.debt")} value={`${debtPct}%`} sub={fmtUZS(data.debt)} t={t} />
               </div>
             </div>
           </Panel>
 
-          <Panel t={t} title="Bozorlar bo'yicha summa" icon={<LayoutDashboard size={14} />}>
+          <Panel t={t} title={t("super.byMarket")} icon={<LayoutDashboard size={14} />}>
             <div className="space-y-2.5">
               {data.markets.slice(0, 5).map((m) => (
                 <BarRow key={m.id} m={m} max={maxMarket} t={t} dark={dark} />
@@ -165,7 +169,7 @@ export function SuperDashboardPage() {
             </div>
           </Panel>
 
-          <Panel t={t} title="To'lov reytingi" icon={<Trophy size={14} />}>
+          <Panel t={t} title={t("super.ranking")} icon={<Trophy size={14} />}>
             <div className="space-y-2">
               {ranked.slice(0, 5).map((m, i) => (
                 <div key={m.id} className="flex items-center gap-3">
@@ -187,11 +191,11 @@ export function SuperDashboardPage() {
         {/* Bozorlar — list/card toggle */}
         <div className="mb-3 flex items-center justify-between">
           <div className="text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color: t.faint }}>
-            Bozorlar ({data.markets.length})
+            {t("super.marketsList")} ({data.markets.length})
           </div>
           <div className="flex items-center gap-1 rounded-xl border p-1" style={{ background: t.panel, borderColor: t.panelBorder }}>
-            <ViewBtn active={view === "list"} onClick={() => setView("list")} t={t}><List size={15} /> Ro'yxat</ViewBtn>
-            <ViewBtn active={view === "cards"} onClick={() => setView("cards")} t={t}><LayoutGrid size={15} /> Kartochka</ViewBtn>
+            <ViewBtn active={view === "list"} onClick={() => setView("list")} t={t}><List size={15} /> {t("super.viewList")}</ViewBtn>
+            <ViewBtn active={view === "cards"} onClick={() => setView("cards")} t={t}><LayoutGrid size={15} /> {t("super.viewCards")}</ViewBtn>
           </div>
         </div>
 
@@ -207,7 +211,7 @@ export function SuperDashboardPage() {
 
         <div className="mt-8 flex items-center justify-center gap-2 text-xs" style={{ color: t.faint }}>
           <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-status-paid" />
-          Jonli · har 30 soniyada yangilanadi · oxirgi yangilanish{" "}
+          {t("super.live")} · {t("super.autoRefresh")} · {t("super.lastUpdate")}{" "}
           {new Date(dataUpdatedAt).toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
         </div>
       </div>
@@ -308,11 +312,11 @@ function MarketCard({
       </div>
       {m.is_demo ? (
         <div className="mt-3 inline-flex items-center gap-1 text-xs font-bold" style={{ color: t.faint }}>
-          Namuna ko'rinishi <ArrowRight size={13} className="transition-transform group-hover:translate-x-1" />
+          {t("super.demoPreview")} <ArrowRight size={13} className="transition-transform group-hover:translate-x-1" />
         </div>
       ) : (
         <div className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-brand">
-          Ochish <ArrowRight size={13} className="transition-transform group-hover:translate-x-1" />
+          {t("super.open")} <ArrowRight size={13} className="transition-transform group-hover:translate-x-1" />
         </div>
       )}
     </button>

@@ -30,3 +30,7 @@ class Setting(Base):
 # Dashboard sozlamasi shu kalit ostida bitta JSON sifatida saqlanadi.
 # Admin shu qiymatlarni alohida tahrirlaydi, main page shu yerdan o'qiydi.
 DASHBOARD_SETTINGS_KEY = "dashboard_stats"
+
+# Ilova mavzusi (light/dark) shu kalit ostida saqlanadi. Admin o'zgartiradi,
+# barcha foydalanuvchilar shu mavzuni ko'radi.
+THEME_SETTINGS_KEY = "app_theme"

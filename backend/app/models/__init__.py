@@ -8,7 +8,7 @@ from app.models.monthly_balance import (
     MonthlyBalance,
 )
 from app.models.pavilion import Pavilion
-from app.models.settings import DASHBOARD_SETTINGS_KEY, Setting
+from app.models.settings import DASHBOARD_SETTINGS_KEY, THEME_SETTINGS_KEY, Setting
 from app.models.shop import Shop
 from app.models.user import User, UserRole
 
@@ -24,5 +24,6 @@ __all__ = [
     "RU_TYPE_TO_CATEGORY",
     "Setting",
     "DASHBOARD_SETTINGS_KEY",
+    "THEME_SETTINGS_KEY",
     "AuditLog",
 ]

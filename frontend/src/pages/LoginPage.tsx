@@ -2,6 +2,8 @@ import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Store, ShieldCheck, ArrowRight } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
+import { useT } from "@/i18n/useT";
+import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -10,6 +12,7 @@ export function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const t = useT();
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -19,7 +22,7 @@ export function LoginPage() {
       const user = useAuthStore.getState().user;
       navigate(user?.role === "super_admin" ? "/super" : "/", { replace: true });
     } catch {
-      setError("Login yoki parol noto'g'ri");
+      setError(t("login.error"));
     }
   }
 
@@ -34,6 +37,11 @@ export function LoginPage() {
         style={{ backgroundImage: "linear-gradient(rgba(255,255,255,.6) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.6) 1px, transparent 1px)", backgroundSize: "44px 44px" }}
       />
 
+      {/* Til tanlash — yuqori o'ngda */}
+      <div className="absolute right-5 top-5 z-10">
+        <LanguageSwitcher dark />
+      </div>
+
       {/* Kartochka */}
       <div className="relative w-full max-w-sm animate-scale-in">
         <div className="mb-6 flex flex-col items-center text-center">
@@ -41,32 +49,32 @@ export function LoginPage() {
             <Store className="text-white" size={30} strokeWidth={2.2} />
           </div>
           <h1 className="font-display text-2xl font-extrabold text-white">
-            Savdo Kompleksi
+            {t("login.title")}
           </h1>
-          <p className="mt-1 text-sm text-white/55">Boshqaruv tizimiga kirish</p>
+          <p className="mt-1 text-sm text-white/55">{t("login.subtitle")}</p>
         </div>
 
         <div className="card-glass rounded-3xl border-white/15 bg-white/10 p-7">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="mb-1.5 block text-xs font-bold text-white/70">Login</label>
+              <label className="mb-1.5 block text-xs font-bold text-white/70">{t("login.username")}</label>
               <input
                 className="input border-white/15 bg-white/10 text-white placeholder:text-white/40 focus:bg-white/15 focus:ring-white/20"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="Login"
+                placeholder={t("login.username")}
                 autoComplete="username"
                 required
               />
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-bold text-white/70">Parol</label>
+              <label className="mb-1.5 block text-xs font-bold text-white/70">{t("login.password")}</label>
               <input
                 className="input border-white/15 bg-white/10 text-white placeholder:text-white/40 focus:bg-white/15 focus:ring-white/20"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Parol"
+                placeholder={t("login.password")}
                 autoComplete="current-password"
                 required
               />
@@ -81,9 +89,9 @@ export function LoginPage() {
               className="btn group w-full bg-white py-3 text-brand-dark hover:bg-white"
               disabled={loading}
             >
-              {loading ? "Kirilmoqda..." : (
+              {loading ? t("login.loading") : (
                 <>
-                  Kirish
+                  {t("login.submit")}
                   <ArrowRight size={17} className="transition-transform group-hover:translate-x-1" />
                 </>
               )}
@@ -92,7 +100,7 @@ export function LoginPage() {
         </div>
 
         <div className="mt-5 flex items-center justify-center gap-1.5 text-xs text-white/40">
-          <ShieldCheck size={13} /> Xavfsiz ulanish · ma'lumotlar himoyalangan
+          <ShieldCheck size={13} /> {t("login.secure")}
         </div>
       </div>
     </div>

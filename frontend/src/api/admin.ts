@@ -113,3 +113,14 @@ export async function importShopsGsheet(url: string): Promise<ShopImportResult> 
   const { data } = await apiClient.post<ShopImportResult>("/admin/import/shops/gsheet", { url });
   return data;
 }
+
+// === Mavzu (theme) ===
+export async function getTheme(): Promise<"light" | "dark"> {
+  const { data } = await apiClient.get<{ theme: "light" | "dark" }>("/settings/theme");
+  return data.theme;
+}
+
+export async function setTheme(theme: "light" | "dark"): Promise<"light" | "dark"> {
+  const { data } = await apiClient.put<{ theme: "light" | "dark" }>("/admin/theme", { theme });
+  return data.theme;
+}

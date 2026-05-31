@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { getPavilions } from "@/api/pavilions";
 import { createPavilion, updatePavilion, deletePavilion } from "@/api/admin";
+import { useT } from "@/i18n/useT";
 
 const VIEW_W = 1568;
 const VIEW_H = 1109;
@@ -31,6 +32,7 @@ type Mode = "select" | "draw";
 
 export function MapEditor() {
   const qc = useQueryClient();
+  const t = useT();
   const svgRef = useRef<SVGSVGElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 
@@ -242,26 +244,24 @@ export function MapEditor() {
   return (
     <div className="space-y-3">
       <p className="text-sm text-ink-soft">
-        Xaritada region (blok) chizing. Har bir region uchun magazin ID prefiksini
-        kiriting (masalan <span className="font-mono font-bold">04-1-1</span>) — shu prefiksli
-        barcha magazinlar region bosilganda ko'rinadi.
+        {t("editor.intro")} <span className="font-mono font-bold">04-1-1</span>
       </p>
 
       <div className="flex flex-wrap items-center gap-2">
         <button className={mode === "select" ? "btn-primary" : "btn-ghost"} onClick={() => setMode("select")}>
-          <MousePointer2 size={15} /> Tanlash
+          <MousePointer2 size={15} /> {t("editor.select")}
         </button>
         <button className="btn-ghost" onClick={startNew}>
-          <Plus size={15} /> Yangi region
+          <Plus size={15} /> {t("editor.newRegion")}
         </button>
         {mode === "draw" && (
           <span className="rounded-lg bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
-            Chizish rejimi — nuqta qo'shish uchun xaritaga bosing
+            {t("editor.drawMode")}
           </span>
         )}
         {points.length > 0 && (
           <button className="btn-ghost text-status-unpaid" onClick={() => setPoints([])}>
-            <X size={15} /> Nuqtalarni tozalash
+            <X size={15} /> {t("editor.clearPoints")}
           </button>
         )}
       </div>
@@ -271,16 +271,16 @@ export function MapEditor() {
         <div ref={wrapRef} className={`card relative overflow-hidden ${fullscreen ? "grid place-items-center bg-slate-900" : ""}`}>
           {/* Boshqaruv tugmalari */}
           <div className="absolute right-3 top-3 z-10 flex flex-col gap-1.5">
-            <button onClick={toggleFullscreen} className="grid h-9 w-9 place-items-center rounded-xl border border-white/60 bg-white/90 text-ink-soft shadow-soft backdrop-blur hover:text-brand" title="To'liq ekran">
+            <button onClick={toggleFullscreen} className="grid h-9 w-9 place-items-center rounded-xl border border-white/60 bg-white/90 text-ink-soft shadow-soft backdrop-blur hover:text-brand" title={t("editor.fullscreen")}>
               {fullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
             </button>
-            <button onClick={() => applyZoom(1.4)} className="grid h-9 w-9 place-items-center rounded-xl border border-white/60 bg-white/90 text-ink-soft shadow-soft backdrop-blur hover:text-brand" title="Kattalashtirish">
+            <button onClick={() => applyZoom(1.4)} className="grid h-9 w-9 place-items-center rounded-xl border border-white/60 bg-white/90 text-ink-soft shadow-soft backdrop-blur hover:text-brand" title={t("map.zoomIn")}>
               <ZoomIn size={16} />
             </button>
-            <button onClick={() => applyZoom(1 / 1.4)} className="grid h-9 w-9 place-items-center rounded-xl border border-white/60 bg-white/90 text-ink-soft shadow-soft backdrop-blur hover:text-brand" title="Kichiklashtirish">
+            <button onClick={() => applyZoom(1 / 1.4)} className="grid h-9 w-9 place-items-center rounded-xl border border-white/60 bg-white/90 text-ink-soft shadow-soft backdrop-blur hover:text-brand" title={t("map.zoomOut")}>
               <ZoomOut size={16} />
             </button>
-            <button onClick={resetZoom} className="grid h-9 w-9 place-items-center rounded-xl border border-white/60 bg-white/90 text-ink-soft shadow-soft backdrop-blur hover:text-brand" title="Asl holat">
+            <button onClick={resetZoom} className="grid h-9 w-9 place-items-center rounded-xl border border-white/60 bg-white/90 text-ink-soft shadow-soft backdrop-blur hover:text-brand" title={t("map.reset")}>
               <Maximize2 size={14} />
             </button>
           </div>
@@ -381,36 +381,36 @@ export function MapEditor() {
         <div className="space-y-3">
           <div className="card space-y-2 p-3">
             <div className="text-xs font-bold text-ink-soft">
-              {selectedId != null ? `Region #${selectedId}` : "Yangi region"}
+              {selectedId != null ? `${t("editor.region")} #${selectedId}` : t("editor.newRegion")}
             </div>
-            <input className="input" placeholder="Nomi (masalan A-BLOK)" value={name} onChange={(e) => setName(e.target.value)} />
-            <input className="input" placeholder="Belgi (xaritada, masalan A)" value={labelText} onChange={(e) => setLabelText(e.target.value)} />
+            <input className="input" placeholder={t("editor.name")} value={name} onChange={(e) => setName(e.target.value)} />
+            <input className="input" placeholder={t("editor.label")} value={labelText} onChange={(e) => setLabelText(e.target.value)} />
             <div>
-              <input className="input font-mono" placeholder="Magazin ID prefiksi: 04-1-1" value={shopPrefix} onChange={(e) => setShopPrefix(e.target.value)} />
+              <input className="input font-mono" placeholder={t("editor.prefix")} value={shopPrefix} onChange={(e) => setShopPrefix(e.target.value)} />
               <div className="mt-1 text-[11px] text-ink-faint">
-                Shu prefiksli magazinlar (04-1-1-001, 04-1-1-002...) region bosilganda ko'rinadi
+                {t("editor.prefixHint")}
               </div>
             </div>
             <div className="flex items-center gap-2 text-xs">
-              <span className="text-ink-soft">To'ldirish</span>
+              <span className="text-ink-soft">{t("editor.fill")}</span>
               <input type="color" value={fillColor} onChange={(e) => setFillColor(e.target.value)} />
-              <span className="text-ink-soft">Chegara</span>
+              <span className="text-ink-soft">{t("editor.stroke")}</span>
               <input type="color" value={strokeColor} onChange={(e) => setStrokeColor(e.target.value)} />
             </div>
-            <div className="text-xs text-ink-faint">Nuqtalar: {points.length}</div>
+            <div className="text-xs text-ink-faint">{t("editor.points")}: {points.length}</div>
             <button className="btn-primary w-full" onClick={handleSave} disabled={saving}>
-              <Save size={15} /> {saving ? "Saqlanmoqda..." : "Saqlash"}
+              <Save size={15} /> {saving ? t("common.saving") : t("common.save")}
             </button>
             {selectedId != null && (
               <button className="btn-ghost w-full text-status-unpaid" onClick={handleDelete}>
-                <Trash2 size={15} /> O'chirish
+                <Trash2 size={15} /> {t("common.delete")}
               </button>
             )}
             {msg && <div className="text-center text-xs font-semibold text-brand">{msg}</div>}
           </div>
 
           <div className="card p-3 text-xs text-ink-soft">
-            <div className="mb-1 font-bold">Yo'riqnoma</div>
+            <div className="mb-1 font-bold">{t("editor.guide")}</div>
             <ul className="list-disc space-y-1 pl-4">
               <li>"Yangi region" → "Chizish" rejimi</li>
               <li>Xaritaga bosib nuqta qo'shing</li>

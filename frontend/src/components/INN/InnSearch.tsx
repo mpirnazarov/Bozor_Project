@@ -2,13 +2,16 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
 import { searchInn } from "@/api/inn";
+import { useT } from "@/i18n/useT";
 
 interface Props {
   onSelectInn: (inn: string) => void;
 }
 
+// i18n
 export function InnSearch({ onSelectInn }: Props) {
   const [q, setQ] = useState("");
+  const t = useT();
   const [active, setActive] = useState(false);
 
   const { data, isFetching } = useQuery({
@@ -19,12 +22,12 @@ export function InnSearch({ onSelectInn }: Props) {
 
   return (
     <div className="card relative p-4">
-      <div className="eyebrow mb-2">Kontragent qidiruv</div>
+      <div className="eyebrow mb-2">{t("inn.title")}</div>
       <div className="relative">
         <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-faint" />
         <input
           className="input pl-10"
-          placeholder="INN yoki nom bo'yicha qidirish..."
+          placeholder={t("inn.placeholder")}
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onFocus={() => setActive(true)}
@@ -35,10 +38,10 @@ export function InnSearch({ onSelectInn }: Props) {
       {active && q.trim().length >= 2 && (
         <div className="absolute left-4 right-4 z-30 mt-1.5 max-h-72 overflow-y-auto rounded-2xl border border-white/60 bg-white/95 shadow-float backdrop-blur-xl animate-scale-in">
           {isFetching && (
-            <div className="px-4 py-3.5 text-sm text-ink-faint">Qidirilmoqda...</div>
+            <div className="px-4 py-3.5 text-sm text-ink-faint">{t("inn.searching")}</div>
           )}
           {!isFetching && data?.length === 0 && (
-            <div className="px-4 py-3.5 text-sm text-ink-faint">Topilmadi</div>
+            <div className="px-4 py-3.5 text-sm text-ink-faint">{t("common.notFound")}</div>
           )}
           {data?.map((r) => (
             <button
@@ -51,7 +54,7 @@ export function InnSearch({ onSelectInn }: Props) {
                 <div className="font-mono text-xs text-ink-faint">INN: {r.inn}</div>
               </div>
               <span className="shrink-0 rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-bold text-brand">
-                {r.shop_count} ta
+                {r.shop_count} {t("inn.shops")}
               </span>
             </button>
           ))}

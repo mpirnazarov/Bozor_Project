@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { LogOut, Settings, Store, ArrowLeft, Info } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
+import { useT } from "@/i18n/useT";
+import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 import { HeaderStats } from "@/components/Dashboard/HeaderStats";
 import { InnSearch } from "@/components/INN/InnSearch";
 import { MapView } from "@/components/Map/MapView";
@@ -21,6 +23,7 @@ export function HomePage() {
   const isSuperAdmin = user?.role === "super_admin";
   const [searchParams] = useSearchParams();
   const isDemo = searchParams.get("demo") === "1";
+  const t = useT();
 
   const [activePavilion, setActivePavilion] = useState<Pavilion | null>(null);
   const [activeShop, setActiveShop] = useState<string | null>(null);
@@ -42,12 +45,13 @@ export function HomePage() {
             </div>
             <div>
               <h1 className="font-display text-base font-extrabold leading-tight text-ink">
-                O'rikzor Savdo Kompleksi
+                {t("app.title")}
               </h1>
-              <p className="text-xs text-ink-faint">Bozor boshqaruv tizimi</p>
+              <p className="text-xs text-ink-faint">{t("app.subtitle")}</p>
             </div>
           </div>
           <div className="flex items-center gap-2.5">
+            <LanguageSwitcher />
             <div className="flex items-center gap-2 rounded-full bg-white/60 py-1 pl-3 pr-1.5 ring-1 ring-slate-200/70">
               <span className="text-sm font-semibold text-ink-soft">{user?.username}</span>
               {isMarketAdmin && (
@@ -57,14 +61,14 @@ export function HomePage() {
               )}
               {isSuperAdmin && (
                 <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-ink-soft">
-                  ko'rish
+                  {t("home.view")}
                 </span>
               )}
             </div>
             {/* Super admin uchun — boshqaruv markaziga qaytish */}
             {isSuperAdmin && (
               <Link to="/super" className="btn-ghost px-3 py-2" title="Boshqaruv markazi">
-                <ArrowLeft size={16} /> Markaz
+                <ArrowLeft size={16} /> {t("home.center")}
               </Link>
             )}
             {/* Admin tugmasi FAQAT bozor admini uchun (super admin uchun emas) */}
@@ -84,7 +88,7 @@ export function HomePage() {
         {isDemo && (
           <div className="flex items-center gap-2.5 rounded-2xl border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700">
             <Info size={16} />
-            Bu bozor uchun vaqtinchalik (namuna) ma'lumot ko'rsatilmoqda. Real ma'lumotlar keyinroq ulanadi.
+            {t("home.demoNotice")}
           </div>
         )}
         <HeaderStats />

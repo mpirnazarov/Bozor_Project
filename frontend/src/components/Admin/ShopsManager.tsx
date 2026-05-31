@@ -7,9 +7,11 @@ import {
   importShopsCsv, importShopsGsheet, type ShopImportResult,
 } from "@/api/admin";
 import { listShops } from "@/api/shops";
+import { useT } from "@/i18n/useT";
 
 export function ShopsManager() {
   const qc = useQueryClient();
+  const t = useT();
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ShopImportResult | null>(null);
@@ -57,9 +59,7 @@ export function ShopsManager() {
   return (
     <div className="space-y-4">
       <p className="text-sm text-ink-soft">
-        Magazinlarni Google Sheets havolasi yoki CSV fayl orqali yuklang. Har magazin
-        INN bo'yicha kontragentga bog'lanadi. Topilmagan (bog'lanmagan) magazinlar
-        pastda ro'yxatda ko'rsatiladi.
+        {t("shopsmgr.intro")}
       </p>
 
       {/* Import manbalari */}
@@ -67,7 +67,7 @@ export function ShopsManager() {
         {/* Google Sheets */}
         <div className="card space-y-2 p-4">
           <div className="flex items-center gap-2 text-sm font-bold text-ink">
-            <Link2 size={16} className="text-brand" /> Google Sheets havolasi
+            <Link2 size={16} className="text-brand" /> {t("shopsmgr.gsheet")}
           </div>
           <input
             className="input font-mono text-xs"
@@ -80,19 +80,19 @@ export function ShopsManager() {
           </div>
           <button className="btn-primary w-full" onClick={runUrl} disabled={busy}>
             {busy ? <Loader2 size={15} className="animate-spin" /> : <Link2 size={15} />}
-            Havoladan yuklash
+            {t("shopsmgr.gsheetLoad")}
           </button>
         </div>
 
         {/* CSV fayl */}
         <div className="card space-y-2 p-4">
           <div className="flex items-center gap-2 text-sm font-bold text-ink">
-            <Upload size={16} className="text-brand" /> CSV fayl
+            <Upload size={16} className="text-brand" /> {t("shopsmgr.csv")}
           </div>
           <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 py-6 text-center transition-colors hover:border-brand hover:bg-brand-50">
             <Upload size={22} className="text-ink-faint" />
             <span className="text-xs font-semibold text-ink-soft">
-              CSV faylni tanlang yoki tashlang
+              {t("shopsmgr.csvDrop")}
             </span>
             <input
               type="file"
@@ -116,7 +116,7 @@ export function ShopsManager() {
 
       {busy && (
         <div className="flex items-center gap-2 rounded-xl bg-brand-50 px-4 py-3 text-sm font-semibold text-brand">
-          <Loader2 size={16} className="animate-spin" /> Import qilinmoqda...
+          <Loader2 size={16} className="animate-spin" /> {t("shopsmgr.importing")}
         </div>
       )}
 
@@ -124,14 +124,14 @@ export function ShopsManager() {
       {result && (
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <StatBox label="O'qilgan qator" value={result.rows_read} tone="ink" icon={<Store size={16} />} />
-            <StatBox label="Qo'shildi" value={result.inserted} tone="paid" icon={<CheckCircle2 size={16} />} />
-            <StatBox label="Yangilandi" value={result.updated} tone="brand" icon={<CheckCircle2 size={16} />} />
-            <StatBox label="Bog'lanmadi" value={result.not_found_count} tone="unpaid" icon={<AlertTriangle size={16} />} />
+            <StatBox label={t("shopsmgr.rowsRead")} value={result.rows_read} tone="ink" icon={<Store size={16} />} />
+            <StatBox label={t("shopsmgr.inserted")} value={result.inserted} tone="paid" icon={<CheckCircle2 size={16} />} />
+            <StatBox label={t("shopsmgr.updated")} value={result.updated} tone="brand" icon={<CheckCircle2 size={16} />} />
+            <StatBox label={t("shopsmgr.unlinked")} value={result.not_found_count} tone="unpaid" icon={<AlertTriangle size={16} />} />
           </div>
           <div className="flex flex-wrap gap-3 text-xs text-ink-soft">
-            <span>Kontragentga bog'landi: <b className="text-status-paid">{result.linked}</b></span>
-            <span>Yangi kontragent: <b className="text-brand">{result.counterparties_created}</b></span>
+            <span>{t("shopsmgr.linked")}: <b className="text-status-paid">{result.linked}</b></span>
+            <span>{t("shopsmgr.cpCreated")}: <b className="text-brand">{result.counterparties_created}</b></span>
           </div>
 
           {/* Topilmaganlar ro'yxati + filter */}
@@ -140,13 +140,13 @@ export function ShopsManager() {
               <div className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm font-bold text-ink">
                   <AlertTriangle size={16} className="text-status-unpaid" />
-                  Topilmagan / bog'lanmagan ({result.not_found_count})
+                  {t("shopsmgr.notFoundTitle")} ({result.not_found_count})
                 </div>
                 <button
                   className={onlyNotFound ? "btn-primary px-3 py-1.5 text-xs" : "btn-ghost px-3 py-1.5 text-xs"}
                   onClick={() => setOnlyNotFound((v) => !v)}
                 >
-                  <Filter size={13} /> {onlyNotFound ? "Hammasi" : "Faqat topilmaganlar"}
+                  <Filter size={13} /> {onlyNotFound ? t("shopsmgr.showAll") : t("shopsmgr.onlyNotFound")}
                 </button>
               </div>
               <div className="max-h-80 space-y-1.5 overflow-y-auto">
@@ -189,11 +189,11 @@ export function ShopsManager() {
       {/* Umumiy magazin statistikasi (DB) */}
       {!result && shopStats && (
         <div className="card p-4">
-          <div className="mb-2 text-sm font-bold text-ink">Bazadagi magazinlar</div>
+          <div className="mb-2 text-sm font-bold text-ink">{t("shopsmgr.dbShops")}</div>
           <div className="text-2xl font-extrabold text-brand tabnum">
             {shopStats.total?.toLocaleString("uz-UZ") ?? 0}
           </div>
-          <div className="text-xs text-ink-faint">jami magazin</div>
+          <div className="text-xs text-ink-faint">{t("shopsmgr.totalShops")}</div>
         </div>
       )}
     </div>

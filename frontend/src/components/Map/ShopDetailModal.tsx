@@ -1,13 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { getShop } from "@/api/shops";
-import { fmtUZS, STATUS_COLORS, STATUS_LABELS } from "@/lib/utils";
+import { fmtUZS, STATUS_COLORS } from "@/lib/utils";
+import { useT } from "@/i18n/useT";
 import { Modal, Spinner } from "@/components/ui/Modal";
 
-const CATEGORY_LABELS: Record<string, string> = {
-  rent: "🏠 Arenda",
-  electricity: "⚡ Elektr",
-  water: "💧 Suv",
+const CATEGORY_TKEY: Record<string, string> = {
+  rent: "pav.service.rent",
+  electricity: "pav.service.electricity",
+  water: "pav.service.water",
 };
+const CATEGORY_ICON: Record<string, string> = { rent: "🏠", electricity: "⚡", water: "💧" };
 
 interface Props {
   shopId: string | null;
@@ -15,6 +17,7 @@ interface Props {
 }
 
 export function ShopDetailModal({ shopId, onClose }: Props) {
+  const t = useT();
   const { data, isLoading } = useQuery({
     queryKey: ["shop", shopId],
     queryFn: () => getShop(shopId!),
@@ -31,57 +34,72 @@ export function ShopDetailModal({ shopId, onClose }: Props) {
               className="rounded-lg px-4 py-2.5 text-sm font-bold text-white"
               style={{ background: STATUS_COLORS[data.billing.status] }}
             >
-              {STATUS_LABELS[data.billing.status]}
+              {t("pav.status." + data.billing.status)}
               {data.billing.status !== "no_data" && (
                 <span className="float-right font-mono">
-                  Qarz: {fmtUZS(data.billing.total_debt)}
+                  {t("shop.debtLabel")}: {fmtUZS(data.billing.total_debt)}
                 </span>
               )}
             </div>
           )}
 
           <div className="card p-3 text-sm">
-            <Row label="Magazin ID" value={data.shop.shop_id} mono />
-            <Row label="Pavilion" value={data.shop.pavilion_code ?? "—"} />
-            <Row label="Tur" value={data.shop.shop_type ?? "—"} />
-            <Row label="Oylik ijara" value={fmtUZS(data.shop.monthly_rent)} mono />
+            <Row label={t("shop.shopId")} value={data.shop.shop_id} mono />
+            <Row label={t("shop.pavilion")} value={data.shop.pavilion_code ?? "—"} />
+            <Row label={t("shop.type")} value={data.shop.shop_type ?? "—"} />
+            <Row label={t("shop.rent")} value={fmtUZS(data.shop.monthly_rent)} mono />
             {data.counterparty && (
               <>
-                <Row label="Kontragent" value={data.counterparty.name} />
-                <Row label="INN" value={data.counterparty.inn} mono />
-                <Row label="Shartnoma" value={data.counterparty.contract_no ?? "—"} />
-                <Row label="Sana" value={data.counterparty.contract_date ?? "—"} />
+                <Row label={t("shop.counterparty")} value={data.counterparty.name} />
+                <Row label={t("shop.inn")} value={data.counterparty.inn} mono />
+                <Row label={t("shop.contract")} value={data.counterparty.contract_no ?? "—"} />
+                <Row label={t("shop.date")} value={data.counterparty.contract_date ?? "—"} />
                 {data.counterparty.phone && (
-                  <Row label="Telefon" value={data.counterparty.phone} />
+                  <Row label={t("shop.phone")} value={data.counterparty.phone} />
                 )}
               </>
             )}
           </div>
 
-          {data.billing && data.billing.categories.length > 0 && (
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-              {data.billing.categories.map((c) => {
-                const debt = Number(c.debt);
-                return (
-                  <div key={c.category} className="card p-3">
-                    <div className="text-xs font-semibold text-slate-500">
-                      {CATEGORY_LABELS[c.category] ?? c.category}
+          {data.billing && (
+            <div>
+              <div className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-faint">
+                {t("shop.paymentBreakdown")}
+              </div>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                {(["rent", "electricity", "water"] as const).map((cat) => {
+                  const c = data.billing!.categories.find((x) => x.category === cat);
+                  const due = Number(c?.due ?? 0);
+                  const paid = Number(c?.paid ?? 0);
+                  const debt = Math.max(0, due - paid);
+                  const hasData = due > 0 || paid > 0;
+                  return (
+                    <div key={cat} className="card p-3">
+                      <div className="text-xs font-bold text-ink-soft">
+                        {CATEGORY_ICON[cat]} {t(CATEGORY_TKEY[cat])}
+                      </div>
+                      {hasData ? (
+                        <>
+                          <div className="mt-1 font-mono text-xs text-ink-faint">
+                            {t("shop.account")}: {fmtUZS(due)}
+                          </div>
+                          <div className="font-mono text-xs text-ink-faint">
+                            {t("common.paid")}: {fmtUZS(paid)}
+                          </div>
+                          <div
+                            className="mt-1 font-mono text-sm font-bold"
+                            style={{ color: debt > 0 ? STATUS_COLORS.unpaid : STATUS_COLORS.paid }}
+                          >
+                            {debt > 0 ? `${t("shop.debtLabel")}: ${fmtUZS(debt)}` : t("shop.noDebt")}
+                          </div>
+                        </>
+                      ) : (
+                        <div className="mt-2 text-xs text-ink-faint">{t("shop.noData")}</div>
+                      )}
                     </div>
-                    <div className="mt-1 font-mono text-xs text-slate-400">
-                      Hisob: {fmtUZS(c.due)}
-                    </div>
-                    <div className="font-mono text-xs text-slate-400">
-                      To'langan: {fmtUZS(c.paid)}
-                    </div>
-                    <div
-                      className="mt-1 font-mono text-sm font-bold"
-                      style={{ color: debt > 0 ? STATUS_COLORS.unpaid : STATUS_COLORS.paid }}
-                    >
-                      {debt > 0 ? `Qarz: ${fmtUZS(debt)}` : "Qarzsiz"}
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>

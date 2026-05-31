@@ -4,6 +4,7 @@ import { Plus, Minus, Maximize2 } from "lucide-react";
 import { getPavilions } from "@/api/pavilions";
 import { Spinner } from "@/components/ui/Modal";
 import type { Pavilion } from "@/types/api";
+import { useT } from "@/i18n/useT";
 
 const VIEW_W = 1568;
 const VIEW_H = 1109;
@@ -22,6 +23,7 @@ interface ViewBox {
 }
 
 export function MapView({ onSelectPavilion }: Props) {
+  const t = useT();
   const { data: pavilions, isLoading, isError, error } = useQuery({
     queryKey: ["pavilions"],
     queryFn: getPavilions,
@@ -107,12 +109,12 @@ export function MapView({ onSelectPavilion }: Props) {
     pan.current.active = false;
   }
 
-  if (isLoading) return <Spinner label="Xarita yuklanmoqda..." />;
+  if (isLoading) return <Spinner label={t("map.loading")} />;
 
   if (isError) {
     return (
       <div className="card p-6 text-center text-sm text-status-unpaid">
-        Xaritani yuklashda xatolik: {(error as Error)?.message ?? "noma'lum"}
+        {t("map.error")}: {(error as Error)?.message ?? "noma'lum"}
       </div>
     );
   }
@@ -133,21 +135,21 @@ export function MapView({ onSelectPavilion }: Props) {
         <button
           onClick={() => applyZoom(1.4)}
           className="grid h-9 w-9 place-items-center rounded-xl border border-white/60 bg-white/90 text-ink-soft shadow-soft backdrop-blur transition-colors hover:bg-white hover:text-brand"
-          title="Kattalashtirish"
+          title={t("map.zoomIn")}
         >
           <Plus size={17} />
         </button>
         <button
           onClick={() => applyZoom(1 / 1.4)}
           className="grid h-9 w-9 place-items-center rounded-xl border border-white/60 bg-white/90 text-ink-soft shadow-soft backdrop-blur transition-colors hover:bg-white hover:text-brand"
-          title="Kichiklashtirish"
+          title={t("map.zoomOut")}
         >
           <Minus size={17} />
         </button>
         <button
           onClick={reset}
           className="grid h-9 w-9 place-items-center rounded-xl border border-white/60 bg-white/90 text-ink-soft shadow-soft backdrop-blur transition-colors hover:bg-white hover:text-brand"
-          title="Asl holatga qaytarish"
+          title={t("map.reset")}
         >
           <Maximize2 size={15} />
         </button>

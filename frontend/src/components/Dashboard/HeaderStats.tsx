@@ -3,9 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { Info, RefreshCw, Wallet, CheckCircle2, AlertTriangle, TrendingUp, X } from "lucide-react";
 import { getDashboard } from "@/api/dashboard";
 import { fmtUZS } from "@/lib/utils";
+import { useT } from "@/i18n/useT";
 
 export function HeaderStats() {
   const [live, setLive] = useState(false);
+  const t = useT();
 
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ["dashboard", live],
@@ -29,8 +31,8 @@ export function HeaderStats() {
     <>
       <div className="flex items-center justify-between">
         <div>
-          <div className="eyebrow">Umumiy ko'rsatkichlar</div>
-          <h2 className="font-display text-lg font-bold text-ink">Moliyaviy holat</h2>
+          <div className="eyebrow">{t("home.overview")}</div>
+          <h2 className="font-display text-lg font-bold text-ink">{t("home.financial")}</h2>
         </div>
         <button
           onClick={() => {
@@ -41,25 +43,25 @@ export function HeaderStats() {
           title="monthly_balances'dan real hisoblash"
         >
           <RefreshCw size={14} className={isFetching ? "animate-spin" : ""} />
-          {live ? "Real ma'lumot" : "Real hisobla"}
+          {live ? t("home.realData") : t("home.computeReal")}
         </button>
       </div>
 
       <div className="stagger grid gap-3 sm:grid-cols-3">
         <StatCard
-          label="Jami summa"
+          label={t("home.totalSum")}
           value={data?.total}
           loading={isLoading}
           icon={<Wallet size={18} />}
           tone="brand"
           footer={
             <span className="inline-flex items-center gap-1 text-ink-faint">
-              <TrendingUp size={12} /> umumiy hisob-kitob
+              <TrendingUp size={12} /> {t("home.collectRate")}
             </span>
           }
         />
         <StatCard
-          label="To'langan"
+          label={t("home.paidSum")}
           value={data?.paid}
           loading={isLoading}
           icon={<CheckCircle2 size={18} />}
@@ -83,14 +85,14 @@ export function HeaderStats() {
           }
         />
         <StatCard
-          label="Qarzdorlik"
+          label={t("home.debtSum")}
           value={data?.debt}
           loading={isLoading}
           icon={<AlertTriangle size={18} />}
           tone="unpaid"
           footer={
             <span className="inline-flex items-center gap-1 text-ink-faint">
-              undirilishi kerak
+              {t("home.mustCollect")}
             </span>
           }
         />
@@ -149,6 +151,7 @@ function BreakdownPopover({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const t = useT();
 
   useEffect(() => {
     if (!open) return;
@@ -179,7 +182,7 @@ function BreakdownPopover({
       {open && (
         <div className="absolute right-0 top-7 z-40 w-64 animate-scale-in rounded-2xl border border-white/60 bg-white/95 p-3 shadow-float backdrop-blur-xl">
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-xs font-bold text-ink">Tushum tarkibi</span>
+            <span className="text-xs font-bold text-ink">{t("home.breakdown")}</span>
             <button
               onClick={() => setOpen(false)}
               className="grid h-5 w-5 place-items-center rounded-full text-ink-faint transition-colors hover:bg-slate-100 hover:text-ink"
@@ -196,7 +199,7 @@ function BreakdownPopover({
             ))}
           </div>
           <div className="mt-2 flex items-center justify-between rounded-xl bg-status-paid/8 px-2.5 py-2">
-            <span className="text-xs font-extrabold text-ink">Jami</span>
+            <span className="text-xs font-extrabold text-ink">{t("common.total")}</span>
             <span className="tabnum text-sm font-extrabold text-status-paid">{fmtUZS(total)}</span>
           </div>
         </div>

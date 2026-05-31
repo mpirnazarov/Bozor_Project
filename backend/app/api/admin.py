@@ -12,6 +12,7 @@ from app.database import get_db
 from app.deps import AdminUser, CurrentMarket
 from app.models import (
     DASHBOARD_SETTINGS_KEY,
+    THEME_SETTINGS_KEY,
     AuditLog,
     Pavilion,
     Setting,
@@ -33,6 +34,30 @@ from app.services.import_service import import_balances_xlsx
 from app.services.shop_import_service import import_shops_csv
 
 router = APIRouter()
+
+
+class _ThemeBody(BaseModel):
+    theme: str
+
+
+@router.put("/theme")
+async def update_theme(
+    body: _ThemeBody,
+    admin: AdminUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    """Ilova mavzusini (light/dark) o'zgartiradi — barcha userlarda ko'rinadi."""
+    theme = body.theme if body.theme in ("light", "dark") else "light"
+    setting = await db.get(Setting, THEME_SETTINGS_KEY)
+    if setting is None:
+        setting = Setting(key=THEME_SETTINGS_KEY, value={"theme": theme}, updated_by=admin.id)
+        db.add(setting)
+    else:
+        setting.value = {"theme": theme}
+        setting.updated_by = admin.id
+    await write_audit(db, admin.id, "update_theme", "settings", THEME_SETTINGS_KEY, {"theme": theme})
+    await db.commit()
+    return {"theme": theme}
 
 
 @router.put("/dashboard", response_model=DashboardOut)
