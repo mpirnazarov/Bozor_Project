@@ -14,22 +14,23 @@ export function Modal({ open, onClose, title, children, maxWidth = "max-w-lg" }:
   return (
     <Dialog.Root open={open} onOpenChange={(o) => !o && onClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-md data-[state=open]:animate-fade-in" />
-        <Dialog.Content
-          className={`fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] ${maxWidth}
-            -translate-x-1/2 -translate-y-1/2 rounded-3xl border border-white/60 bg-white/95 p-6 shadow-float backdrop-blur-xl
-            focus:outline-none max-h-[88vh] overflow-y-auto data-[state=open]:animate-scale-in`}
-        >
-          <div className="mb-4 flex items-start justify-between gap-4">
-            <Dialog.Title className="font-display text-lg font-extrabold text-ink">
-              {title}
-            </Dialog.Title>
-            <Dialog.Close className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-faint transition-colors hover:bg-slate-100 hover:text-ink">
-              <X size={18} />
-            </Dialog.Close>
-          </div>
-          {children}
-        </Dialog.Content>
+        <Dialog.Overlay className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-ink/40 p-4 backdrop-blur-md data-[state=open]:animate-fade-in">
+          <Dialog.Content
+            className={`relative z-50 w-full ${maxWidth}
+              rounded-3xl border border-white/60 bg-white/95 p-6 shadow-float backdrop-blur-xl
+              focus:outline-none max-h-[90vh] overflow-y-auto data-[state=open]:animate-scale-in`}
+          >
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <Dialog.Title className="font-display text-lg font-extrabold text-ink">
+                {title}
+              </Dialog.Title>
+              <Dialog.Close className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-faint transition-colors hover:bg-slate-100 hover:text-ink">
+                <X size={18} />
+              </Dialog.Close>
+            </div>
+            {children}
+          </Dialog.Content>
+        </Dialog.Overlay>
       </Dialog.Portal>
     </Dialog.Root>
   );

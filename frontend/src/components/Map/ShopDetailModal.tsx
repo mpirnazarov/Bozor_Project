@@ -61,47 +61,45 @@ export function ShopDetailModal({ shopId, onClose }: Props) {
             )}
           </div>
 
-          {data.billing && (
-            <div>
-              <div className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-faint">
-                {t("shop.paymentBreakdown")}
-              </div>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                {(["rent", "electricity", "water"] as const).map((cat) => {
-                  const c = data.billing!.categories.find((x) => x.category === cat);
-                  const due = Number(c?.due ?? 0);
-                  const paid = Number(c?.paid ?? 0);
-                  const debt = Math.max(0, due - paid);
-                  const hasData = due > 0 || paid > 0;
-                  return (
-                    <div key={cat} className="card p-3">
-                      <div className="text-xs font-bold text-ink-soft">
-                        {CATEGORY_ICON[cat]} {t(CATEGORY_TKEY[cat])}
-                      </div>
-                      {hasData ? (
-                        <>
-                          <div className="mt-1 font-mono text-xs text-ink-faint">
-                            {t("shop.account")}: {fmtUZS(due)}
-                          </div>
-                          <div className="font-mono text-xs text-ink-faint">
-                            {t("common.paid")}: {fmtUZS(paid)}
-                          </div>
-                          <div
-                            className="mt-1 font-mono text-sm font-bold"
-                            style={{ color: debt > 0 ? STATUS_COLORS.unpaid : STATUS_COLORS.paid }}
-                          >
-                            {debt > 0 ? `${t("shop.debtLabel")}: ${fmtUZS(debt)}` : t("shop.noDebt")}
-                          </div>
-                        </>
-                      ) : (
-                        <div className="mt-2 text-xs text-ink-faint">{t("shop.noData")}</div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+          <div>
+            <div className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-faint">
+              {t("shop.paymentBreakdown")}
             </div>
-          )}
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              {(["rent", "electricity", "water"] as const).map((cat) => {
+                const c = data.billing?.categories.find((x) => x.category === cat);
+                const due = Number(c?.due ?? 0);
+                const paid = Number(c?.paid ?? 0);
+                const debt = Math.max(0, due - paid);
+                const hasData = due > 0 || paid > 0;
+                return (
+                  <div key={cat} className="card p-3">
+                    <div className="text-xs font-bold text-ink-soft">
+                      {CATEGORY_ICON[cat]} {t(CATEGORY_TKEY[cat])}
+                    </div>
+                    {hasData ? (
+                      <>
+                        <div className="mt-1 font-mono text-xs text-ink-faint">
+                          {t("shop.account")}: {fmtUZS(due)}
+                        </div>
+                        <div className="font-mono text-xs text-ink-faint">
+                          {t("common.paid")}: {fmtUZS(paid)}
+                        </div>
+                        <div
+                          className="mt-1 font-mono text-sm font-bold"
+                          style={{ color: debt > 0 ? STATUS_COLORS.unpaid : STATUS_COLORS.paid }}
+                        >
+                          {debt > 0 ? `${t("shop.debtLabel")}: ${fmtUZS(debt)}` : t("shop.noDebt")}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="mt-2 text-xs text-ink-faint">{t("shop.noData")}</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       )}
     </Modal>
