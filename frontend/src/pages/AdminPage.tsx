@@ -4,12 +4,14 @@ import * as Tabs from "@radix-ui/react-tabs";
 import { ArrowLeft } from "lucide-react";
 import { DashboardEditor } from "@/components/Admin/DashboardEditor";
 import { MapEditor } from "@/components/Admin/MapEditor";
+import { ShopsManager } from "@/components/Admin/ShopsManager";
 import { ExcelImport } from "@/components/Admin/ExcelImport";
 import { AuditLogView } from "@/components/Admin/AuditLogView";
 
 const TABS = [
   { value: "dashboard", label: "Dashboard summalari" },
   { value: "map", label: "Xarita muharriri" },
+  { value: "shops", label: "Magazinlar" },
   { value: "import", label: "Excel import" },
   { value: "audit", label: "Audit log" },
 ];
@@ -48,6 +50,9 @@ export function AdminPage() {
           </Tabs.Content>
           <Tabs.Content value="map">
             <MapEditor />
+          </Tabs.Content>
+          <Tabs.Content value="shops">
+            <ShopsManager />
           </Tabs.Content>
           <Tabs.Content value="import">
             <ExcelImport />

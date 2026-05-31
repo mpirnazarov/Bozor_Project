@@ -87,3 +87,29 @@ export async function updatePavilion(
 export async function deletePavilion(id: number): Promise<void> {
   await apiClient.delete(`/admin/pavilions/${id}`);
 }
+
+// === Magazinlar importi (CSV / Google Sheets) ===
+export interface ShopImportResult {
+  rows_read: number;
+  inserted: number;
+  updated: number;
+  linked: number;
+  counterparties_created: number;
+  not_found: { row?: number; shop_id?: string; reason: string; name?: string; raw?: string }[];
+  not_found_count: number;
+  errors: string[];
+}
+
+export async function importShopsCsv(file: File): Promise<ShopImportResult> {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await apiClient.post<ShopImportResult>("/admin/import/shops/csv", form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+
+export async function importShopsGsheet(url: string): Promise<ShopImportResult> {
+  const { data } = await apiClient.post<ShopImportResult>("/admin/import/shops/gsheet", { url });
+  return data;
+}

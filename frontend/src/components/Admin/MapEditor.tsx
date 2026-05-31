@@ -1,25 +1,26 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2, Save, X, MousePointer2 } from "lucide-react";
+import {
+  Plus, Trash2, Save, X, MousePointer2, Maximize2, Minimize2,
+  ZoomIn, ZoomOut,
+} from "lucide-react";
 import { getPavilions } from "@/api/pavilions";
 import { createPavilion, updatePavilion, deletePavilion } from "@/api/admin";
 
 const VIEW_W = 1568;
 const VIEW_H = 1109;
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 6;
 
 type Pt = { x: number; y: number };
+type VB = { x: number; y: number; w: number; h: number };
 
-// "x1,y1 x2,y2" -> [{x,y}]
 function parsePoints(s: string | null): Pt[] {
   if (!s) return [];
-  return s
-    .trim()
-    .split(/\s+/)
-    .map((pair) => {
-      const [x, y] = pair.split(",").map(Number);
-      return { x, y };
-    })
-    .filter((p) => isFinite(p.x) && isFinite(p.y));
+  return s.trim().split(/\s+/).map((pair) => {
+    const [x, y] = pair.split(",").map(Number);
+    return { x, y };
+  }).filter((p) => isFinite(p.x) && isFinite(p.y));
 }
 
 function pointsToStr(pts: Pt[]): string {
@@ -31,6 +32,7 @@ type Mode = "select" | "draw";
 export function MapEditor() {
   const qc = useQueryClient();
   const svgRef = useRef<SVGSVGElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
 
   const { data: pavilions } = useQuery({ queryKey: ["pavilions-all"], queryFn: getPavilions });
 
@@ -39,13 +41,18 @@ export function MapEditor() {
   const [points, setPoints] = useState<Pt[]>([]);
   const [name, setName] = useState("");
   const [labelText, setLabelText] = useState("");
+  const [shopPrefix, setShopPrefix] = useState("");
   const [fillColor, setFillColor] = useState("#d4a373");
   const [strokeColor, setStrokeColor] = useState("#b45309");
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
 
-  // Tanlanган pavilion ma'lumotларини formага yuklash
+  const [vb, setVb] = useState<VB>({ x: 0, y: 0, w: VIEW_W, h: VIEW_H });
+  const [fullscreen, setFullscreen] = useState(false);
+  const pan = useRef({ active: false, moved: false, sx: 0, sy: 0, ox: 0, oy: 0 });
+  const zoom = VIEW_W / vb.w;
+
   useEffect(() => {
     if (selectedId == null) return;
     const p = pavilions?.find((x) => x.id === selectedId);
@@ -53,29 +60,90 @@ export function MapEditor() {
     setPoints(parsePoints(p.polygon_points));
     setName(p.display_name);
     setLabelText(p.display_text ?? "");
+    setShopPrefix((p.meta?.shop_prefix as string | undefined) ?? "");
     setFillColor(p.fill_color);
     setStrokeColor(p.stroke_color);
   }, [selectedId, pavilions]);
 
-  // SVG koordinatasига o'tkazish (ekran -> viewBox)
-  function toSvgCoords(e: React.MouseEvent): Pt {
-    const svg = svgRef.current!;
-    const rect = svg.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * VIEW_W;
-    const y = ((e.clientY - rect.top) / rect.height) * VIEW_H;
-    return { x, y };
+  useEffect(() => {
+    function onFsChange() {
+      setFullscreen(!!document.fullscreenElement);
+    }
+    document.addEventListener("fullscreenchange", onFsChange);
+    return () => document.removeEventListener("fullscreenchange", onFsChange);
+  }, []);
+
+  // ekran -> viewBox koordinatasi (zoom/pan'ni hisobga oladi)
+  function toSvgCoords(clientX: number, clientY: number): Pt {
+    const rect = svgRef.current!.getBoundingClientRect();
+    const px = (clientX - rect.left) / rect.width;
+    const py = (clientY - rect.top) / rect.height;
+    return { x: vb.x + px * vb.w, y: vb.y + py * vb.h };
+  }
+
+  function applyZoom(factor: number, cx?: number, cy?: number) {
+    setVb((prev) => {
+      const newW = Math.min(VIEW_W / MIN_ZOOM, Math.max(VIEW_W / MAX_ZOOM, prev.w / factor));
+      const newH = newW * (VIEW_H / VIEW_W);
+      const fx = cx ?? prev.x + prev.w / 2;
+      const fy = cy ?? prev.y + prev.h / 2;
+      let nx = fx - (fx - prev.x) * (newW / prev.w);
+      let ny = fy - (fy - prev.y) * (newH / prev.h);
+      nx = Math.min(Math.max(0, nx), VIEW_W - newW);
+      ny = Math.min(Math.max(0, ny), VIEW_H - newH);
+      return { x: nx, y: ny, w: newW, h: newH };
+    });
+  }
+  function resetZoom() { setVb({ x: 0, y: 0, w: VIEW_W, h: VIEW_H }); }
+
+  function handleWheel(e: React.WheelEvent) {
+    if (mode === "draw") return; // chizishda zoom o'chiq (nuqta qo'yishga xalaqit bermasin)
+    e.preventDefault();
+    const { x, y } = toSvgCoords(e.clientX, e.clientY);
+    applyZoom(e.deltaY < 0 ? 1.2 : 1 / 1.2, x, y);
+  }
+
+  function toggleFullscreen() {
+    if (!document.fullscreenElement) wrapRef.current?.requestFullscreen?.();
+    else document.exitFullscreen?.();
+  }
+
+  // --- chizish/surish ---
+  function handleSvgPointerDown(e: React.PointerEvent) {
+    if (mode === "draw") return; // draw rejimida pan yo'q
+    if (dragIdx != null) return; // nuqta surilyapti
+    (e.currentTarget as SVGSVGElement).setPointerCapture(e.pointerId);
+    pan.current = { active: true, moved: false, sx: e.clientX, sy: e.clientY, ox: vb.x, oy: vb.y };
+  }
+  function handleSvgPointerMove(e: React.PointerEvent) {
+    if (dragIdx != null) {
+      const p = toSvgCoords(e.clientX, e.clientY);
+      setPoints((prev) => prev.map((pt, i) => (i === dragIdx ? p : pt)));
+      return;
+    }
+    if (!pan.current.active) return;
+    e.preventDefault();
+    const rect = svgRef.current!.getBoundingClientRect();
+    const dx = ((e.clientX - pan.current.sx) / rect.width) * vb.w;
+    const dy = ((e.clientY - pan.current.sy) / rect.height) * vb.h;
+    if (Math.abs(e.clientX - pan.current.sx) > 3 || Math.abs(e.clientY - pan.current.sy) > 3) pan.current.moved = true;
+    let nx = pan.current.ox - dx;
+    let ny = pan.current.oy - dy;
+    nx = Math.min(Math.max(0, nx), VIEW_W - vb.w);
+    ny = Math.min(Math.max(0, ny), VIEW_H - vb.h);
+    setVb((prev) => ({ ...prev, x: nx, y: ny }));
+  }
+  function handleSvgPointerUp(e: React.PointerEvent) {
+    try { (e.currentTarget as SVGSVGElement).releasePointerCapture(e.pointerId); } catch { /* noop */ }
+    pan.current.active = false;
+    setDragIdx(null);
   }
 
   function handleSvgClick(e: React.MouseEvent) {
     if (mode !== "draw") return;
-    const p = toSvgCoords(e);
+    if (pan.current.moved) return;
+    const p = toSvgCoords(e.clientX, e.clientY);
     setPoints((prev) => [...prev, p]);
-  }
-
-  function handlePointDrag(e: React.MouseEvent) {
-    if (dragIdx == null) return;
-    const p = toSvgCoords(e);
-    setPoints((prev) => prev.map((pt, i) => (i === dragIdx ? p : pt)));
   }
 
   function startNew() {
@@ -83,6 +151,7 @@ export function MapEditor() {
     setPoints([]);
     setName("");
     setLabelText("");
+    setShopPrefix("");
     setFillColor("#d4a373");
     setStrokeColor("#b45309");
     setMode("draw");
@@ -93,7 +162,18 @@ export function MapEditor() {
     setPoints((prev) => prev.filter((_, i) => i !== idx));
   }
 
-  // Markaz (label uchun)
+  // idx va idx+1 nuqtalar orasiga yangi nuqta qo'shadi (chetga bosilganda)
+  function insertPointAfter(idx: number) {
+    setPoints((prev) => {
+      const a = prev[idx];
+      const b = prev[(idx + 1) % prev.length];
+      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      const next = [...prev];
+      next.splice(idx + 1, 0, mid);
+      return next;
+    });
+  }
+
   function centroid(pts: Pt[]): Pt {
     if (pts.length === 0) return { x: VIEW_W / 2, y: VIEW_H / 2 };
     const sx = pts.reduce((a, p) => a + p.x, 0) / pts.length;
@@ -102,14 +182,8 @@ export function MapEditor() {
   }
 
   async function handleSave() {
-    if (points.length < 3) {
-      setMsg("Kamida 3 ta nuqta kerak");
-      return;
-    }
-    if (!name.trim()) {
-      setMsg("Nom kiriting");
-      return;
-    }
+    if (points.length < 3) { setMsg("Kamida 3 ta nuqta kerak"); return; }
+    if (!name.trim()) { setMsg("Nom kiriting"); return; }
     setSaving(true);
     setMsg("");
     const c = centroid(points);
@@ -122,6 +196,7 @@ export function MapEditor() {
       label_x: c.x,
       label_y: c.y,
       is_active: true,
+      meta: { shop_prefix: shopPrefix.trim() || undefined },
     };
     try {
       if (selectedId != null) {
@@ -157,18 +232,14 @@ export function MapEditor() {
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-slate-500">
-        Xaritada region (blok) chizing. "Chizish" rejimида nuqta qo'shish uchun
-        bosing, nuqtalarni surib joyini o'zgartiring. Saqlasangiz barcha
-        foydalanuvchilarda ko'rinadi.
+      <p className="text-sm text-ink-soft">
+        Xaritada region (blok) chizing. Har bir region uchun magazin ID prefiksini
+        kiriting (masalan <span className="font-mono font-bold">04-1-1</span>) — shu prefiksli
+        barcha magazinlar region bosilganda ko'rinadi.
       </p>
 
-      {/* Asboblar paneli */}
       <div className="flex flex-wrap items-center gap-2">
-        <button
-          className={mode === "select" ? "btn-primary" : "btn-ghost"}
-          onClick={() => setMode("select")}
-        >
+        <button className={mode === "select" ? "btn-primary" : "btn-ghost"} onClick={() => setMode("select")}>
           <MousePointer2 size={15} /> Tanlash
         </button>
         <button className="btn-ghost" onClick={startNew}>
@@ -188,22 +259,50 @@ export function MapEditor() {
 
       <div className="grid gap-3 lg:grid-cols-[1fr,260px]">
         {/* Xarita */}
-        <div className="card overflow-hidden">
+        <div ref={wrapRef} className={`card relative overflow-hidden ${fullscreen ? "grid place-items-center bg-slate-900" : ""}`}>
+          {/* Boshqaruv tugmalari */}
+          <div className="absolute right-3 top-3 z-10 flex flex-col gap-1.5">
+            <button onClick={toggleFullscreen} className="grid h-9 w-9 place-items-center rounded-xl border border-white/60 bg-white/90 text-ink-soft shadow-soft backdrop-blur hover:text-brand" title="To'liq ekran">
+              {fullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+            </button>
+            <button onClick={() => applyZoom(1.4)} className="grid h-9 w-9 place-items-center rounded-xl border border-white/60 bg-white/90 text-ink-soft shadow-soft backdrop-blur hover:text-brand" title="Kattalashtirish">
+              <ZoomIn size={16} />
+            </button>
+            <button onClick={() => applyZoom(1 / 1.4)} className="grid h-9 w-9 place-items-center rounded-xl border border-white/60 bg-white/90 text-ink-soft shadow-soft backdrop-blur hover:text-brand" title="Kichiklashtirish">
+              <ZoomOut size={16} />
+            </button>
+            <button onClick={resetZoom} className="grid h-9 w-9 place-items-center rounded-xl border border-white/60 bg-white/90 text-ink-soft shadow-soft backdrop-blur hover:text-brand" title="Asl holat">
+              <Maximize2 size={14} />
+            </button>
+          </div>
+          {zoom > 1.05 && (
+            <div className="absolute left-3 top-3 z-10 rounded-full bg-ink/70 px-2.5 py-1 text-xs font-bold text-white backdrop-blur">
+              {zoom.toFixed(1)}×
+            </div>
+          )}
+
           <svg
             ref={svgRef}
-            viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+            viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
             width="100%"
-            style={{ background: "#e8eef3", display: "block", cursor: mode === "draw" ? "crosshair" : "default" }}
+            className="block touch-none select-none"
+            style={{
+              background: "#e8eef3",
+              maxHeight: fullscreen ? "100vh" : undefined,
+              cursor: mode === "draw" ? "crosshair" : pan.current.active ? "grabbing" : "grab",
+            }}
+            preserveAspectRatio="xMidYMid meet"
             onClick={handleSvgClick}
-            onMouseMove={handlePointDrag}
-            onMouseUp={() => setDragIdx(null)}
-            onMouseLeave={() => setDragIdx(null)}
+            onWheel={handleWheel}
+            onPointerDown={handleSvgPointerDown}
+            onPointerMove={handleSvgPointerMove}
+            onPointerUp={handleSvgPointerUp}
+            onPointerLeave={handleSvgPointerUp}
           >
             <image href="/map.jpg" x="0" y="0" width={VIEW_W} height={VIEW_H}
               preserveAspectRatio="xMidYMid meet"
               onError={(e) => ((e.target as SVGImageElement).style.display = "none")} />
 
-            {/* Mavjud pavilionlar (fon) */}
             {pavilions?.map((p) => {
               if (p.id === selectedId) return null;
               const pts = parsePoints(p.polygon_points);
@@ -216,9 +315,10 @@ export function MapEditor() {
                   fillOpacity={0.35}
                   stroke={p.stroke_color}
                   strokeWidth={2}
+                  vectorEffect="non-scaling-stroke"
                   style={{ cursor: "pointer" }}
                   onClick={(e) => {
-                    if (mode === "select") {
+                    if (mode === "select" && !pan.current.moved) {
                       e.stopPropagation();
                       setSelectedId(p.id);
                     }
@@ -227,67 +327,68 @@ export function MapEditor() {
               );
             })}
 
-            {/* Joriy chizilayotgan polygon */}
             {points.length >= 2 && (
-              <polygon
-                points={pointsToStr(points)}
-                fill={fillColor}
-                fillOpacity={0.5}
-                stroke={strokeColor}
-                strokeWidth={3}
-              />
+              <polygon points={pointsToStr(points)} fill={fillColor} fillOpacity={0.5}
+                stroke={strokeColor} strokeWidth={3} vectorEffect="non-scaling-stroke" />
             )}
 
-            {/* Nuqtalar (drag uchun) */}
+            {/* Segment o'rtalaridagi "+" — bosilganda shu joyga nuqta qo'shadi */}
+            {points.length >= 2 && points.map((pt, i) => {
+              const next = points[(i + 1) % points.length];
+              // oxirgi -> birinchi segmentni faqat polygon yopiq bo'lsa (3+) ko'rsatamiz
+              if (i === points.length - 1 && points.length < 3) return null;
+              const mx = (pt.x + next.x) / 2;
+              const my = (pt.y + next.y) / 2;
+              const r = 7 / zoom;
+              return (
+                <g key={`mid-${i}`} style={{ cursor: "copy" }}
+                  onPointerDown={(e) => { e.stopPropagation(); insertPointAfter(i); }}>
+                  <circle cx={mx} cy={my} r={r} fill={strokeColor} fillOpacity={0.85}
+                    stroke="#fff" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+                  <line x1={mx - r * 0.5} y1={my} x2={mx + r * 0.5} y2={my}
+                    stroke="#fff" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+                  <line x1={mx} y1={my - r * 0.5} x2={mx} y2={my + r * 0.5}
+                    stroke="#fff" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+                </g>
+              );
+            })}
+
+            {/* Asosiy nuqtalar (surish / o'chirish) */}
             {points.map((pt, i) => (
               <circle
                 key={i}
-                cx={pt.x}
-                cy={pt.y}
-                r={8}
-                fill="#fff"
-                stroke={strokeColor}
-                strokeWidth={3}
+                cx={pt.x} cy={pt.y} r={9 / zoom}
+                fill="#fff" stroke={strokeColor} strokeWidth={3}
+                vectorEffect="non-scaling-stroke"
                 style={{ cursor: "move" }}
-                onMouseDown={(e) => {
-                  e.stopPropagation();
-                  setDragIdx(i);
-                }}
-                onDoubleClick={(e) => {
-                  e.stopPropagation();
-                  removePoint(i);
-                }}
+                onPointerDown={(e) => { e.stopPropagation(); setDragIdx(i); }}
+                onDoubleClick={(e) => { e.stopPropagation(); removePoint(i); }}
               />
             ))}
           </svg>
         </div>
 
-        {/* O'ng panel — tahrirlash */}
+        {/* O'ng panel */}
         <div className="space-y-3">
           <div className="card space-y-2 p-3">
-            <div className="text-xs font-bold text-slate-500">
+            <div className="text-xs font-bold text-ink-soft">
               {selectedId != null ? `Region #${selectedId}` : "Yangi region"}
             </div>
-            <input
-              className="input"
-              placeholder="Nomi (masalan A-BLOK)"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-            <input
-              className="input"
-              placeholder="Belgi (xaritada, masalan A)"
-              value={labelText}
-              onChange={(e) => setLabelText(e.target.value)}
-            />
+            <input className="input" placeholder="Nomi (masalan A-BLOK)" value={name} onChange={(e) => setName(e.target.value)} />
+            <input className="input" placeholder="Belgi (xaritada, masalan A)" value={labelText} onChange={(e) => setLabelText(e.target.value)} />
+            <div>
+              <input className="input font-mono" placeholder="Magazin ID prefiksi: 04-1-1" value={shopPrefix} onChange={(e) => setShopPrefix(e.target.value)} />
+              <div className="mt-1 text-[11px] text-ink-faint">
+                Shu prefiksli magazinlar (04-1-1-001, 04-1-1-002...) region bosilganda ko'rinadi
+              </div>
+            </div>
             <div className="flex items-center gap-2 text-xs">
-              <span className="text-slate-500">To'ldirish</span>
+              <span className="text-ink-soft">To'ldirish</span>
               <input type="color" value={fillColor} onChange={(e) => setFillColor(e.target.value)} />
-              <span className="text-slate-500">Chegara</span>
+              <span className="text-ink-soft">Chegara</span>
               <input type="color" value={strokeColor} onChange={(e) => setStrokeColor(e.target.value)} />
             </div>
-            <div className="text-xs text-slate-400">Nuqtalar: {points.length}</div>
-
+            <div className="text-xs text-ink-faint">Nuqtalar: {points.length}</div>
             <button className="btn-primary w-full" onClick={handleSave} disabled={saving}>
               <Save size={15} /> {saving ? "Saqlanmoqda..." : "Saqlash"}
             </button>
@@ -299,14 +400,16 @@ export function MapEditor() {
             {msg && <div className="text-center text-xs font-semibold text-brand">{msg}</div>}
           </div>
 
-          <div className="card p-3 text-xs text-slate-500">
+          <div className="card p-3 text-xs text-ink-soft">
             <div className="mb-1 font-bold">Yo'riqnoma</div>
             <ul className="list-disc space-y-1 pl-4">
-              <li>"Yangi region" → "Chizish" rejimi yoqiladi</li>
-              <li>Xaritaga bosib nuqta qo'shing (ko'p qirrali bo'lishi mumkin)</li>
+              <li>"Yangi region" → "Chizish" rejimi</li>
+              <li>Xaritaga bosib nuqta qo'shing</li>
               <li>Nuqtani surib joyini o'zgartiring</li>
+              <li>Chetdagi "+" ni bosib nuqtalar orasiga yangi nuqta qo'shing</li>
               <li>Nuqtaga ikki marta bosib o'chiring</li>
-              <li>Mavjud regionni tahrirlash uchun "Tanlash"da ustiga bosing</li>
+              <li>Tanlash rejimida: scroll = zoom, surish = ko'chirish</li>
+              <li>Magazin ID prefiksini kiriting (04-1-1)</li>
             </ul>
           </div>
         </div>
