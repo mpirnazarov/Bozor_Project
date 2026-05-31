@@ -1,44 +1,81 @@
 import { useQuery } from "@tanstack/react-query";
+import {
+  Plus, Pencil, Trash2, Upload, Palette, EyeOff, LayoutDashboard,
+  Power, Activity, User as UserIcon, Clock,
+} from "lucide-react";
 import { getAuditLog } from "@/api/admin";
+import { useT } from "@/i18n/useT";
+
+// Amalga qarab rang va ikonka
+function actionStyle(action: string): { color: string; bg: string; icon: React.ReactNode } {
+  if (action.startsWith("create")) return { color: "#16a34a", bg: "rgba(22,163,74,0.1)", icon: <Plus size={16} /> };
+  if (action.startsWith("delete")) return { color: "#dc2626", bg: "rgba(220,38,38,0.1)", icon: <Trash2 size={16} /> };
+  if (action.startsWith("import")) return { color: "#0066ff", bg: "rgba(0,102,255,0.1)", icon: <Upload size={16} /> };
+  if (action === "update_theme") return { color: "#7c3aed", bg: "rgba(124,58,237,0.1)", icon: <Palette size={16} /> };
+  if (action === "update_hide_unmatched") return { color: "#d97706", bg: "rgba(217,119,6,0.1)", icon: <EyeOff size={16} /> };
+  if (action === "update_dashboard") return { color: "#0891b2", bg: "rgba(8,145,178,0.1)", icon: <LayoutDashboard size={16} /> };
+  if (action === "toggle_market") return { color: "#d97706", bg: "rgba(217,119,6,0.1)", icon: <Power size={16} /> };
+  if (action.startsWith("update")) return { color: "#0066ff", bg: "rgba(0,102,255,0.1)", icon: <Pencil size={16} /> };
+  return { color: "#64748b", bg: "rgba(100,116,139,0.1)", icon: <Activity size={16} /> };
+}
 
 export function AuditLogView() {
+  const t = useT();
   const { data, isLoading } = useQuery({
     queryKey: ["audit-log"],
     queryFn: () => getAuditLog(100),
   });
 
-  if (isLoading) return <div className="text-sm text-slate-400">Yuklanmoqda...</div>;
-
+  if (isLoading) return <div className="text-sm text-ink-faint">{t("common.loading")}</div>;
   if (!data || data.length === 0)
-    return <div className="text-sm text-slate-400">Audit yozuvlari yo'q</div>;
+    return <div className="text-sm text-ink-faint">{t("audit.empty")}</div>;
 
   return (
-    <div className="card overflow-hidden">
-      <table className="w-full text-sm">
-        <thead className="bg-slate-50 text-left text-xs font-bold text-slate-500">
-          <tr>
-            <th className="px-3 py-2">Vaqt</th>
-            <th className="px-3 py-2">Amal</th>
-            <th className="px-3 py-2">Resurs</th>
-            <th className="px-3 py-2">User</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-50">
-          {data.map((row) => (
-            <tr key={row.id} className="hover:bg-slate-50">
-              <td className="px-3 py-2 font-mono text-xs text-slate-400">
-                {new Date(row.created_at).toLocaleString("uz")}
-              </td>
-              <td className="px-3 py-2 font-semibold text-slate-700">{row.action}</td>
-              <td className="px-3 py-2 text-slate-500">
-                {row.resource_type}
-                {row.resource_id ? ` · ${row.resource_id}` : ""}
-              </td>
-              <td className="px-3 py-2 text-slate-400">#{row.user_id ?? "—"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="space-y-2.5">
+      {data.map((row) => {
+        const st = actionStyle(row.action);
+        return (
+          <div key={row.id} className="card flex items-start gap-3 p-4">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl" style={{ background: st.bg, color: st.color }}>
+              {st.icon}
+            </div>
+
+            <div className="min-w-0 flex-1">
+              {/* Amal nomi + vaqt */}
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                <span className="font-bold text-ink">{row.action_label}</span>
+                <span className="inline-flex items-center gap-1 font-mono text-xs text-ink-faint">
+                  <Clock size={12} />
+                  {new Date(row.created_at).toLocaleString("uz-UZ", {
+                    day: "2-digit", month: "2-digit", year: "numeric",
+                    hour: "2-digit", minute: "2-digit",
+                  })}
+                </span>
+              </div>
+
+              {/* Tushunarli izoh */}
+              <p className="mt-1 text-sm text-ink-soft">{row.summary}</p>
+
+              {/* Resurs + foydalanuvchi */}
+              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-faint">
+                <span className="inline-flex items-center gap-1">
+                  <span className="font-semibold text-ink-soft">{t("audit.resource")}:</span>
+                  {row.resource_label}
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <UserIcon size={12} />
+                  <span className="font-semibold text-ink-soft">{row.user_label}</span>
+                  {row.user_role && (
+                    <span className="rounded-full bg-brand/10 px-1.5 py-0.5 font-semibold text-brand">
+                      {row.user_role}
+                    </span>
+                  )}
+                </span>
+              </div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -86,3 +86,9 @@ class AuditLogOut(BaseModel):
     resource_id: str | None
     changes: dict | None
     created_at: datetime
+    # Odam o'qiy oladigan qo'shimcha maydonlar
+    action_label: str = ""
+    resource_label: str = ""
+    user_label: str = ""
+    user_role: str | None = None
+    summary: str = ""

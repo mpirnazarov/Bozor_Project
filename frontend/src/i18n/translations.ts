@@ -193,6 +193,8 @@ const uz: Dict = {
   "superadmin.enable": "Yoqish",
   "superadmin.disabled": "O'chirilgan",
   "superadmin.order": "Tartib",
+  "audit.empty": "Audit yozuvlari yo'q",
+  "audit.resource": "Resurs",
   "ui.language": "Til",
 };
 
@@ -366,6 +368,8 @@ const ru: Dict = {
   "superadmin.enable": "Включить",
   "superadmin.disabled": "Отключён",
   "superadmin.order": "Порядок",
+  "audit.empty": "Нет записей аудита",
+  "audit.resource": "Ресурс",
   "ui.language": "Язык",
 };
 
@@ -539,6 +543,8 @@ const en: Dict = {
   "superadmin.enable": "Enable",
   "superadmin.disabled": "Disabled",
   "superadmin.order": "Order",
+  "audit.empty": "No audit records",
+  "audit.resource": "Resource",
   "ui.language": "Language",
 };
 

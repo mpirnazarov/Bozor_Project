@@ -21,6 +21,11 @@ export interface AuditLog {
   resource_id: string | null;
   changes: Record<string, unknown> | null;
   created_at: string;
+  action_label: string;
+  resource_label: string;
+  user_label: string;
+  user_role: string | null;
+  summary: string;
 }
 
 export async function getAuditLog(limit = 50): Promise<AuditLog[]> {

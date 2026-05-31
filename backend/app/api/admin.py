@@ -18,6 +18,7 @@ from app.models import (
     Pavilion,
     Setting,
     Shop,
+    User,
 )
 from app.schemas.admin import (
     AuditLogOut,
@@ -29,6 +30,7 @@ from app.schemas.admin import (
 )
 from app.schemas.dashboard import DashboardOut
 from app.schemas.pavilion import PavilionOut
+from app.services.audit_describe import action_label, build_summary, resource_label
 from app.services.audit_service import write_audit
 from app.services.dashboard_service import get_dashboard_from_settings
 from app.services.import_service import import_balances_xlsx
@@ -288,9 +290,45 @@ async def get_audit_log(
     _admin: AdminUser,
     db: Annotated[AsyncSession, Depends(get_db)],
     limit: int = Query(50, ge=1, le=200),
-) -> list[AuditLog]:
-    """Oxirgi audit yozuvlari."""
+) -> list[AuditLogOut]:
+    """Oxirgi audit yozuvlari — odam o'qiy oladigan ko'rinishda."""
     result = await db.execute(
-        select(AuditLog).order_by(desc(AuditLog.created_at)).limit(limit)
+        select(AuditLog, User)
+        .join(User, AuditLog.user_id == User.id, isouter=True)
+        .order_by(desc(AuditLog.created_at))
+        .limit(limit)
     )
-    return list(result.scalars())
+    rows = result.all()
+
+    out: list[AuditLogOut] = []
+    for log, user in rows:
+        if user is not None:
+            name = user.full_name or user.username
+            role_uz = {
+                "super_admin": "Super admin",
+                "admin": "Administrator",
+                "market_admin": "Bozor admini",
+                "market_viewer": "Kuzatuvchi",
+            }.get(user.role, user.role)
+            user_label = f"{name} (@{user.username})"
+        else:
+            role_uz = None
+            user_label = "Noma'lum foydalanuvchi"
+
+        out.append(
+            AuditLogOut(
+                id=log.id,
+                user_id=log.user_id,
+                action=log.action,
+                resource_type=log.resource_type,
+                resource_id=log.resource_id,
+                changes=log.changes,
+                created_at=log.created_at,
+                action_label=action_label(log.action),
+                resource_label=resource_label(log.resource_type, log.resource_id),
+                user_label=user_label,
+                user_role=role_uz,
+                summary=build_summary(log.action, log.resource_id, log.changes),
+            )
+        )
+    return out

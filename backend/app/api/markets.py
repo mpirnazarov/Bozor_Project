@@ -14,6 +14,7 @@ from app.database import get_db
 from app.deps import CurrentUser, SuperAdminUser
 from app.models.market import Market
 from app.schemas.market import MarketOut, MarketUpdate, SuperDashboardOut
+from app.services.audit_service import write_audit
 
 router = APIRouter()
 
@@ -117,6 +118,7 @@ async def update_market(
     data = payload.model_dump(exclude_unset=True)
     for field, value in data.items():
         setattr(market, field, value)
+    await write_audit(db, _admin.id, "update_market", "market", market.slug, data)
     await db.commit()
     await db.refresh(market)
     return market
@@ -133,6 +135,7 @@ async def toggle_market(
     if market is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Bozor topilmadi")
     market.is_active = not market.is_active
+    await write_audit(db, _admin.id, "toggle_market", "market", market.slug, {"is_active": market.is_active})
     await db.commit()
     await db.refresh(market)
     return market
