@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.deps import CurrentUser
+from app.deps import CurrentMarket, CurrentUser
 from app.models import Counterparty, Shop
 from app.schemas.billing import (
     CounterpartyOut,
@@ -22,6 +22,7 @@ router = APIRouter()
 @router.get("", response_model=PaginatedShops)
 async def list_shops(
     _user: CurrentUser,
+    market: CurrentMarket,
     db: Annotated[AsyncSession, Depends(get_db)],
     inn: str | None = Query(None),
     pavilion: str | None = Query(None, description="pavilion_code bo'yicha"),
@@ -29,8 +30,8 @@ async def list_shops(
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
 ) -> PaginatedShops:
-    """Magazinlar ro'yxati — filtrlash va sahifalash bilan."""
-    stmt = select(Shop)
+    """Magazinlar ro'yxati — filtrlash va sahifalash bilan (joriy bozor)."""
+    stmt = select(Shop).where(Shop.market_id == market.id)
     if inn:
         stmt = stmt.where(Shop.inn == inn)
     if pavilion:
@@ -50,12 +51,15 @@ async def list_shops(
 async def get_shop(
     shop_id: str,
     _user: CurrentUser,
+    market: CurrentMarket,
     db: Annotated[AsyncSession, Depends(get_db)],
     year: int = Query(2026),
     month: int = Query(5, ge=1, le=12),
 ) -> ShopDetailOut:
     """Magazin detali — kontragent + joriy oy billing."""
-    result = await db.execute(select(Shop).where(Shop.shop_id == shop_id))
+    result = await db.execute(
+        select(Shop).where(Shop.shop_id == shop_id, Shop.market_id == market.id)
+    )
     shop = result.scalar_one_or_none()
     if shop is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Magazin topilmadi")

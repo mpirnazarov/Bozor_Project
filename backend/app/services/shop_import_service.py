@@ -142,9 +142,15 @@ async def import_shops_csv(
                 "name": name,
             })
 
-        # Magazin upsert (shop_id bo'yicha)
+        # Magazin upsert — shop_id VA market_id bo'yicha qidiramiz, shunda
+        # turli bozorlarda bir xil shop_id bo'lsa ham aralashmaydi.
         existing = (
-            await db.execute(select(Shop).where(Shop.shop_id == shop_id))
+            await db.execute(
+                select(Shop).where(
+                    Shop.shop_id == shop_id,
+                    Shop.market_id == market_id,
+                )
+            )
         ).scalar_one_or_none()
 
         if existing:

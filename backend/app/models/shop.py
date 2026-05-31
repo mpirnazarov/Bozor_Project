@@ -10,6 +10,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -19,9 +20,14 @@ from app.database import Base
 
 class Shop(Base):
     __tablename__ = "shops"
+    __table_args__ = (
+        # shop_id endi BUTUN db bo'yicha emas, har BOZOR ichida noyob.
+        # Shunda turli bozorlar bir xil shop_id (04-1-1-001) ishlatishi mumkin.
+        UniqueConstraint("market_id", "shop_id", name="uq_shop_market_shopid"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    shop_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
+    shop_id: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     market_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("markets.id", ondelete="CASCADE"),
         default=1, nullable=False, index=True,
