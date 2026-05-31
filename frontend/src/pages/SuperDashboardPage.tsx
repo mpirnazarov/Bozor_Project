@@ -31,8 +31,8 @@ export function SuperDashboardPage() {
 
   const [now, setNow] = useState(new Date());
   useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(timer);
   }, []);
 
   function openMarket(slug: string, isDemo?: boolean) {
@@ -48,7 +48,7 @@ export function SuperDashboardPage() {
   }
 
   const dark = theme === "dark";
-  const t = dark
+  const c = dark
     ? { bg: "#070d1a", panel: "rgba(255,255,255,0.04)", panelBorder: "rgba(255,255,255,0.08)",
         text: "#f1f5f9", sub: "rgba(241,245,249,0.55)", faint: "rgba(241,245,249,0.35)",
         track: "rgba(255,255,255,0.08)", rowHover: "rgba(255,255,255,0.05)" }
@@ -58,14 +58,14 @@ export function SuperDashboardPage() {
 
   if (isLoading) {
     return (
-      <div className="grid min-h-screen place-items-center" style={{ background: t.bg }}>
+      <div className="grid min-h-screen place-items-center" style={{ background: c.bg }}>
         <div className="h-12 w-12 animate-spin rounded-full border-[3px] border-white/20 border-t-brand" />
       </div>
     );
   }
   if (isError || !data) {
     return (
-      <div className="grid min-h-screen place-items-center" style={{ background: t.bg }}>
+      <div className="grid min-h-screen place-items-center" style={{ background: c.bg }}>
         <div className="text-status-unpaid">Ma'lumotlarni yuklashda xatolik</div>
       </div>
     );
@@ -80,7 +80,7 @@ export function SuperDashboardPage() {
     .sort((a, b) => b.rate - a.rate);
 
   return (
-    <div className="min-h-screen transition-colors duration-500" style={{ background: t.bg, color: t.text }}>
+    <div className="min-h-screen transition-colors duration-500" style={{ background: c.bg, color: c.text }}>
       {dark && (
         <>
           <div className="pointer-events-none fixed -left-40 -top-40 h-[32rem] w-[32rem] rounded-full bg-brand/20 blur-[160px]" />
@@ -97,7 +97,7 @@ export function SuperDashboardPage() {
             </div>
             <div>
               <h1 className="font-display text-2xl font-extrabold leading-tight lg:text-3xl">{t("super.title")}</h1>
-              <div className="flex items-center gap-2 text-sm" style={{ color: t.sub }}>
+              <div className="flex items-center gap-2 text-sm" style={{ color: c.sub }}>
                 <span className="inline-flex items-center gap-1.5">
                   <span className="relative flex h-2 w-2">
                     <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-status-paid opacity-75" />
@@ -105,7 +105,7 @@ export function SuperDashboardPage() {
                   </span>
                   {t("super.live")}
                 </span>
-                <span style={{ color: t.faint }}>·</span>
+                <span style={{ color: c.faint }}>·</span>
                 <span>{data.markets.length} {t("super.markets")}</span>
               </div>
             </div>
@@ -116,21 +116,21 @@ export function SuperDashboardPage() {
               <div className="font-display text-2xl font-bold tabnum lg:text-3xl">
                 {now.toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
               </div>
-              <div className="text-xs" style={{ color: t.faint }}>
+              <div className="text-xs" style={{ color: c.faint }}>
                 {now.toLocaleDateString("uz-UZ", { weekday: "long", day: "numeric", month: "long" })}
               </div>
             </div>
             <LanguageSwitcher dark={dark} />
-            <IconBtn t={t} onClick={() => refetch()} title={t("common.refresh")}>
+            <IconBtn t={c} onClick={() => refetch()} title={t("common.refresh")}>
               <RefreshCw size={18} className={isFetching ? "animate-spin" : ""} />
             </IconBtn>
-            <IconBtn t={t} onClick={() => setTheme(dark ? "light" : "dark")} title="Theme">
+            <IconBtn t={c} onClick={() => setTheme(dark ? "light" : "dark")} title="Theme">
               {dark ? <Sun size={18} /> : <Moon size={18} />}
             </IconBtn>
-            <IconBtn t={t} onClick={toggleFullscreen} title={t("super.fullscreen")}>
+            <IconBtn t={c} onClick={toggleFullscreen} title={t("super.fullscreen")}>
               <Maximize size={18} />
             </IconBtn>
-            <IconBtn t={t} onClick={() => logout()} title={t("common.logout")}>
+            <IconBtn t={c} onClick={() => logout()} title={t("common.logout")}>
               <LogOut size={18} />
             </IconBtn>
           </div>
@@ -138,43 +138,43 @@ export function SuperDashboardPage() {
 
         {/* Katta ko'rsatkichlar */}
         <div className="mb-5 grid gap-4 lg:grid-cols-3">
-          <BigStat t={t} dark={dark} label={t("home.totalSum")} value={fmtUZS(data.total)}
+          <BigStat t={c} dark={dark} label={t("home.totalSum")} value={fmtUZS(data.total)}
             icon={<Wallet size={22} />} accent="#0066ff"
             sub={<span className="inline-flex items-center gap-1"><TrendingUp size={13} /> {data.markets.length} {t("super.markets")}</span>} />
-          <BigStat t={t} dark={dark} label={t("home.paidSum")} value={fmtUZS(data.paid)}
+          <BigStat t={c} dark={dark} label={t("home.paidSum")} value={fmtUZS(data.paid)}
             icon={<CheckCircle2 size={22} />} accent="#16a34a"
             sub={<span>{paidPct}% {t("super.colRate").toLowerCase()}</span>} />
-          <BigStat t={t} dark={dark} label={t("home.debtSum")} value={fmtUZS(data.debt)}
+          <BigStat t={c} dark={dark} label={t("home.debtSum")} value={fmtUZS(data.debt)}
             icon={<AlertTriangle size={22} />} accent="#dc2626"
             sub={<span>{debtPct}% {t("home.mustCollect")}</span>} />
         </div>
 
         {/* Analitika qatori: donut + bar + reyting */}
         <div className="mb-5 grid gap-4 lg:grid-cols-3">
-          <Panel t={t} title={t("super.paymentStatus")} icon={<Activity size={14} />}>
+          <Panel t={c} title={t("super.paymentStatus")} icon={<Activity size={14} />}>
             <div className="flex items-center gap-5">
               <Donut paidPct={paidPct} dark={dark} />
               <div className="space-y-3">
-                <Legend color="#16a34a" label={t("home.paidSum")} value={`${paidPct}%`} sub={fmtUZS(data.paid)} t={t} />
-                <Legend color="#dc2626" label={t("common.debt")} value={`${debtPct}%`} sub={fmtUZS(data.debt)} t={t} />
+                <Legend color="#16a34a" label={t("home.paidSum")} value={`${paidPct}%`} sub={fmtUZS(data.paid)} t={c} />
+                <Legend color="#dc2626" label={t("common.debt")} value={`${debtPct}%`} sub={fmtUZS(data.debt)} t={c} />
               </div>
             </div>
           </Panel>
 
-          <Panel t={t} title={t("super.byMarket")} icon={<LayoutDashboard size={14} />}>
+          <Panel t={c} title={t("super.byMarket")} icon={<LayoutDashboard size={14} />}>
             <div className="space-y-2.5">
               {data.markets.slice(0, 5).map((m) => (
-                <BarRow key={m.id} m={m} max={maxMarket} t={t} dark={dark} />
+                <BarRow key={m.id} m={m} max={maxMarket} t={c} dark={dark} />
               ))}
             </div>
           </Panel>
 
-          <Panel t={t} title={t("super.ranking")} icon={<Trophy size={14} />}>
+          <Panel t={c} title={t("super.ranking")} icon={<Trophy size={14} />}>
             <div className="space-y-2">
               {ranked.slice(0, 5).map((m, i) => (
                 <div key={m.id} className="flex items-center gap-3">
                   <span className="grid h-6 w-6 shrink-0 place-items-center rounded-lg text-xs font-bold"
-                    style={{ background: i === 0 ? "rgba(234,179,8,0.18)" : t.track, color: i === 0 ? "#eab308" : t.sub }}>
+                    style={{ background: i === 0 ? "rgba(234,179,8,0.18)" : c.track, color: i === 0 ? "#eab308" : c.sub }}>
                     {i + 1}
                   </span>
                   <span className="flex-1 truncate text-sm font-semibold">{m.name}</span>
@@ -190,26 +190,26 @@ export function SuperDashboardPage() {
 
         {/* Bozorlar — list/card toggle */}
         <div className="mb-3 flex items-center justify-between">
-          <div className="text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color: t.faint }}>
+          <div className="text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color: c.faint }}>
             {t("super.marketsList")} ({data.markets.length})
           </div>
-          <div className="flex items-center gap-1 rounded-xl border p-1" style={{ background: t.panel, borderColor: t.panelBorder }}>
-            <ViewBtn active={view === "list"} onClick={() => setView("list")} t={t}><List size={15} /> {t("super.viewList")}</ViewBtn>
-            <ViewBtn active={view === "cards"} onClick={() => setView("cards")} t={t}><LayoutGrid size={15} /> {t("super.viewCards")}</ViewBtn>
+          <div className="flex items-center gap-1 rounded-xl border p-1" style={{ background: c.panel, borderColor: c.panelBorder }}>
+            <ViewBtn active={view === "list"} onClick={() => setView("list")} t={c}><List size={15} /> {t("super.viewList")}</ViewBtn>
+            <ViewBtn active={view === "cards"} onClick={() => setView("cards")} t={c}><LayoutGrid size={15} /> {t("super.viewCards")}</ViewBtn>
           </div>
         </div>
 
         {view === "list" ? (
-          <MarketList markets={ranked} t={t} onOpen={openMarket} />
+          <MarketList markets={ranked} t={c} onOpen={openMarket} />
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {data.markets.map((m) => (
-              <MarketCard key={m.id} m={m} t={t} onOpen={openMarket} />
+              <MarketCard key={m.id} m={m} t={c} onOpen={openMarket} />
             ))}
           </div>
         )}
 
-        <div className="mt-8 flex items-center justify-center gap-2 text-xs" style={{ color: t.faint }}>
+        <div className="mt-8 flex items-center justify-center gap-2 text-xs" style={{ color: c.faint }}>
           <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-status-paid" />
           {t("super.live")} · {t("super.autoRefresh")} · {t("super.lastUpdate")}{" "}
           {new Date(dataUpdatedAt).toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
