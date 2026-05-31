@@ -63,17 +63,23 @@ async def get_dashboard_live(
         due_by_cat[cat] = Decimal(due)
         paid_by_cat[cat] = Decimal(paid)
 
-    total_due = sum(due_by_cat.values(), Decimal(0))
+    # DIQQAT: bu tizimda due_amount = QOLGAN QARZ (to'lanmagan qism),
+    # paid_amount = to'langan. Shuning uchun:
+    #   Qarz  = sum(due_amount)
+    #   To'langan = sum(paid_amount)
+    #   Jami  = To'langan + Qarz
+    total_debt = sum(due_by_cat.values(), Decimal(0))
     total_paid = sum(paid_by_cat.values(), Decimal(0))
+    total_sum = total_paid + total_debt
 
     # Live rejimda breakdown faqat rent/electricity/water mavjud — arava,
     # xojatxona, parking, boshqa DB'da alohida saqlanmaydi, shuning uchun 0.
     rent_paid = paid_by_cat.get(BillingCategory.RENT.value, Decimal(0))
 
     return DashboardOut(
-        total=int(total_due),
+        total=int(total_sum),
         paid=int(total_paid),
-        debt=int(total_due - total_paid),
+        debt=int(total_debt),
         services=ServicesBreakdown(
             rent=int(rent_paid),
             arava=0,

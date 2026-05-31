@@ -21,10 +21,11 @@ from app.schemas.billing import (
 _EPS = Decimal("1")
 
 
-def _status_from_amounts(due: Decimal, paid: Decimal, has_data: bool) -> ShopStatus:
+def _status_from_amounts(debt: Decimal, paid: Decimal, has_data: bool) -> ShopStatus:
+    # DIQQAT: bu tizimda due_amount = QOLGAN QARZ. Shuning uchun bu yerga
+    # to'g'ridan-to'g'ri qarz (debt) keladi, "to'liq hisob" emas.
     if not has_data:
         return ShopStatus.NO_DATA
-    debt = due - paid
     if debt <= _EPS:
         return ShopStatus.PAID
     if paid > _EPS:
@@ -54,32 +55,37 @@ async def _balances_by_inn(
 def _build_status(
     shop_id: str, inn: str | None, balances: list[MonthlyBalance]
 ) -> BillingStatusOut:
+    # DIQQAT: due_amount = QOLGAN QARZ, paid_amount = to'langan.
+    #   Qarz (debt)      = due_amount
+    #   To'langan (paid) = paid_amount
+    #   Jami (due/total) = paid_amount + due_amount
     cats: list[CategoryBalance] = []
-    total_due = Decimal(0)
     total_paid = Decimal(0)
+    total_debt = Decimal(0)
     for b in balances:
-        debt = b.due_amount - b.paid_amount
+        debt = b.due_amount if b.due_amount > 0 else Decimal(0)
+        line_total = b.paid_amount + debt  # shu xizmat bo'yicha jami
         cats.append(
             CategoryBalance(
                 category=b.category,
-                due=b.due_amount,
+                due=line_total,      # "due" = jami hisoblangan (paid + qarz)
                 paid=b.paid_amount,
-                debt=debt if debt > 0 else Decimal(0),
+                debt=debt,
             )
         )
-        total_due += b.due_amount
         total_paid += b.paid_amount
+        total_debt += debt
 
     has_data = len(balances) > 0
-    status = _status_from_amounts(total_due, total_paid, has_data)
-    total_debt = total_due - total_paid
+    status = _status_from_amounts(total_debt, total_paid, has_data)
+    total_sum = total_paid + total_debt
     return BillingStatusOut(
         shop_id=shop_id,
         inn=inn,
         status=status,
-        total_due=total_due,
+        total_due=total_sum,      # Jami = to'langan + qarz
         total_paid=total_paid,
-        total_debt=total_debt if total_debt > 0 else Decimal(0),
+        total_debt=total_debt,
         categories=cats,
     )
 
