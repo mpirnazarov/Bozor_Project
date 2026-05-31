@@ -15,15 +15,15 @@ export function fmtUZS(value: number | string): string {
 }
 
 export const STATUS_LABELS: Record<string, string> = {
-  paid: "Qarzsiz",
-  partial: "Qisman",
-  unpaid: "To'lamagan",
-  no_data: "Ma'lumot yo'q",
+  paid: "To'liq to'lagan",
+  partial: "Qisman to'lagan",
+  unpaid: "To'lanmagan",
+  no_data: "Topilmadi",
 };
 
 export const STATUS_COLORS: Record<string, string> = {
   paid: "#16a34a",
   partial: "#eab308",
   unpaid: "#dc2626",
-  no_data: "#9ca3af",
+  no_data: "#1f2937",
 };
