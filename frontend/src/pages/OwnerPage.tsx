@@ -146,7 +146,7 @@ export function OwnerPage() {
 }
 
 function MarketRow({
-  m, curY, curM, onView, onPay, onBlock, onPwd, onDelete,
+  m, curY: _curY, curM, onView, onPay, onBlock, onPwd, onDelete,
 }: {
   m: OwnerMarket; curY: number; curM: number;
   onView: () => void; onPay: (paid: boolean) => void; onBlock: (b: boolean) => void;
