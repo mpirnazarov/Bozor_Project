@@ -77,15 +77,23 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
     });
   }, [data, service]);
 
+  // Tepadagi summalar HAR DOIM umumiy (barcha xizmatlar bo'yicha) bo'ladi —
+  // xizmat filtri faqat magazin ranglari/ro'yxatini o'zgartiradi, summani emas.
   const totals = useMemo(() => {
-    return computed.reduce(
-      (acc, c) => {
-        acc.due += c.due; acc.paid += c.paid; acc.debt += c.debt;
+    if (!data) return { due: 0, paid: 0, debt: 0 };
+    return data.shops.reduce(
+      (acc, s) => {
+        const b = data.billing[s.shop_id];
+        if (b) {
+          acc.due += Number(b.total_due);
+          acc.paid += Number(b.total_paid);
+          acc.debt += Number(b.total_debt);
+        }
         return acc;
       },
       { due: 0, paid: 0, debt: 0 },
     );
-  }, [computed]);
+  }, [data]);
 
   // Har holat bo'yicha magazin soni (filtr yonida ko'rsatish uchun)
   const counts = useMemo(() => {

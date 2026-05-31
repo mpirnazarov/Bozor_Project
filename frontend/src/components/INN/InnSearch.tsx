@@ -21,7 +21,7 @@ export function InnSearch({ onSelectInn }: Props) {
   });
 
   return (
-    <div className="card relative p-4">
+    <div className={`card relative p-4 ${active ? "z-40" : ""}`}>
       <div className="eyebrow mb-2">{t("inn.title")}</div>
       <div className="relative">
         <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-faint" />
@@ -36,7 +36,7 @@ export function InnSearch({ onSelectInn }: Props) {
       </div>
 
       {active && q.trim().length >= 2 && (
-        <div className="absolute left-4 right-4 z-30 mt-1.5 max-h-72 overflow-y-auto rounded-2xl border border-white/60 bg-white/95 shadow-float backdrop-blur-xl animate-scale-in">
+        <div className="absolute left-4 right-4 z-50 mt-1.5 max-h-72 overflow-y-auto rounded-2xl border border-white/60 bg-white/95 shadow-float backdrop-blur-xl animate-scale-in">
           {isFetching && (
             <div className="px-4 py-3.5 text-sm text-ink-faint">{t("inn.searching")}</div>
           )}
