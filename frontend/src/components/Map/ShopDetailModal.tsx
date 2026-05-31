@@ -27,17 +27,29 @@ export function ShopDetailModal({ shopId, onClose }: Props) {
   return (
     <Modal open={!!shopId} onClose={onClose} title={shopId ?? ""} maxWidth="max-w-lg">
       {isLoading && <Spinner label="Yuklanmoqda..." />}
-      {data && (
+      {data && (() => {
+        // Umumiy status/qarz FAQAT arenda bo'yicha (elektr/suv alohida ko'rsatiladi)
+        const rentCat = data.billing?.categories.find((c) => c.category === "rent");
+        const rentDue = Number(rentCat?.due ?? 0);
+        const rentPaid = Number(rentCat?.paid ?? 0);
+        const rentDebt = Math.max(0, rentDue - rentPaid);
+        const hasRent = rentDue > 0 || rentPaid > 0;
+        let rentStatus: "paid" | "partial" | "unpaid" | "no_data";
+        if (!hasRent) rentStatus = "no_data";
+        else if (rentDebt <= 1) rentStatus = "paid";
+        else if (rentPaid > 1) rentStatus = "partial";
+        else rentStatus = "unpaid";
+        return (
         <div className="space-y-4">
           {data.billing && (
             <div
               className="rounded-lg px-4 py-2.5 text-sm font-bold text-white"
-              style={{ background: STATUS_COLORS[data.billing.status] }}
+              style={{ background: STATUS_COLORS[rentStatus] }}
             >
-              {t("pav.status." + data.billing.status)}
-              {data.billing.status !== "no_data" && (
+              {t("pav.status." + rentStatus)}
+              {rentStatus !== "no_data" && rentDebt > 0 && (
                 <span className="float-right font-mono">
-                  {t("shop.debtLabel")}: {fmtUZS(data.billing.total_debt)}
+                  {t("shop.debtLabel")}: {fmtUZS(rentDebt)}
                 </span>
               )}
             </div>
@@ -101,7 +113,8 @@ export function ShopDetailModal({ shopId, onClose }: Props) {
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
     </Modal>
   );
 }

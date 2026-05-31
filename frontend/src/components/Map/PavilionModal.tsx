@@ -38,15 +38,12 @@ function statusForService(b: BillingStatus | undefined, service: ServiceKey): {
   status: ShopStatus; due: number; paid: number; debt: number;
 } {
   if (!b) return { status: "no_data", due: 0, paid: 0, debt: 0 };
-  if (service === "all") {
-    return {
-      status: b.status,
-      due: Number(b.total_due),
-      paid: Number(b.total_paid),
-      debt: Number(b.total_debt),
-    };
-  }
-  const cat: CategoryBalance | undefined = b.categories.find((c) => c.category === service);
+
+  // "Barcha" (default) — status va qarz FAQAT arenda bo'yicha aniqlanadi.
+  // Elektr/suv qarzi faqat o'sha filtr tanlanganda hisobga olinadi.
+  const effective = service === "all" ? "rent" : service;
+
+  const cat: CategoryBalance | undefined = b.categories.find((c) => c.category === effective);
   if (!cat) return { status: "no_data", due: 0, paid: 0, debt: 0 };
   const due = Number(cat.due);
   const paid = Number(cat.paid);

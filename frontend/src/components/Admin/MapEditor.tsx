@@ -117,12 +117,10 @@ export function MapEditor() {
 
   // --- chizish/surish ---
   function handleSvgPointerDown(e: React.PointerEvent) {
-    if (mode === "draw") return; // draw rejimida pan yo'q
     if (dragIdx != null) return; // nuqta surilyapti
-    // DIQQAT: setPointerCapture'ni shu yerda chaqirmaymiz! Aks holda region
-    // polygonining onClick'i ishlamaydi (pointer SVG'ga qamalib qoladi).
-    // Capture'ni faqat haqiqiy surish (harakat) boshlanganda qilamiz.
-    pan.current = { active: true, moved: false, sx: e.clientX, sy: e.clientY, ox: vb.x, oy: vb.y };
+    // Har bosishda pan holatini tozalaymiz (draw rejimida ham), aks holda
+    // oldingi surishdan qolgan moved=true chizishni bloklaydi.
+    pan.current = { active: mode !== "draw", moved: false, sx: e.clientX, sy: e.clientY, ox: vb.x, oy: vb.y };
   }
   function handleSvgPointerMove(e: React.PointerEvent) {
     if (dragIdx != null) {
@@ -371,6 +369,7 @@ export function MapEditor() {
           >
             <image href="/map.jpg" x="0" y="0" width={VIEW_W} height={VIEW_H}
               preserveAspectRatio="xMidYMid meet"
+              style={{ pointerEvents: "none" }}
               onError={(e) => ((e.target as SVGImageElement).style.display = "none")} />
 
             {pavilions?.map((p) => {
@@ -388,7 +387,7 @@ export function MapEditor() {
                   strokeWidth={2}
                   strokeDasharray={hidden ? "6 4" : undefined}
                   vectorEffect="non-scaling-stroke"
-                  style={{ cursor: "pointer" }}
+                  style={{ cursor: "pointer", pointerEvents: mode === "draw" ? "none" : "auto" }}
                   onClick={(e) => {
                     if (mode === "select" && !pan.current.moved) {
                       e.stopPropagation();
