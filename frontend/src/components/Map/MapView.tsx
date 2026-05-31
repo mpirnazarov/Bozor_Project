@@ -71,8 +71,9 @@ export function MapView({ onSelectPavilion }: Props) {
   }
 
   function handlePointerDown(e: React.PointerEvent) {
-    // Pointer'ni ushlab olamiz — drag faqat xarita ichida qoladi, sahifa surilmaydi
-    (e.currentTarget as SVGSVGElement).setPointerCapture(e.pointerId);
+    // DIQQAT: setPointerCapture'ni shu yerda chaqirmaymiz — aks holda region
+    // polygonining onClick'i ishlamaydi (pointer SVG'ga qamalib qoladi).
+    // Capture faqat haqiqiy surish boshlanganda qilinadi (handlePointerMove'da).
     pan.current = {
       active: true, moved: false,
       sx: e.clientX, sy: e.clientY, ox: vb.x, oy: vb.y,
@@ -80,13 +81,17 @@ export function MapView({ onSelectPavilion }: Props) {
   }
   function handlePointerMove(e: React.PointerEvent) {
     if (!pan.current.active) return;
+    const movedEnough =
+      Math.abs(e.clientX - pan.current.sx) > 4 || Math.abs(e.clientY - pan.current.sy) > 4;
+    if (!movedEnough && !pan.current.moved) return; // hali surish emas — clickka ruxsat
+    if (!pan.current.moved) {
+      pan.current.moved = true;
+      try { (e.currentTarget as SVGSVGElement).setPointerCapture(e.pointerId); } catch { /* noop */ }
+    }
     e.preventDefault();
     const rect = svgRef.current!.getBoundingClientRect();
     const dx = ((e.clientX - pan.current.sx) / rect.width) * vb.w;
     const dy = ((e.clientY - pan.current.sy) / rect.height) * vb.h;
-    if (Math.abs(e.clientX - pan.current.sx) > 3 || Math.abs(e.clientY - pan.current.sy) > 3) {
-      pan.current.moved = true;
-    }
     let nx = pan.current.ox - dx;
     let ny = pan.current.oy - dy;
     nx = Math.min(Math.max(0, nx), VIEW_W - vb.w);
