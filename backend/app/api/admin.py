@@ -1,6 +1,9 @@
 """Admin endpointlari — /api/admin/* (hammasi require_admin)."""
 from typing import Annotated
 
+import httpx
+from pydantic import BaseModel
+
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,6 +30,7 @@ from app.schemas.pavilion import PavilionOut
 from app.services.audit_service import write_audit
 from app.services.dashboard_service import get_dashboard_from_settings
 from app.services.import_service import import_balances_xlsx
+from app.services.shop_import_service import import_shops_csv
 
 router = APIRouter()
 
@@ -168,6 +172,63 @@ async def import_excel(
     await write_audit(
         db, admin.id, "import_excel", "monthly_balances", file.filename,
         {"rows": result.rows_read, "inserted": result.inserted},
+    )
+    await db.commit()
+    return result
+
+
+@router.post("/import/shops/csv")
+async def import_shops_file(
+    admin: AdminUser,
+    market: CurrentMarket,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    file: UploadFile = File(...),
+) -> dict:
+    """CSV fayl'dan magazinlarni import qiladi (shop_id + INN + nom)."""
+    if not file.filename or not file.filename.lower().endswith((".csv", ".tsv", ".txt")):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Faqat .csv fayl")
+    content = await file.read()
+    result = await import_shops_csv(db, content, market_id=market.id, source=file.filename)
+    await write_audit(
+        db, admin.id, "import_shops_csv", "shops", file.filename,
+        {"rows": result["rows_read"], "inserted": result["inserted"], "updated": result["updated"]},
+    )
+    await db.commit()
+    return result
+
+
+class _SheetImportBody(BaseModel):
+    url: str
+
+
+@router.post("/import/shops/gsheet")
+async def import_shops_gsheet(
+    admin: AdminUser,
+    market: CurrentMarket,
+    body: _SheetImportBody,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    """Google Sheets (yoki istalgan CSV URL) havolasidan magazinlarni import qiladi.
+
+    Havola CSV ko'rinishida bo'lishi kerak (masalan .../pub?output=csv).
+    """
+    url = body.url.strip()
+    if not url.startswith("http"):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "To'g'ri URL kiriting")
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=30) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            content = resp.content
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, f"Havoladan yuklab bo'lmadi: {e}"
+        ) from e
+
+    result = await import_shops_csv(db, content, market_id=market.id, source="gsheet")
+    await write_audit(
+        db, admin.id, "import_shops_gsheet", "shops", url[:200],
+        {"rows": result["rows_read"], "inserted": result["inserted"], "updated": result["updated"]},
     )
     await db.commit()
     return result

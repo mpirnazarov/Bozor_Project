@@ -45,9 +45,21 @@ async def get_pavilion(
     if pav is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Pavilion topilmadi")
 
-    count = await db.scalar(
-        select(func.count()).select_from(Shop).where(Shop.pavilion_id == pavilion_id)
-    )
+    prefix = None
+    if isinstance(pav.meta, dict):
+        prefix = (pav.meta.get("shop_prefix") or "").strip() or None
+
+    if prefix:
+        count = await db.scalar(
+            select(func.count()).select_from(Shop).where(
+                Shop.market_id == pav.market_id,
+                Shop.shop_id.like(f"{prefix}-%"),
+            )
+        )
+    else:
+        count = await db.scalar(
+            select(func.count()).select_from(Shop).where(Shop.pavilion_id == pavilion_id)
+        )
     detail = PavilionDetailOut.model_validate(pav)
     detail.shop_count = count or 0
     return detail
@@ -66,9 +78,27 @@ async def get_pavilion_shops(
     if pav is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Pavilion topilmadi")
 
-    result = await db.execute(
-        select(Shop).where(Shop.pavilion_id == pavilion_id, Shop.is_active.is_(True))
-    )
+    # Magazinlarni tanlash: agar region meta.shop_prefix bo'lsa, shop_id
+    # prefiks bo'yicha (masalan "04-1-1" -> "04-1-1-001", "04-1-1-002" ...).
+    # Aks holda eski usul — pavilion_id (FK) bo'yicha.
+    prefix = None
+    if isinstance(pav.meta, dict):
+        prefix = (pav.meta.get("shop_prefix") or "").strip() or None
+
+    if prefix:
+        result = await db.execute(
+            select(Shop)
+            .where(
+                Shop.market_id == pav.market_id,
+                Shop.shop_id.like(f"{prefix}-%"),
+                Shop.is_active.is_(True),
+            )
+            .order_by(Shop.shop_id)
+        )
+    else:
+        result = await db.execute(
+            select(Shop).where(Shop.pavilion_id == pavilion_id, Shop.is_active.is_(True))
+        )
     shops = list(result.scalars())
     shop_ids = [s.shop_id for s in shops]
     billing = await compute_batch_status(db, shop_ids, year, month)
