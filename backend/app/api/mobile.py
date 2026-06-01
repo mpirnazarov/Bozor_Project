@@ -220,3 +220,39 @@ async def mobile_counterparty(
             "debt": total_debt,
         },
     }
+
+
+@router.get("/periods")
+async def mobile_periods(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    inn: str = Query(..., description="Kontragent INN"),
+    market: str = Query(..., description="Bozor slug"),
+) -> list[dict]:
+    """Shu INN uchun DB'da mavjud oylar (eng so'nggi 12 ta).
+
+    Android oy tanlashda faqat shu ro'yxatni ko'rsatadi — ma'lumoti yo'q
+    oylar ko'rsatilmaydi.
+    """
+    inn = inn.strip()
+    m = await db.scalar(select(Market).where(Market.slug == market.strip()))
+    if m is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Bozor topilmadi")
+
+    # Shu bozorda balanslar bormi — bo'lmasa market filtrisiz INN bo'yicha
+    has_market_bal = await db.scalar(
+        select(MonthlyBalance.id).where(
+            MonthlyBalance.inn == inn, MonthlyBalance.market_id == m.id
+        ).limit(1)
+    )
+    q = (
+        select(MonthlyBalance.year, MonthlyBalance.month)
+        .where(MonthlyBalance.inn == inn)
+        .group_by(MonthlyBalance.year, MonthlyBalance.month)
+        .order_by(MonthlyBalance.year.desc(), MonthlyBalance.month.desc())
+        .limit(12)
+    )
+    if has_market_bal is not None:
+        q = q.where(MonthlyBalance.market_id == m.id)
+
+    rows = (await db.execute(q)).all()
+    return [{"year": int(y), "month": int(mo)} for y, mo in rows]
