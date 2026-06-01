@@ -32,15 +32,21 @@ def _f(v) -> float:
 async def mobile_markets(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[dict]:
-    """Mobil ilova uchun bozorlar ro'yxati (faol, bloklanmagan)."""
+    """Mobil ilova uchun bozorlar ro'yxati (faol, bloklanmagan).
+
+    O'rikzor doim birinchi, qolganlar display_order bo'yicha.
+    """
     rows = await db.execute(
         select(Market)
         .where(Market.is_active.is_(True), Market.support_blocked.is_(False))
         .order_by(Market.display_order, Market.id)
     )
+    markets = list(rows.scalars())
+    # O'rikzorni ro'yxat boshiga olamiz
+    markets.sort(key=lambda m: (m.slug != "orikzor", m.display_order, m.id))
     return [
         {"id": m.id, "slug": m.slug, "name": m.name}
-        for m in rows.scalars()
+        for m in markets
     ]
 
 
@@ -48,8 +54,8 @@ async def mobile_markets(
 async def mobile_counterparty(
     db: Annotated[AsyncSession, Depends(get_db)],
     inn: str = Query(..., description="Kontragent INN"),
-    year: int | None = Query(None),
-    month: int | None = Query(None),
+    year_q: int | None = Query(None, alias="year"),
+    month_q: int | None = Query(None, alias="month"),
     market: str = Query(..., description="Bozor slug (majburiy)"),
 ) -> dict:
     """Eski PHP counterparty.php bilan bir xil format.
@@ -62,8 +68,8 @@ async def mobile_counterparty(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "INN parametri kerak")
 
     today = date.today()
-    year = year or today.year
-    month = month or today.month
+    year = year_q or today.year
+    month = month_q or today.month
 
     # Bozorni aniqlaymiz (majburiy)
     m = await db.scalar(select(Market).where(Market.slug == market.strip()))
@@ -95,6 +101,32 @@ async def mobile_counterparty(
     )
     shops_db = list((await db.execute(shop_stmt)).scalars())
 
+    # Davrni aniqlaymiz: agar so'ralgan (yoki joriy) oyda balans bo'lmasa,
+    # shu INN uchun ENG SO'NGGI mavjud oyni avtomatik olamiz — shunda
+    # to'lovlar 0 ko'rinib qolmaydi.
+    explicit_period = year_q is not None and month_q is not None
+    # Davrni aniqlash uchun shu INN bo'yicha balanslar qaysi market_id'da borligini
+    # tekshiramiz. Eski import'da balanslar market_id'siz/boshqa bo'lishi mumkin,
+    # shuning uchun avval shu bozor, bo'lmasa umuman INN bo'yicha olamiz.
+    bal_market_filter = MonthlyBalance.market_id == market_id
+    has_market_bal = await db.scalar(
+        select(MonthlyBalance.id).where(MonthlyBalance.inn == inn, bal_market_filter).limit(1)
+    )
+    use_market_filter = has_market_bal is not None
+
+    if not explicit_period:
+        period_q = (
+            select(MonthlyBalance.year, MonthlyBalance.month)
+            .where(MonthlyBalance.inn == inn)
+            .order_by(MonthlyBalance.year.desc(), MonthlyBalance.month.desc())
+            .limit(1)
+        )
+        if use_market_filter:
+            period_q = period_q.where(bal_market_filter)
+        latest = (await db.execute(period_q)).first()
+        if latest is not None:
+            year, month = int(latest[0]), int(latest[1])
+
     # 3. Billing (monthly_balances) — kategoriya bo'yicha
     # DIQQAT: due_amount = QOLGAN QARZ, paid_amount = to'langan.
     #   => paid = paid_amount, debt = due_amount, due = paid + debt
@@ -111,8 +143,8 @@ async def mobile_counterparty(
         )
         .group_by(MonthlyBalance.category)
     )
-    if market_id is not None:
-        bal_stmt = bal_stmt.where(MonthlyBalance.market_id == market_id)
+    if use_market_filter:
+        bal_stmt = bal_stmt.where(bal_market_filter)
 
     def _zero() -> dict:
         return {"due": 0.0, "paid": 0.0, "debt": 0.0}
@@ -146,13 +178,16 @@ async def mobile_counterparty(
 
     shops_out = []
     for s in shops_db:
+        # shop_type ustunida import paytida ba'zan firma nomi saqlangan
+        # (masalan "(рекл)2"). Foydalanuvchiga faoliyat turini (purpose)
+        # ko'rsatamiz; u bo'sh bo'lsa — bo'sh qoldiramiz.
+        display_type = (s.purpose or "").strip() or None
         shops_out.append({
             "shop_id": s.shop_id,
             "pavilion_code": s.pavilion_code,
             "region_id": s.pavilion_id,
             "monthly_rent": _f(s.monthly_rent),
-            "shop_type": s.shop_type,
-            # Eski format maydonlari (magazin darajasida aniq bo'lmaganda kontragent darajasi)
+            "shop_type": display_type,
             "rent_due": _f(s.monthly_rent),
             "rent_paid": 0.0,
             "rent_status": rent_status,
