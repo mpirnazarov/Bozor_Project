@@ -34,6 +34,8 @@ export function HomePage() {
   const [activePavilion, setActivePavilion] = useState<Pavilion | null>(null);
   const [activeShop, setActiveShop] = useState<string | null>(null);
   const [activeInn, setActiveInn] = useState<string | null>(null);
+  // Logo/i-tugma toggle: default i (Info), bosilganda logo (Store), yana bosilganda i
+  const [showLogo, setShowLogo] = useState(false);
 
   const { data: innDetail } = useQuery({
     queryKey: ["inn", activeInn],
@@ -46,9 +48,19 @@ export function HomePage() {
       <header className="sticky top-0 z-20 border-b border-white/60 bg-white/70 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
           <div className="flex items-center gap-3">
-            <div className="grid h-11 w-11 place-items-center rounded-xl bg-brand-grad shadow-glow">
-              <Store className="text-white" size={22} strokeWidth={2.2} />
-            </div>
+            <button
+              type="button"
+              onClick={() => setShowLogo((v) => !v)}
+              className="grid h-11 w-11 place-items-center rounded-xl bg-brand-grad shadow-glow transition-transform active:scale-95"
+              title={showLogo ? t("app.title") : "Info"}
+              aria-label="logo-info-toggle"
+            >
+              {showLogo ? (
+                <Store className="text-white" size={22} strokeWidth={2.2} />
+              ) : (
+                <Info className="text-white" size={22} strokeWidth={2.2} />
+              )}
+            </button>
             <div>
               <h1 className="font-display text-base font-extrabold leading-tight text-ink">
                 {t("app.title")}
