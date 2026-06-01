@@ -21,13 +21,20 @@ async def list_pavilions(
     market: CurrentMarket,
     db: Annotated[AsyncSession, Depends(get_db)],
     include_inactive: bool = Query(False),
+    map_layer_id: int | None = Query(None, description="Faqat shu xaritaning regionlari"),
 ) -> list[Pavilion]:
-    """Tanlangan bozorning pavilionlari (xarita uchun)."""
+    """Tanlangan bozorning pavilionlari (xarita uchun).
+
+    map_layer_id berilsa — faqat o'sha xaritaning regionlari.
+    Berilmasa — barcha (orqaga moslik; eski xaritasiz regionlar ham).
+    """
     stmt = (
         select(Pavilion)
         .where(Pavilion.market_id == market.id)
         .order_by(Pavilion.display_order)
     )
+    if map_layer_id is not None:
+        stmt = stmt.where(Pavilion.map_layer_id == map_layer_id)
     if not include_inactive:
         stmt = stmt.where(Pavilion.is_active.is_(True))
     result = await db.execute(stmt)

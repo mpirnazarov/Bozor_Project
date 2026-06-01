@@ -1,8 +1,10 @@
 import { apiClient } from "./client";
 import type { Pavilion, PavilionShops } from "@/types/api";
 
-export async function getPavilions(): Promise<Pavilion[]> {
-  const { data } = await apiClient.get<Pavilion[]>("/pavilions");
+export async function getPavilions(mapLayerId?: number): Promise<Pavilion[]> {
+  const { data } = await apiClient.get<Pavilion[]>("/pavilions", {
+    params: mapLayerId != null ? { map_layer_id: mapLayerId } : undefined,
+  });
   // Backend xato/HTML qaytarsa, massiv bo'lmasligi mumkin — himoya
   if (!Array.isArray(data)) {
     throw new Error(

@@ -14,6 +14,11 @@ class Pavilion(Base):
         Integer, ForeignKey("markets.id", ondelete="CASCADE"),
         default=1, nullable=False, index=True,
     )
+    # Qaysi xaritaga (qavat) tegishli. NULL = eski/asosiy xarita (orqaga moslik).
+    map_layer_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("map_layers.id", ondelete="CASCADE"),
+        nullable=True, index=True,
+    )
     display_name: Mapped[str] = mapped_column(String(100), nullable=False)
     display_text: Mapped[str | None] = mapped_column(String(10), nullable=True)
     pavilion_type: Mapped[str | None] = mapped_column(String(50), nullable=True)

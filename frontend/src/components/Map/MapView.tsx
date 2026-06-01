@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRef, useState, useCallback } from "react";
-import { Plus, Minus, Maximize2 } from "lucide-react";
+import { Plus, Minus, Maximize2, ChevronLeft, ChevronRight, Layers } from "lucide-react";
 import { getPavilions } from "@/api/pavilions";
+import { getMapLayers, mapImageUrl } from "@/api/maps";
 import { Spinner } from "@/components/ui/Modal";
 import type { Pavilion } from "@/types/api";
 import { useT } from "@/i18n/useT";
@@ -24,9 +25,15 @@ interface ViewBox {
 
 export function MapView({ onSelectPavilion }: Props) {
   const t = useT();
+
+  // Bozorning xaritalari (qavatlar). Bo'lmasa — eski yagona /map.jpg rejimi.
+  const { data: layers } = useQuery({ queryKey: ["map-layers"], queryFn: () => getMapLayers() });
+  const [activeIdx, setActiveIdx] = useState(0);
+  const activeLayer = layers && layers.length > 0 ? layers[Math.min(activeIdx, layers.length - 1)] : null;
+
   const { data: pavilions, isLoading, isError, error } = useQuery({
-    queryKey: ["pavilions"],
-    queryFn: getPavilions,
+    queryKey: ["pavilions", activeLayer?.id ?? "all"],
+    queryFn: () => getPavilions(activeLayer?.id),
   });
 
   const svgRef = useRef<SVGSVGElement>(null);
@@ -162,6 +169,31 @@ export function MapView({ onSelectPavilion }: Props) {
         </div>
       )}
 
+      {/* Xaritalar (qavatlar) o'rtasida o'tish — faqat bittadan ko'p bo'lsa */}
+      {layers && layers.length > 1 && (
+        <div className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-full bg-white/95 px-1.5 py-1 shadow-soft ring-1 ring-slate-200 backdrop-blur">
+          <button
+            onClick={() => { setActiveIdx((i) => (i - 1 + layers.length) % layers.length); reset(); }}
+            className="grid h-8 w-8 place-items-center rounded-full text-ink-soft transition-colors hover:bg-slate-100 hover:text-brand"
+            title="Oldingi xarita"
+          >
+            <ChevronLeft size={18} />
+          </button>
+          <div className="flex items-center gap-1.5 px-2 text-sm font-bold text-ink">
+            <Layers size={15} className="text-brand" />
+            {activeLayer?.name ?? ""}
+            <span className="text-xs font-normal text-ink-faint">({activeIdx + 1}/{layers.length})</span>
+          </div>
+          <button
+            onClick={() => { setActiveIdx((i) => (i + 1) % layers.length); reset(); }}
+            className="grid h-8 w-8 place-items-center rounded-full text-ink-soft transition-colors hover:bg-slate-100 hover:text-brand"
+            title="Keyingi xarita"
+          >
+            <ChevronRight size={18} />
+          </button>
+        </div>
+      )}
+
       <svg
         ref={svgRef}
         viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
@@ -181,7 +213,7 @@ export function MapView({ onSelectPavilion }: Props) {
         onPointerLeave={handlePointerUp}
       >
         <image
-          href="/map.jpg"
+          href={activeLayer ? mapImageUrl(activeLayer.id) : "/map.jpg"}
           x="0"
           y="0"
           width={VIEW_W}

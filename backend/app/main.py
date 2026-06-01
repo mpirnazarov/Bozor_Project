@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import admin, auth, billing, dashboard, inn, markets, owner, pavilions, settings as settings_api, shops, yertola
+from app.api import admin, auth, billing, dashboard, inn, maps, markets, owner, pavilions, settings as settings_api, shops, yertola
 from app.config import settings
 from app.middleware.security import LoginRateLimitMiddleware, SecurityHeadersMiddleware
 
@@ -75,6 +75,7 @@ app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(markets.router, prefix="/api/markets", tags=["markets"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
 app.include_router(pavilions.router, prefix="/api/pavilions", tags=["pavilions"])
+app.include_router(maps.router, prefix="/api/maps", tags=["maps"])
 app.include_router(shops.router, prefix="/api/shops", tags=["shops"])
 app.include_router(billing.router, prefix="/api/billing", tags=["billing"])
 app.include_router(inn.router, prefix="/api/inn", tags=["inn"])

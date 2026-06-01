@@ -58,6 +58,7 @@ export interface Pavilion {
   label_rotation: number;
   is_active: boolean;
   display_order: number;
+  map_layer_id?: number | null;
   meta: Record<string, unknown>;
 }
 

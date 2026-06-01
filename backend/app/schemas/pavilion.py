@@ -21,6 +21,7 @@ class PavilionOut(BaseModel):
     label_rotation: float
     is_active: bool
     display_order: int
+    map_layer_id: int | None = None
     meta: dict = Field(default_factory=dict)
 
 

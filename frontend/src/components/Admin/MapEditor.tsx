@@ -2,10 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Plus, Trash2, Save, X, MousePointer2, Maximize2, Minimize2,
-  ZoomIn, ZoomOut, EyeOff,
+  ZoomIn, ZoomOut, EyeOff, Layers, Upload, ImagePlus,
 } from "lucide-react";
 import { getPavilions } from "@/api/pavilions";
 import { createPavilion, updatePavilion, deletePavilion } from "@/api/admin";
+import {
+  getMapLayers, createMapLayer, uploadMapImage, deleteMapLayer, mapImageUrl,
+} from "@/api/maps";
 import { useT } from "@/i18n/useT";
 
 const VIEW_W = 1568;
@@ -36,7 +39,21 @@ export function MapEditor() {
   const svgRef = useRef<SVGSVGElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  const { data: pavilions } = useQuery({ queryKey: ["pavilions-all"], queryFn: getPavilions });
+  const { data: layers } = useQuery({ queryKey: ["map-layers"], queryFn: () => getMapLayers() });
+  const [activeLayerId, setActiveLayerId] = useState<number | null>(null);
+  // Birinchi xaritani avtomatik tanlaymiz
+  useEffect(() => {
+    if (activeLayerId == null && layers && layers.length > 0) {
+      setActiveLayerId(layers[0].id);
+    }
+  }, [layers, activeLayerId]);
+
+  const activeLayer = layers?.find((l) => l.id === activeLayerId) ?? null;
+
+  const { data: pavilions } = useQuery({
+    queryKey: ["pavilions-all", activeLayerId ?? "none"],
+    queryFn: () => getPavilions(activeLayerId ?? undefined),
+  });
 
   const [mode, setMode] = useState<Mode>("select");
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -225,6 +242,7 @@ export function MapEditor() {
   }
 
   async function handleSave() {
+    if (activeLayerId == null) { setMsg("Avval xarita tanlang yoki qo'shing"); return; }
     if (points.length < 3) { setMsg("Kamida 3 ta nuqta kerak"); return; }
     if (!isHidden && !name.trim()) { setMsg(t("editor.name")); return; }
     setSaving(true);
@@ -240,6 +258,7 @@ export function MapEditor() {
       label_x: labelPoint.x,
       label_y: labelPoint.y,
       is_active: true,
+      map_layer_id: activeLayerId ?? undefined,
       meta: {
         shop_prefix: isHidden ? undefined : (shopPrefix.trim() || undefined),
         show_label: showLabel,
@@ -278,11 +297,107 @@ export function MapEditor() {
     }
   }
 
+  // ===== Xarita (qavat) boshqaruvi =====
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleNewLayer() {
+    const name = prompt("Yangi xarita nomi (masalan: 1-etaj, Podval):", "");
+    if (!name || !name.trim()) return;
+    try {
+      const layer = await createMapLayer(name.trim());
+      await qc.invalidateQueries({ queryKey: ["map-layers"] });
+      setActiveLayerId(layer.id);
+      setMsg("✓ Xarita qo'shildi. Endi rasm yuklang.");
+    } catch {
+      setMsg("Xarita qo'shishda xatolik");
+    }
+  }
+
+  async function handleUploadImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || activeLayerId == null) return;
+    try {
+      await uploadMapImage(activeLayerId, file);
+      await qc.invalidateQueries({ queryKey: ["map-layers"] });
+      setMsg("✓ Rasm yuklandi");
+    } catch {
+      setMsg("Rasm yuklashda xatolik (8 MB dan oshmasin)");
+    }
+  }
+
+  async function handleDeleteLayer() {
+    if (activeLayerId == null) return;
+    if (!confirm(`«${activeLayer?.name}» xaritasi va undagi BARCHA regionlar o'chiriladi. Davom etilsinmi?`)) return;
+    try {
+      await deleteMapLayer(activeLayerId);
+      await qc.invalidateQueries({ queryKey: ["map-layers"] });
+      qc.invalidateQueries({ queryKey: ["pavilions-all"] });
+      setActiveLayerId(null);
+      setMsg("✓ Xarita o'chirildi");
+    } catch {
+      setMsg("Xaritani o'chirishda xatolik");
+    }
+  }
+
   return (
     <div className="space-y-3">
       <p className="text-sm text-ink-soft">
         {t("editor.intro")} <span className="font-mono font-bold">04-1-1</span>
       </p>
+
+      {/* Xaritalar (qavatlar) boshqaruvi */}
+      <div className="flex flex-wrap items-center gap-2 rounded-xl bg-slate-50 p-2.5">
+        <span className="inline-flex items-center gap-1.5 text-sm font-bold text-ink-soft">
+          <Layers size={16} className="text-brand" /> Xarita:
+        </span>
+        {layers && layers.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {layers.map((l) => (
+              <button
+                key={l.id}
+                onClick={() => { setActiveLayerId(l.id); startNew(); }}
+                className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
+                  l.id === activeLayerId ? "bg-brand text-white" : "bg-white text-ink-soft ring-1 ring-slate-200 hover:bg-slate-100"
+                }`}
+              >
+                {l.name}{!l.has_image && " ⚠️"}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <span className="text-sm text-ink-faint">Hali xarita yo'q — yangi qo'shing</span>
+        )}
+
+        <div className="ml-auto flex items-center gap-1.5">
+          {activeLayer && (
+            <>
+              <button className="btn-ghost px-3 py-1.5 text-xs" onClick={() => fileInputRef.current?.click()}>
+                <Upload size={14} /> {activeLayer.has_image ? "Rasmni almashtirish" : "Rasm yuklash"}
+              </button>
+              <button className="btn-ghost px-3 py-1.5 text-xs text-status-unpaid" onClick={handleDeleteLayer}>
+                <Trash2 size={14} />
+              </button>
+            </>
+          )}
+          <button className="btn-primary px-3 py-1.5 text-xs" onClick={handleNewLayer}>
+            <ImagePlus size={14} /> Yangi xarita
+          </button>
+          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleUploadImage} />
+        </div>
+      </div>
+
+      {/* Xarita yo'q bo'lsa ogohlantirish */}
+      {(!layers || layers.length === 0) && (
+        <div className="rounded-xl border-2 border-dashed border-brand/30 bg-brand/5 px-4 py-3 text-sm text-ink-soft">
+          Region chizishdan oldin xarita qo'shing va rasm yuklang: <b>«Yangi xarita»</b> tugmasini bosing.
+        </div>
+      )}
+      {activeLayer && !activeLayer.has_image && (
+        <div className="rounded-xl border-2 border-dashed border-amber-400/40 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+          «{activeLayer.name}» uchun hali rasm yuklanmagan — <b>«Rasm yuklash»</b> tugmasini bosing.
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         <button className={mode === "select" ? "btn-primary" : "btn-ghost"} onClick={() => setMode("select")}>
@@ -381,7 +496,7 @@ export function MapEditor() {
             onPointerUp={handleSvgPointerUp}
             onPointerLeave={handleSvgPointerUp}
           >
-            <image href="/map.jpg" x="0" y="0" width={VIEW_W} height={VIEW_H}
+            <image href={activeLayer ? mapImageUrl(activeLayer.id) : "/map.jpg"} x="0" y="0" width={VIEW_W} height={VIEW_H}
               preserveAspectRatio="xMidYMid meet"
               style={{ pointerEvents: "none" }}
               onError={(e) => ((e.target as SVGImageElement).style.display = "none")} />

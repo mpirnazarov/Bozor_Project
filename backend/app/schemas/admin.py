@@ -44,6 +44,7 @@ class PavilionCreate(BaseModel):
     label_rotation: float = 0
     is_active: bool = True
     display_order: int = 0
+    map_layer_id: int | None = None
     meta: dict = {}
 
 
@@ -63,6 +64,7 @@ class PavilionUpdate(BaseModel):
     label_rotation: float | None = None
     is_active: bool | None = None
     display_order: int | None = None
+    map_layer_id: int | None = None
     meta: dict | None = None
 
 
