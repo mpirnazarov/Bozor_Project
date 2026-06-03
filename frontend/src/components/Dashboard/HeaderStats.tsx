@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Info, Wallet, CheckCircle2, AlertTriangle, TrendingUp, X } from "lucide-react";
 import { getDashboard } from "@/api/dashboard";
@@ -35,7 +36,7 @@ export function HeaderStats() {
         </div>
       </div>
 
-      <div className="stagger relative z-30 grid gap-3 sm:grid-cols-3 [&:has(.breakdown-open)]:z-50">
+      <div className="stagger grid gap-3 sm:grid-cols-3">
         <StatCard
           label={t("home.totalSum")}
           value={data?.total}
@@ -108,7 +109,7 @@ function StatCard({
 }) {
   const t = TONE[tone] ?? TONE.brand;
   return (
-    <div className={`stat-card ring-1 ${t.ring} relative [&:has(.breakdown-open)]:z-50`}>
+    <div className={`stat-card ring-1 ${t.ring}`}>
       <div className="stat-glow">
         <div className={`absolute -right-8 -top-8 h-28 w-28 rounded-full bg-gradient-to-br ${t.glow} to-transparent blur-2xl`} />
       </div>
@@ -138,27 +139,19 @@ function BreakdownPopover({
   total: number;
 }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
   const t = useT();
 
   useEffect(() => {
     if (!open) return;
-    function onClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
     }
-    document.addEventListener("mousedown", onClick);
     document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onClick);
-      document.removeEventListener("keydown", onKey);
-    };
+    return () => document.removeEventListener("keydown", onKey);
   }, [open]);
 
   return (
-    <div ref={ref} className={`relative ${open ? "breakdown-open" : ""}`}>
+    <div className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
         className="inline-flex items-center gap-1 rounded-full bg-status-paid/12 px-2.5 py-1 text-[11px] font-bold text-status-paid transition-colors hover:bg-status-paid/20"
@@ -167,31 +160,46 @@ function BreakdownPopover({
         <Info size={14} /> {t("home.breakdown")}
       </button>
 
-      {open && (
-        <div className="absolute right-0 top-9 z-[60] w-80 animate-scale-in rounded-2xl border border-white/60 bg-white/95 p-4 shadow-float backdrop-blur-xl">
-          <div className="mb-2.5 flex items-center justify-between">
-            <span className="text-sm font-bold text-ink">{t("home.breakdown")}</span>
-            <button
-              onClick={() => setOpen(false)}
-              className="grid h-6 w-6 place-items-center rounded-full text-ink-faint transition-colors hover:bg-slate-100 hover:text-ink"
+      {open &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+            onMouseDown={() => setOpen(false)}
+          >
+            {/* Orqa fon */}
+            <div className="absolute inset-0 bg-ink/40 backdrop-blur-sm animate-fade-in" />
+            {/* Modal — kattalashtirilgan */}
+            <div
+              className="relative w-full max-w-md animate-scale-in rounded-3xl border border-white/60 bg-white p-6 shadow-float"
+              onMouseDown={(e) => e.stopPropagation()}
             >
-              <X size={15} />
-            </button>
-          </div>
-          <div className="divide-y divide-slate-100">
-            {items.map((it) => (
-              <div key={it.name} className="flex items-center justify-between py-2">
-                <span className="text-sm font-medium text-ink-soft">{it.name}</span>
-                <span className="tabnum text-sm font-bold text-ink">{fmtUZS(it.amount)}</span>
+              <div className="mb-4 flex items-center justify-between">
+                <span className="font-display text-lg font-extrabold text-ink">
+                  {t("home.breakdown")}
+                </span>
+                <button
+                  onClick={() => setOpen(false)}
+                  className="grid h-9 w-9 place-items-center rounded-full text-ink-faint transition-colors hover:bg-slate-100 hover:text-ink"
+                >
+                  <X size={20} />
+                </button>
               </div>
-            ))}
-          </div>
-          <div className="mt-2.5 flex items-center justify-between rounded-xl bg-status-paid/8 px-3 py-2.5">
-            <span className="text-sm font-extrabold text-ink">{t("common.total")}</span>
-            <span className="tabnum text-base font-extrabold text-status-paid">{fmtUZS(total)}</span>
-          </div>
-        </div>
-      )}
+              <div className="divide-y divide-slate-100">
+                {items.map((it) => (
+                  <div key={it.name} className="flex items-center justify-between py-3">
+                    <span className="text-base font-medium text-ink-soft">{it.name}</span>
+                    <span className="tabnum text-base font-bold text-ink">{fmtUZS(it.amount)}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 flex items-center justify-between rounded-2xl bg-status-paid/10 px-4 py-3.5">
+                <span className="text-base font-extrabold text-ink">{t("common.total")}</span>
+                <span className="tabnum text-xl font-extrabold text-status-paid">{fmtUZS(total)}</span>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
