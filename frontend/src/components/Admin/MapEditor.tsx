@@ -49,6 +49,10 @@ export function MapEditor() {
   }, [layers, activeLayerId]);
 
   const activeLayer = layers?.find((l) => l.id === activeLayerId) ?? null;
+  // Birinchi xarita rasm yuklanmagan bo'lsa — eski /map.jpg ni ko'rsatadi
+  // (1-etaj uchun bazaviy xarita), shuning uchun unda "rasm yo'q" ogohlantirishi chiqmaydi.
+  const isBaseLayer = !!activeLayer && !!layers && layers.length > 0 && layers[0].id === activeLayer.id;
+  const activeUsesBaseMap = isBaseLayer && !activeLayer?.has_image;
 
   const { data: pavilions } = useQuery({
     queryKey: ["pavilions-all", activeLayerId ?? "none"],
@@ -361,7 +365,7 @@ export function MapEditor() {
                   l.id === activeLayerId ? "bg-brand text-white" : "bg-white text-ink-soft ring-1 ring-slate-200 hover:bg-slate-100"
                 }`}
               >
-                {l.name}{!l.has_image && " ⚠️"}
+                {l.name}{!l.has_image && !(layers[0].id === l.id) && " ⚠️"}
               </button>
             ))}
           </div>
@@ -373,7 +377,7 @@ export function MapEditor() {
           {activeLayer && (
             <>
               <button className="btn-ghost px-3 py-1.5 text-xs" onClick={() => fileInputRef.current?.click()}>
-                <Upload size={14} /> {activeLayer.has_image ? "Rasmni almashtirish" : "Rasm yuklash"}
+                <Upload size={14} /> {activeLayer.has_image ? "Rasm/PDF almashtirish" : "Rasm yoki PDF yuklash"}
               </button>
               <button className="btn-ghost px-3 py-1.5 text-xs text-status-unpaid" onClick={handleDeleteLayer}>
                 <Trash2 size={14} />
@@ -383,7 +387,7 @@ export function MapEditor() {
           <button className="btn-primary px-3 py-1.5 text-xs" onClick={handleNewLayer}>
             <ImagePlus size={14} /> Yangi xarita
           </button>
-          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleUploadImage} />
+          <input ref={fileInputRef} type="file" accept="image/*,application/pdf,.pdf" className="hidden" onChange={handleUploadImage} />
         </div>
       </div>
 
@@ -393,9 +397,9 @@ export function MapEditor() {
           Region chizishdan oldin xarita qo'shing va rasm yuklang: <b>«Yangi xarita»</b> tugmasini bosing.
         </div>
       )}
-      {activeLayer && !activeLayer.has_image && (
+      {activeLayer && !activeLayer.has_image && !activeUsesBaseMap && (
         <div className="rounded-xl border-2 border-dashed border-amber-400/40 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-          «{activeLayer.name}» uchun hali rasm yuklanmagan — <b>«Rasm yuklash»</b> tugmasini bosing.
+          «{activeLayer.name}» uchun hali rasm yuklanmagan — <b>«Rasm yoki PDF yuklash»</b> tugmasini bosing. (PDF ning birinchi sahifasi avtomatik rasmga aylantiriladi.)
         </div>
       )}
 
@@ -496,7 +500,7 @@ export function MapEditor() {
             onPointerUp={handleSvgPointerUp}
             onPointerLeave={handleSvgPointerUp}
           >
-            <image href={activeLayer ? mapImageUrl(activeLayer.id) : "/map.jpg"} x="0" y="0" width={VIEW_W} height={VIEW_H}
+            <image href={activeLayer?.has_image ? mapImageUrl(activeLayer.id) : "/map.jpg"} x="0" y="0" width={VIEW_W} height={VIEW_H}
               preserveAspectRatio="xMidYMid meet"
               style={{ pointerEvents: "none" }}
               onError={(e) => ((e.target as SVGImageElement).style.display = "none")} />

@@ -60,13 +60,34 @@ async def list_map_layers(
     market: CurrentMarket,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[MapLayerOut]:
-    """Joriy bozorning barcha xaritalari (tartib bo'yicha)."""
+    """Joriy bozorning barcha xaritalari (tartib bo'yicha).
+
+    Agar bozorda hali xarita bo'lmasa — mavjud (eski) `map.jpg` ni
+    "1-etaj" sifatida avtomatik birinchi xarita qilib yaratadi. Shunda
+    foydalanuvchi darrov region chiza oladi va keyin yangi xarita
+    qo'shishi mumkin.
+    """
     rows = await db.execute(
         select(MapLayer)
         .where(MapLayer.market_id == market.id, MapLayer.is_active == True)  # noqa: E712
         .order_by(MapLayer.display_order, MapLayer.id)
     )
-    return [_to_out(m) for m in rows.scalars()]
+    layers = list(rows.scalars())
+
+    if not layers:
+        # Default "1-etaj" — rasmsiz (image yo'q => frontend /map.jpg ga tushadi)
+        default_layer = MapLayer(
+            market_id=market.id,
+            name="1-etaj",
+            display_order=0,
+            is_active=True,
+        )
+        db.add(default_layer)
+        await db.commit()
+        await db.refresh(default_layer)
+        layers = [default_layer]
+
+    return [_to_out(m) for m in layers]
 
 
 @router.get("/{layer_id}/image")
@@ -137,17 +158,62 @@ async def upload_map_image(
     db: Annotated[AsyncSession, Depends(get_db)],
     file: UploadFile = File(...),
 ) -> MapLayerOut:
-    """Xarita rasmini yuklaydi (jpg/png)."""
+    """Xarita rasmini yuklaydi (jpg/png yoki PDF — PDF birinchi sahifasi rasmga aylantiriladi)."""
     layer = await db.get(MapLayer, layer_id)
     if layer is None or layer.market_id != market.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Xarita topilmadi")
-    if not file.content_type or not file.content_type.startswith("image/"):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Faqat rasm fayli (jpg/png)")
+
+    ctype = (file.content_type or "").lower()
+    is_pdf = ctype == "application/pdf" or (file.filename or "").lower().endswith(".pdf")
+    is_image = ctype.startswith("image/")
+    if not (is_image or is_pdf):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Faqat rasm (jpg/png) yoki PDF fayl")
+
     content = await file.read()
     if len(content) > MAX_IMAGE_BYTES:
-        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Rasm juda katta (8 MB chegarasi)")
-    layer.image_data = base64.b64encode(content).decode("ascii")
-    layer.image_mime = file.content_type
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Fayl juda katta (8 MB chegarasi)")
+
+    if is_pdf:
+        # PDF birinchi sahifasini yuqori sifatли PNG ga aylantiramiz.
+        try:
+            import fitz  # PyMuPDF
+        except ImportError:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "PDF qo'llab-quvvatlanmaydi. Iltimos PDF ni rasmga (PNG/JPG) aylantirib yuklang.",
+            )
+        try:
+            doc = fitz.open(stream=content, filetype="pdf")
+            if doc.page_count == 0:
+                raise ValueError("bo'sh PDF")
+            page = doc[0]
+            # Sifat va hajm balansi: 2x dan boshlab, katta bo'lsa kichraytiramiz
+            png_bytes = b""
+            pix = None
+            for zoom in (2.0, 1.5, 1.0):
+                pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom))
+                png_bytes = pix.tobytes("png")
+                if len(png_bytes) <= MAX_IMAGE_BYTES:
+                    break
+            doc.close()
+        except HTTPException:
+            raise
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "PDF o'qib bo'lmadi") from e
+        if not png_bytes or len(png_bytes) > MAX_IMAGE_BYTES:
+            raise HTTPException(
+                status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                "PDF dan chiqgan rasm juda katta — kichikroq/oddiyroq PDF yuklang",
+            )
+        layer.image_data = base64.b64encode(png_bytes).decode("ascii")
+        layer.image_mime = "image/png"
+        # Eslatma: view_w/view_h o'zgartirilmaydi — rasm standart maydon (1568x1109)
+        # ga moslab cho'ziladi, xuddi oddiy rasm yuklanganidek. Shunda regionlar
+        # koordinatasi barcha xaritalarda bir xil ishlaydi.
+    else:
+        layer.image_data = base64.b64encode(content).decode("ascii")
+        layer.image_mime = ctype or "image/jpeg"
+
     await db.commit()
     await db.refresh(layer)
     return _to_out(layer)

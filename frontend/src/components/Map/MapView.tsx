@@ -213,7 +213,7 @@ export function MapView({ onSelectPavilion }: Props) {
         onPointerLeave={handlePointerUp}
       >
         <image
-          href={activeLayer ? mapImageUrl(activeLayer.id) : "/map.jpg"}
+          href={activeLayer?.has_image ? mapImageUrl(activeLayer.id) : "/map.jpg"}
           x="0"
           y="0"
           width={VIEW_W}
