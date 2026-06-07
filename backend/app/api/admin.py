@@ -1,4 +1,5 @@
 """Admin endpointlari — /api/admin/* (hammasi require_admin)."""
+from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 from pydantic import BaseModel
@@ -31,6 +32,13 @@ from app.schemas.dashboard import DashboardOut
 from app.schemas.pavilion import PavilionOut
 from app.services.audit_describe import action_label, build_summary, resource_label
 from app.services.audit_service import write_audit
+from app.services.billing_import_service import import_billing_xlsx
+from app.services.rollback_service import (
+    REVERT_WINDOW_HOURS,
+    revert_snapshot,
+    save_snapshot,
+)
+from app.models.change_snapshot import ChangeSnapshot
 from app.utils.safe_fetch import UnsafeUrlError, fetch_url_safely
 from app.services.dashboard_service import get_dashboard_from_settings
 from app.services.import_service import import_balances_xlsx
@@ -233,6 +241,89 @@ async def import_excel(
     return result
 
 
+class BillingImportOut(BaseModel):
+    rows_read: int
+    counterparties: int
+    records: int
+    skipped: int
+    errors: list[str]
+    snapshot_id: int | None = None
+
+
+@router.post("/import/billing", response_model=BillingImportOut)
+async def import_billing(
+    admin: AdminUser,
+    market: CurrentMarket,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    file: UploadFile = File(...),
+    year: int = Query(...),
+    month: int = Query(..., ge=1, le=12),
+) -> BillingImportOut:
+    """Billing Excel import (1C buxgalteriya formati).
+
+    Дебет=qarz (due_amount), Кредит=ortiqcha to'lov (paid_amount).
+    Import oldidan snapshot olinadi — keyin 24 soat ichida qaytarish mumkin.
+    """
+    if not file.filename or not file.filename.lower().endswith((".xlsx", ".xlsm")):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Faqat .xlsx fayl")
+    content = await file.read()
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Fayl juda katta (10 MB chegarasi)")
+
+    result = await import_billing_xlsx(db, content, year, month, market.id)
+
+    snapshot_id: int | None = None
+    if result.records > 0:
+        # Audit + snapshot (rollback uchun)
+        audit = await write_audit(
+            db, admin.id, "import_billing", "monthly_balances",
+            f"{file.filename} ({year}-{month:02d})",
+            {
+                "year": year, "month": month, "market": market.slug,
+                "counterparties": result.counterparties, "records": result.records,
+            },
+        )
+        snap = await save_snapshot(
+            db,
+            action="import_billing",
+            table_name="monthly_balances",
+            before_rows=result.snapshot_rows,
+            user_id=admin.id,
+            market_id=market.id,
+            summary=f"Billing import: {file.filename} — {year}-{month:02d}, "
+                    f"{result.counterparties} kontragent, {result.records} yozuv",
+            audit_id=audit.id,
+        )
+        snapshot_id = snap.id
+
+    await db.commit()
+    return BillingImportOut(
+        rows_read=result.rows_read,
+        counterparties=result.counterparties,
+        records=result.records,
+        skipped=result.skipped,
+        errors=result.errors,
+        snapshot_id=snapshot_id,
+    )
+
+
+@router.post("/revert/{snapshot_id}")
+async def revert_action(
+    admin: AdminUser,
+    snapshot_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    """Amalni ortga qaytaradi (oxirgi 24 soat ichida)."""
+    ok, msg = await revert_snapshot(db, snapshot_id)
+    if not ok:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, msg)
+    await write_audit(
+        db, admin.id, "revert", "change_snapshot", str(snapshot_id), {"result": msg}
+    )
+    await db.commit()
+    return {"ok": True, "message": msg}
+
+
 @router.post("/import/shops/csv")
 async def import_shops_file(
     admin: AdminUser,
@@ -304,6 +395,19 @@ async def get_audit_log(
     )
     rows = result.all()
 
+    # Shu auditlarga bog'liq snapshotlar (rollback uchun)
+    audit_ids = [log.id for log, _ in rows]
+    snap_map: dict[int, ChangeSnapshot] = {}
+    if audit_ids:
+        snaps = await db.execute(
+            select(ChangeSnapshot).where(ChangeSnapshot.audit_id.in_(audit_ids))
+        )
+        for s in snaps.scalars():
+            if s.audit_id is not None:
+                snap_map[s.audit_id] = s
+
+    now = datetime.now(timezone.utc)
+
     out: list[AuditLogOut] = []
     for log, user in rows:
         if user is not None:
@@ -319,6 +423,16 @@ async def get_audit_log(
             role_uz = None
             user_label = "Noma'lum foydalanuvchi"
 
+        snap = snap_map.get(log.id)
+        snapshot_id = snap.id if snap else None
+        reverted = snap.reverted if snap else False
+        revertable = False
+        if snap and not snap.reverted:
+            created = snap.created_at
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
+            revertable = (now - created) <= timedelta(hours=REVERT_WINDOW_HOURS)
+
         out.append(
             AuditLogOut(
                 id=log.id,
@@ -333,6 +447,9 @@ async def get_audit_log(
                 user_label=user_label,
                 user_role=role_uz,
                 summary=build_summary(log.action, log.resource_id, log.changes),
+                snapshot_id=snapshot_id,
+                revertable=revertable,
+                reverted=reverted,
             )
         )
     return out

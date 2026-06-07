@@ -111,7 +111,7 @@ const uz: Dict = {
   "admin.tab.dashboard": "Dashboard summalari",
   "admin.tab.map": "Xarita muharriri",
   "admin.tab.shops": "Magazinlar",
-  "admin.tab.import": "Excel import",
+  "admin.tab.import": "Billing import",
   "admin.tab.documents": "Hujjatlar",
   "admin.tab.audit": "Audit log",
 
@@ -291,7 +291,7 @@ const ru: Dict = {
   "admin.tab.dashboard": "Суммы дашборда",
   "admin.tab.map": "Редактор карты",
   "admin.tab.shops": "Магазины",
-  "admin.tab.import": "Импорт Excel",
+  "admin.tab.import": "Billing import",
   "admin.tab.documents": "Документы",
   "admin.tab.audit": "Журнал",
 
@@ -467,7 +467,7 @@ const en: Dict = {
   "admin.tab.dashboard": "Dashboard totals",
   "admin.tab.map": "Map editor",
   "admin.tab.shops": "Shops",
-  "admin.tab.import": "Excel import",
+  "admin.tab.import": "Billing import",
   "admin.tab.documents": "Documents",
   "admin.tab.audit": "Audit log",
 

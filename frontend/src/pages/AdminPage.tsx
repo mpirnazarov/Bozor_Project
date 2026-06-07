@@ -8,7 +8,7 @@ import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 import { DashboardEditor } from "@/components/Admin/DashboardEditor";
 import { MapEditor } from "@/components/Admin/MapEditor";
 import { ShopsManager } from "@/components/Admin/ShopsManager";
-import { ExcelImport } from "@/components/Admin/ExcelImport";
+import { BillingImport } from "@/components/Admin/BillingImport";
 import { AuditLogView } from "@/components/Admin/AuditLogView";
 import { DocumentsView } from "@/components/Admin/DocumentsView";
 
@@ -65,7 +65,7 @@ export function AdminPage() {
             <ShopsManager />
           </Tabs.Content>
           <Tabs.Content value="import">
-            <ExcelImport />
+            <BillingImport />
           </Tabs.Content>
           <Tabs.Content value="documents">
             <DocumentsView />

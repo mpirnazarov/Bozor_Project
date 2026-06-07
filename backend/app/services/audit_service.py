@@ -13,16 +13,17 @@ async def write_audit(
     changes: dict | None = None,
     ip_address: str | None = None,
     user_agent: str | None = None,
-) -> None:
-    """Audit yozuvini qo'shadi (commit chaqiruvchida bo'ladi)."""
-    db.add(
-        AuditLog(
-            user_id=user_id,
-            action=action,
-            resource_type=resource_type,
-            resource_id=resource_id,
-            changes=changes,
-            ip_address=ip_address,
-            user_agent=user_agent,
-        )
+) -> AuditLog:
+    """Audit yozuvini qo'shadi (commit chaqiruvchida bo'ladi). AuditLog qaytaradi."""
+    entry = AuditLog(
+        user_id=user_id,
+        action=action,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        changes=changes,
+        ip_address=ip_address,
+        user_agent=user_agent,
     )
+    db.add(entry)
+    await db.flush()
+    return entry

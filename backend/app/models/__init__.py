@@ -1,5 +1,6 @@
 """SQLAlchemy models."""
 from app.models.audit_log import AuditLog
+from app.models.change_snapshot import ChangeSnapshot
 from app.models.counterparty import Counterparty
 from app.models.market import Market
 from app.models.monthly_balance import (
@@ -31,4 +32,5 @@ __all__ = [
     "THEME_SETTINGS_KEY",
     "HIDE_UNMATCHED_KEY",
     "AuditLog",
+    "ChangeSnapshot",
 ]

@@ -1,9 +1,10 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import {
   Plus, Pencil, Trash2, Upload, Palette, EyeOff, LayoutDashboard,
-  Power, Activity, User as UserIcon, Clock,
+  Power, Activity, User as UserIcon, Clock, Undo2, RotateCcw,
 } from "lucide-react";
-import { getAuditLog } from "@/api/admin";
+import { getAuditLog, revertAction } from "@/api/admin";
 import { useT } from "@/i18n/useT";
 
 // Amalga qarab rang va ikonka
@@ -21,10 +22,28 @@ function actionStyle(action: string): { color: string; bg: string; icon: React.R
 
 export function AuditLogView() {
   const t = useT();
+  const qc = useQueryClient();
+  const [revertingId, setRevertingId] = useState<number | null>(null);
   const { data, isLoading } = useQuery({
     queryKey: ["audit-log"],
     queryFn: () => getAuditLog(100),
   });
+
+  const revertMut = useMutation({
+    mutationFn: (snapshotId: number) => revertAction(snapshotId),
+    onSettled: () => {
+      setRevertingId(null);
+      qc.invalidateQueries({ queryKey: ["audit-log"] });
+      qc.invalidateQueries({ queryKey: ["pavilions"] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+  });
+
+  function handleRevert(snapshotId: number) {
+    if (!confirm("Bu amalni ortga qaytarasizmi? O'zgartirilgan yozuvlar import oldidagi holatiga qaytariladi.")) return;
+    setRevertingId(snapshotId);
+    revertMut.mutate(snapshotId);
+  }
 
   if (isLoading) return <div className="text-sm text-ink-faint">{t("common.loading")}</div>;
   if (!data || data.length === 0)
@@ -72,6 +91,26 @@ export function AuditLogView() {
                   )}
                 </span>
               </div>
+
+              {/* Ortga qaytarish (rollback) — faqat 24 soat ichidagi snapshotli amallar */}
+              {row.snapshot_id != null && (row.revertable || row.reverted) && (
+                <div className="mt-2.5">
+                  {row.reverted ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-ink-faint">
+                      <RotateCcw size={12} /> Qaytarilgan
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => handleRevert(row.snapshot_id!)}
+                      disabled={revertingId === row.snapshot_id}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 transition-colors hover:bg-amber-100 disabled:opacity-50"
+                    >
+                      <Undo2 size={14} />
+                      {revertingId === row.snapshot_id ? "Qaytarilmoqda..." : "Ortga qaytarish"}
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         );

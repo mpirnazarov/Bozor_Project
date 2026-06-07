@@ -94,3 +94,7 @@ class AuditLogOut(BaseModel):
     user_label: str = ""
     user_role: str | None = None
     summary: str = ""
+    # Rollback (ortga qaytarish) — agar shu amal uchun snapshot bo'lsa
+    snapshot_id: int | None = None
+    revertable: bool = False
+    reverted: bool = False

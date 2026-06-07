@@ -12,6 +12,9 @@ ACTION_LABELS: dict[str, str] = {
     "import_shops_csv": "Magazinlar import qilindi (CSV)",
     "import_shops_gsheet": "Magazinlar import qilindi (Google Sheets)",
     "import_balances": "Balanslar import qilindi (Excel)",
+    "import_excel": "Balanslar import qilindi (Excel)",
+    "import_billing": "Billing import qilindi",
+    "revert": "Amal ortga qaytarildi",
     "update_dashboard": "Dashboard summalari yangilandi",
     "update_shop": "Magazin tahrirlandi",
     "update_theme": "Mavzu o'zgartirildi",
@@ -29,6 +32,8 @@ RESOURCE_LABELS: dict[str, str] = {
     "settings": "Sozlamalar",
     "market": "Bozor",
     "balances": "Balanslar",
+    "monthly_balances": "Billing (oylik balanslar)",
+    "change_snapshot": "Amal (snapshot)",
     "dashboard": "Dashboard",
 }
 

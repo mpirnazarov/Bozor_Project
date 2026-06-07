@@ -1,5 +1,6 @@
 """Pavilions endpoint — /api/pavilions."""
 from typing import Annotated
+from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
@@ -77,10 +78,14 @@ async def get_pavilion_shops(
     pavilion_id: int,
     _user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
-    year: int = Query(2026),
-    month: int = Query(5, ge=1, le=12),
+    year: int | None = Query(None),
+    month: int | None = Query(None, ge=1, le=12),
 ) -> dict:
     """Pavilion magazinlari + billing statusi (xarita tile ranglari uchun)."""
+    # Davr berilmasa — joriy oy (yangi oyga o'tilganda avtomatik ishlaydi)
+    today = date.today()
+    year = year or today.year
+    month = month or today.month
     pav = await db.get(Pavilion, pavilion_id)
     if pav is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Pavilion topilmadi")

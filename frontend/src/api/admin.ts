@@ -26,12 +26,45 @@ export interface AuditLog {
   user_label: string;
   user_role: string | null;
   summary: string;
+  snapshot_id: number | null;
+  revertable: boolean;
+  reverted: boolean;
 }
 
 export async function getAuditLog(limit = 50): Promise<AuditLog[]> {
   const { data } = await apiClient.get<AuditLog[]>("/admin/audit-log", {
     params: { limit },
   });
+  return data;
+}
+
+export interface BillingImportResult {
+  rows_read: number;
+  counterparties: number;
+  records: number;
+  skipped: number;
+  errors: string[];
+  snapshot_id: number | null;
+}
+
+export async function importBilling(
+  file: File,
+  year: number,
+  month: number,
+): Promise<BillingImportResult> {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await apiClient.post<BillingImportResult>("/admin/import/billing", form, {
+    params: { year, month },
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+
+export async function revertAction(snapshotId: number): Promise<{ ok: boolean; message: string }> {
+  const { data } = await apiClient.post<{ ok: boolean; message: string }>(
+    `/admin/revert/${snapshotId}`,
+  );
   return data;
 }
 
