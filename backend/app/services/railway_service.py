@@ -22,22 +22,44 @@ def is_configured() -> bool:
     return bool(settings.RAILWAY_API_TOKEN and settings.RAILWAY_PROJECT_ID)
 
 
+# Railway'da 3 xil token turi bor, har biri boshqa header talab qiladi:
+#   - Account / Team token  -> Authorization: Bearer <token>
+#   - Project token         -> Project-Access-Token: <token>
+# Token turini oldindan bilmaymiz, shuning uchun ikkala variantni sinaymiz.
+def _header_variants() -> list[dict[str, str]]:
+    token = settings.RAILWAY_API_TOKEN
+    base = {"Content-Type": "application/json"}
+    return [
+        {**base, "Authorization": f"Bearer {token}"},
+        {**base, "Project-Access-Token": token},
+        {**base, "Team-Access-Token": token},
+    ]
+
+
 async def _gql(query: str, variables: dict[str, Any] | None = None) -> dict[str, Any]:
-    headers = {
-        "Authorization": f"Bearer {settings.RAILWAY_API_TOKEN}",
-        "Content-Type": "application/json",
-    }
+    payload = {"query": query, "variables": variables or {}}
+    last_error: str | None = None
     async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-        resp = await client.post(
-            RAILWAY_API,
-            json={"query": query, "variables": variables or {}},
-            headers=headers,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        if "errors" in data and data["errors"]:
-            raise RuntimeError(str(data["errors"])[:300])
-        return data.get("data") or {}
+        for headers in _header_variants():
+            try:
+                resp = await client.post(RAILWAY_API, json=payload, headers=headers)
+                resp.raise_for_status()
+                data = resp.json()
+            except Exception as e:  # noqa: BLE001
+                last_error = str(e)[:250]
+                continue
+            errors = data.get("errors")
+            if errors:
+                msg = str(errors)
+                # Avtorizatsiya xatosi bo'lsa — boshqa header turini sinaymiz
+                if "Not Authorized" in msg or "Unauthorized" in msg or "auth" in msg.lower():
+                    last_error = msg[:250]
+                    continue
+                # Boshqa xato (masalan query xatosi) — qaytaramiz
+                raise RuntimeError(msg[:300])
+            return data.get("data") or {}
+    # Hamma header turi muvaffaqiyatsiz
+    raise RuntimeError(last_error or "Avtorizatsiya muvaffaqiyatsiz (token noto'g'ri?)")
 
 
 _DEPLOYMENTS_QUERY = """
