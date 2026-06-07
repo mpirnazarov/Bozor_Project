@@ -9,12 +9,13 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import Response
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.deps import AdminUser, CurrentMarket, CurrentUser
 from app.models.map_layer import MapLayer
+from app.models.pavilion import Pavilion
 
 router = APIRouter()
 
@@ -85,7 +86,41 @@ async def list_map_layers(
         db.add(default_layer)
         await db.commit()
         await db.refresh(default_layer)
+
+        # Eski (xaritaga biriktirilmagan) regionlarni shu 1-etajga bog'laymiz,
+        # aks holda ular hech qaysi xaritada ko'rinmaydi ("Pavilionlar topilmadi").
+        await db.execute(
+            update(Pavilion)
+            .where(
+                Pavilion.market_id == market.id,
+                Pavilion.map_layer_id.is_(None),
+            )
+            .values(map_layer_id=default_layer.id)
+        )
+        await db.commit()
+
         layers = [default_layer]
+    else:
+        # Migratsiya: agar xaritaga biriktirilmagan eski regionlar bo'lsa,
+        # ularni BIRINCHI xaritaga (1-etaj) bog'laymiz. Bu, default 1-etaj
+        # avval yaratilib, regionlar NULL qolgan holatni tuzatadi.
+        orphan = await db.scalar(
+            select(Pavilion.id).where(
+                Pavilion.market_id == market.id,
+                Pavilion.map_layer_id.is_(None),
+            ).limit(1)
+        )
+        if orphan is not None:
+            first_layer = layers[0]
+            await db.execute(
+                update(Pavilion)
+                .where(
+                    Pavilion.market_id == market.id,
+                    Pavilion.map_layer_id.is_(None),
+                )
+                .values(map_layer_id=first_layer.id)
+            )
+            await db.commit()
 
     return [_to_out(m) for m in layers]
 
