@@ -116,9 +116,14 @@ export function MapView({ onSelectPavilion }: Props) {
     pan.current.active = false;
   }
 
-  if (isLoading) return <Spinner label={t("map.loading")} />;
+  const hasLayer = Array.isArray(layers) && layers.length > 0;
 
-  if (isError) {
+  // To'liq spinner faqat eng birinchi yuklashda (hali xarita ham, ma'lumot ham yo'q).
+  // Xaritalar mavjud bo'lsa — UI ni almashtirmaymiz, rasm overlay'i kifoya
+  // (aks holda qavat almashganda hamma narsa "yuklanmoqda"ga aylanib qolardi).
+  if (isLoading && !hasLayer) return <Spinner label={t("map.loading")} />;
+
+  if (isError && !hasLayer) {
     return (
       <div className="card p-6 text-center text-sm text-status-unpaid">
         {t("map.error")}: {(error as Error)?.message ?? "noma'lum"}
@@ -127,10 +132,8 @@ export function MapView({ onSelectPavilion }: Props) {
   }
 
   // Faqat HECH narsa bo'lmaganda (xarita ham, region ham yo'q) xabar ko'rsatamiz.
-  // Agar xarita (qavat) bo'lsa — regionlar bo'sh bo'lsa ham xaritani ko'rsatamiz.
-  const hasLayer = Array.isArray(layers) && layers.length > 0;
   const noPavilions = !Array.isArray(pavilions) || pavilions.length === 0;
-  if (noPavilions && !hasLayer) {
+  if (noPavilions && !hasLayer && !isLoading) {
     return (
       <div className="card p-6 text-center text-sm text-slate-400">
         Pavilionlar topilmadi. Ma'lumotlar bazasi seed qilinmagan yoki API
@@ -145,17 +148,26 @@ export function MapView({ onSelectPavilion }: Props) {
   const mapSrc = activeLayer?.has_image ? mapImageUrl(activeLayer.id) : "/map.jpg";
 
   // Rasm to'liq yuklanmaguncha progress ko'rsatamiz (xarita almashganda).
-  // SVG <image> ning onLoad/onError hodisalariga bog'laymiz + xavfsizlik uchun
-  // timeout: rasm 6s ichida kelmasa ham overlay yo'qoladi (abadiy qolmasin).
+  // Yashirin <img> preloader orqali ishonchli kuzatamiz + xavfsizlik timeout.
   const [imgLoading, setImgLoading] = useState(true);
   useEffect(() => {
     setImgLoading(true);
-    const tmr = window.setTimeout(() => setImgLoading(false), 6000);
+    // Agar rasm 4s ichида kelmasa — baribir ko'rsatamiz (overlay qotib qolmasin)
+    const tmr = window.setTimeout(() => setImgLoading(false), 4000);
     return () => window.clearTimeout(tmr);
   }, [mapSrc]);
 
   return (
     <div className="card relative overflow-hidden">
+      {/* Yashirin preloader — rasm kelganini ishonchli aniqlaydi */}
+      <img
+        src={mapSrc}
+        alt=""
+        aria-hidden="true"
+        className="pointer-events-none absolute h-0 w-0 opacity-0"
+        onLoad={() => setImgLoading(false)}
+        onError={() => setImgLoading(false)}
+      />
       {/* Rasm yuklanayotganda progress overlay (xarita almashganda kutiladi) */}
       {imgLoading && (
         <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-white/75 backdrop-blur-sm">
