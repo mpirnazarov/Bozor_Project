@@ -63,6 +63,23 @@ async def get_support_status(db: AsyncSession, market: Market, today: date | Non
     # Yoki hali 6-sanagacha bo'lsa ham to'lanmagan bo'lsa — yumshoq eslatma
     pending = (not free) and (not paid_this_month)
 
+    # E'tibor darajasi (super dashboard rangi uchun):
+    #   blocked  — bloklangan (eng jiddiy)
+    #   red      — to'lanmagan va oyning 5-sanasidan o'tgan (kechikkan)
+    #   yellow   — to'lanmagan, lekin hali 1-5 sanalar oralig'ida
+    #   ok       — to'langan
+    #   free     — tekin davr
+    if market.support_blocked:
+        attention = "blocked"
+    elif free:
+        attention = "free"
+    elif paid_this_month:
+        attention = "ok"
+    elif today.day > 5:
+        attention = "red"
+    else:
+        attention = "yellow"
+
     return {
         "free_period": free,
         "free_until": free_until.isoformat(),
@@ -72,6 +89,7 @@ async def get_support_status(db: AsyncSession, market: Market, today: date | Non
         "pending": pending,
         "support_blocked": market.support_blocked,
         "due_day": SUPPORT_DUE_DAY,
+        "attention": attention,
     }
 
 

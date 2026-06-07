@@ -39,6 +39,14 @@ class Settings(BaseSettings):
     # bo'lishi kerak. Bitta domen yoki dev'da "lax".
     COOKIE_SAMESITE: Literal["lax", "none", "strict"] = "lax"
 
+    # === Railway integratsiyasi (ixtiyoriy) ===
+    # Token Railway dashboard -> Account Settings -> Tokens dan olinadi.
+    # XAVFSIZLIK: faqat backend environment'da saqlanadi, frontendga chiqmaydi.
+    RAILWAY_API_TOKEN: str = ""
+    RAILWAY_PROJECT_ID: str = ""
+    RAILWAY_ENVIRONMENT_ID: str = ""
+    RAILWAY_SERVICE_ID: str = ""
+
     @computed_field  # type: ignore[misc]
     @property
     def allowed_origins_list(self) -> list[str]:

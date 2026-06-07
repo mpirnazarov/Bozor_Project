@@ -15,6 +15,8 @@ from app.deps import CurrentUser, SuperAdminUser
 from app.models.market import Market
 from app.schemas.market import MarketOut, MarketUpdate, SuperDashboardOut
 from app.services.audit_service import write_audit
+from app.services.support_service import get_support_status
+from app.services.railway_service import get_railway_overview
 
 router = APIRouter()
 
@@ -58,6 +60,7 @@ async def super_dashboard(
     per_market = []
     total = 0.0
     total_paid = 0.0
+    attention_count = 0
     for m in markets:
         stats = m.dashboard_stats or {}
         is_demo = bool(stats.get("is_demo"))
@@ -70,6 +73,16 @@ async def super_dashboard(
             p = float(stats.get("paid", 0) or 0)
         total += t
         total_paid += p
+
+        # Bozorning O'rikzorga to'lovi (support) holati
+        if is_demo:
+            support = {"attention": "free", "paid_this_month": False,
+                       "free_period": True, "monthly_fee": 0, "due_day": 6}
+        else:
+            support = await get_support_status(db, m)
+        if support["attention"] in ("yellow", "red", "blocked"):
+            attention_count += 1
+
         per_market.append(
             {
                 "id": m.id,
@@ -79,6 +92,11 @@ async def super_dashboard(
                 "paid": p,
                 "debt": t - p,
                 "is_demo": is_demo,
+                "attention": support["attention"],
+                "support_paid": bool(support.get("paid_this_month")),
+                "free_period": bool(support.get("free_period")),
+                "monthly_fee": float(support.get("monthly_fee", 0) or 0),
+                "due_day": int(support.get("due_day", 6)),
             }
         )
 
@@ -87,7 +105,19 @@ async def super_dashboard(
         paid=total_paid,
         debt=total - total_paid,
         markets=per_market,
+        attention_count=attention_count,
     )
+
+
+@router.get("/super/railway")
+async def super_railway(
+    _admin: SuperAdminUser,
+) -> dict:
+    """Railway holati (CPU/RAM + deployment ro'yxati) — super dashboard uchun.
+
+    Token sozlanmagan bo'lsa {configured: false} qaytaradi.
+    """
+    return await get_railway_overview()
 
 
 @router.get("/{slug}", response_model=MarketOut)

@@ -5,8 +5,9 @@ import {
   LayoutGrid, LogOut, Wallet, CheckCircle2, AlertTriangle, Store,
   ArrowRight, Sun, Moon, Maximize, RefreshCw, TrendingUp,
   List, LayoutDashboard, Activity, Trophy, ArrowUpRight, Settings,
+  Cpu, MemoryStick, Server, Rocket, CircleCheck, CircleX, Circle,
 } from "lucide-react";
-import { getSuperDashboard, type MarketSummary } from "@/api/markets";
+import { getSuperDashboard, getRailwayOverview, type MarketSummary, type RailwayOverview } from "@/api/markets";
 import { setCurrentMarket } from "@/api/client";
 import { useAuthStore } from "@/store/authStore";
 import { fmtUZS } from "@/lib/utils";
@@ -21,12 +22,20 @@ export function SuperDashboardPage() {
   const logout = useAuthStore((s) => s.logout);
   const [theme, setTheme] = useState<Theme>("dark");
   const [view, setView] = useState<ViewMode>("list");
+  const [showAttention, setShowAttention] = useState(false);
   const t = useT();
 
   const { data, isLoading, isError, dataUpdatedAt, refetch, isFetching } = useQuery({
     queryKey: ["super-dashboard"],
     queryFn: getSuperDashboard,
     refetchInterval: 30_000,
+  });
+
+  const { data: railway } = useQuery({
+    queryKey: ["super-railway"],
+    queryFn: getRailwayOverview,
+    refetchInterval: 60_000,
+    retry: false,
   });
 
   const [now, setNow] = useState(new Date());
@@ -152,6 +161,83 @@ export function SuperDashboardPage() {
             sub={<span>{debtPct}% {t("home.mustCollect")}</span>} />
         </div>
 
+        {/* === To'lov e'tibori (bozorning O'rikzorga to'lovi) === */}
+        {(() => {
+          const attentionMarkets = data.markets.filter(
+            (m) => m.attention === "red" || m.attention === "yellow" || m.attention === "blocked",
+          );
+          const reds = attentionMarkets.filter((m) => m.attention === "red" || m.attention === "blocked").length;
+          const yellows = attentionMarkets.filter((m) => m.attention === "yellow").length;
+          if (attentionMarkets.length === 0) {
+            return (
+              <div className="mb-5 flex items-center gap-3 rounded-2xl border px-5 py-4"
+                style={{ background: dark ? "rgba(22,163,74,0.08)" : "rgba(22,163,74,0.06)", borderColor: "rgba(22,163,74,0.3)" }}>
+                <CheckCircle2 size={20} style={{ color: "#16a34a" }} />
+                <span className="text-sm font-semibold" style={{ color: c.text }}>
+                  Barcha bozorlar to'lovi joyida — e'tibor talab qiladigan holat yo'q
+                </span>
+              </div>
+            );
+          }
+          const hasRed = reds > 0;
+          const accent = hasRed ? "#dc2626" : "#eab308";
+          return (
+            <div className="mb-5 overflow-hidden rounded-2xl border"
+              style={{ background: dark ? `${accent}14` : `${accent}0f`, borderColor: `${accent}55` }}>
+              <button
+                onClick={() => setShowAttention((v) => !v)}
+                className="flex w-full items-center gap-3 px-5 py-4 text-left transition-colors"
+              >
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
+                  style={{ background: `${accent}22`, color: accent }}>
+                  <AlertTriangle size={20} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="font-bold" style={{ color: c.text }}>
+                    {attentionMarkets.length} ta bozor to'lovga e'tibor talab qiladi
+                  </div>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-3 text-xs" style={{ color: c.sub }}>
+                    {reds > 0 && (
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="h-2.5 w-2.5 rounded-full" style={{ background: "#dc2626" }} />
+                        {reds} ta kechikkan (srochno)
+                      </span>
+                    )}
+                    {yellows > 0 && (
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="h-2.5 w-2.5 rounded-full" style={{ background: "#eab308" }} />
+                        {yellows} ta yaqinlashmoqda
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <ArrowRight size={18} className="transition-transform" style={{ color: accent, transform: showAttention ? "rotate(90deg)" : "none" }} />
+              </button>
+              {showAttention && (
+                <div className="border-t px-3 py-2" style={{ borderColor: `${accent}33` }}>
+                  {attentionMarkets.map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => openMarket(m.slug, m.is_demo)}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-black/5"
+                    >
+                      <AttentionDot attention={m.attention} />
+                      <span className="flex-1 truncate text-sm font-semibold" style={{ color: c.text }}>{m.name}</span>
+                      <span className="text-xs font-semibold" style={{ color: attColor(m.attention) }}>
+                        {attLabel(m.attention)}
+                      </span>
+                      <span className="hidden tabnum text-xs sm:block" style={{ color: c.faint }}>
+                        {fmtUZS(m.monthly_fee)}
+                      </span>
+                      <ArrowRight size={15} style={{ color: c.faint }} />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         {/* Analitika qatori: donut + bar + reyting */}
         <div className="mb-5 grid gap-4 lg:grid-cols-3">
           <Panel t={c} title={t("super.paymentStatus")} icon={<Activity size={14} />}>
@@ -190,6 +276,13 @@ export function SuperDashboardPage() {
             </div>
           </Panel>
         </div>
+
+        {/* === Railway server holati (faqat sozlangan bo'lsa) === */}
+        {railway?.configured && (
+          <div className="mb-5">
+            <RailwayPanel railway={railway} t={c} dark={dark} />
+          </div>
+        )}
 
         {/* Bozorlar — list/card toggle */}
         <div className="mb-3 flex items-center justify-between">
@@ -253,6 +346,7 @@ function MarketList({
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
+                <span title={attLabel(m.attention)}><AttentionDot attention={m.attention} /></span>
                 <span className="truncate font-semibold">{m.name}</span>
                 {m.is_demo && (
                   <span className="rounded-full bg-amber-400/20 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-500">demo</span>
@@ -301,6 +395,7 @@ function MarketCard({
     >
       <div className="mb-3 flex items-center gap-2.5">
         <div className="grid h-9 w-9 place-items-center rounded-lg bg-brand/15 text-brand"><Store size={17} /></div>
+        <span title={attLabel(m.attention)}><AttentionDot attention={m.attention} /></span>
         <div className="font-display font-bold">{m.name}</div>
         {m.is_demo && (
           <span className="ml-auto rounded-full bg-amber-400/20 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-500">demo</span>
@@ -429,6 +524,130 @@ function BarRow({ m, max, t, dark }: { m: MarketSummary; max: number; t: any; da
       <div className="h-2.5 overflow-hidden rounded-full" style={{ background: dark ? "rgba(255,255,255,0.06)" : "#e2e8f0" }}>
         <div className="h-full rounded-full" style={{ width: `${totalPct}%`, background: "linear-gradient(90deg,#0066ff,#00a3ff)" }}>
           <div className="h-full rounded-full bg-status-paid/70" style={{ width: `${paidPct}%` }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// === To'lov e'tibori belgilari ===
+function attColor(a: string): string {
+  if (a === "red" || a === "blocked") return "#dc2626";
+  if (a === "yellow") return "#eab308";
+  if (a === "ok") return "#16a34a";
+  return "#94a3b8"; // free
+}
+
+function attLabel(a: string): string {
+  if (a === "blocked") return "Bloklangan";
+  if (a === "red") return "Kechikkan!";
+  if (a === "yellow") return "To'lov yaqin";
+  if (a === "ok") return "To'langan";
+  return "Tekin davr";
+}
+
+function AttentionDot({ attention }: { attention: string }) {
+  const color = attColor(attention);
+  const pulse = attention === "red" || attention === "blocked";
+  return (
+    <span className="relative flex h-3 w-3 shrink-0">
+      {pulse && (
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75" style={{ background: color }} />
+      )}
+      <span className="relative inline-flex h-3 w-3 rounded-full" style={{ background: color }} />
+    </span>
+  );
+}
+
+// === Railway server holati paneli ===
+function deployStatusStyle(status: string): { color: string; icon: any; label: string } {
+  const s = (status || "").toUpperCase();
+  if (s === "SUCCESS") return { color: "#16a34a", icon: CircleCheck, label: "Muvaffaqiyatli" };
+  if (s === "FAILED" || s === "CRASHED") return { color: "#dc2626", icon: CircleX, label: "Xato" };
+  if (s === "BUILDING" || s === "DEPLOYING" || s === "INITIALIZING")
+    return { color: "#eab308", icon: Circle, label: "Jarayonda" };
+  if (s === "REMOVED") return { color: "#94a3b8", icon: Circle, label: "O'chirilgan" };
+  return { color: "#94a3b8", icon: Circle, label: status || "—" };
+}
+
+function RailwayPanel({ railway, t: c, dark }: { railway: RailwayOverview; t: any; dark: boolean }) {
+  const m = railway.metrics || {};
+  const deploys = railway.deployments || [];
+  const cpu = m.cpu_vcpu_latest;
+  const ram = m.ram_gb_latest;
+  return (
+    <div className="rounded-2xl border p-5" style={{ background: c.panel, borderColor: c.panelBorder }}>
+      <div className="mb-4 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color: c.faint }}>
+        <Server size={14} /> Railway server holati
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[1fr_1fr_2fr]">
+        {/* CPU */}
+        <div className="rounded-xl border p-4" style={{ borderColor: c.panelBorder, background: dark ? "rgba(0,102,255,0.06)" : "rgba(0,102,255,0.04)" }}>
+          <div className="mb-1 flex items-center gap-2 text-xs font-semibold" style={{ color: c.sub }}>
+            <Cpu size={14} /> CPU
+          </div>
+          {railway.metrics_error ? (
+            <div className="text-xs text-status-unpaid">Ma'lumot yo'q</div>
+          ) : (
+            <>
+              <div className="font-display text-2xl font-extrabold tabnum" style={{ color: c.text }}>
+                {cpu != null ? `${cpu} vCPU` : "—"}
+              </div>
+              {m.cpu_vcpu_avg != null && (
+                <div className="text-xs" style={{ color: c.faint }}>1 soat o'rtacha: {m.cpu_vcpu_avg} vCPU</div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* RAM */}
+        <div className="rounded-xl border p-4" style={{ borderColor: c.panelBorder, background: dark ? "rgba(124,58,237,0.06)" : "rgba(124,58,237,0.04)" }}>
+          <div className="mb-1 flex items-center gap-2 text-xs font-semibold" style={{ color: c.sub }}>
+            <MemoryStick size={14} /> RAM
+          </div>
+          {railway.metrics_error ? (
+            <div className="text-xs text-status-unpaid">Ma'lumot yo'q</div>
+          ) : (
+            <>
+              <div className="font-display text-2xl font-extrabold tabnum" style={{ color: c.text }}>
+                {ram != null ? `${ram} GB` : "—"}
+              </div>
+              {m.ram_gb_avg != null && (
+                <div className="text-xs" style={{ color: c.faint }}>1 soat o'rtacha: {m.ram_gb_avg} GB</div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Deploymentlar */}
+        <div className="rounded-xl border p-4" style={{ borderColor: c.panelBorder }}>
+          <div className="mb-2 flex items-center gap-2 text-xs font-semibold" style={{ color: c.sub }}>
+            <Rocket size={14} /> Oxirgi deploymentlar
+          </div>
+          {railway.deployments_error ? (
+            <div className="text-xs text-status-unpaid">Ma'lumot yuklanmadi</div>
+          ) : deploys.length === 0 ? (
+            <div className="text-xs" style={{ color: c.faint }}>Deployment topilmadi</div>
+          ) : (
+            <div className="space-y-1.5">
+              {deploys.slice(0, 5).map((d) => {
+                const st = deployStatusStyle(d.status);
+                const Icon = st.icon;
+                return (
+                  <div key={d.id} className="flex items-center gap-2 text-xs">
+                    <Icon size={13} style={{ color: st.color }} />
+                    <span className="font-semibold" style={{ color: st.color }}>{st.label}</span>
+                    <span style={{ color: c.faint }}>
+                      {d.created_at ? new Date(d.created_at).toLocaleString("uz-UZ", {
+                        day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
+                      }) : ""}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>

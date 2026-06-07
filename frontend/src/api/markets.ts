@@ -12,6 +12,8 @@ export interface Market {
   display_order: number;
 }
 
+export type MarketAttention = "ok" | "yellow" | "red" | "blocked" | "free";
+
 export interface MarketSummary {
   id: number;
   slug: string;
@@ -20,6 +22,11 @@ export interface MarketSummary {
   paid: number;
   debt: number;
   is_demo?: boolean;
+  attention: MarketAttention;
+  support_paid: boolean;
+  free_period: boolean;
+  monthly_fee: number;
+  due_day: number;
 }
 
 export interface SuperDashboard {
@@ -27,6 +34,7 @@ export interface SuperDashboard {
   paid: number;
   debt: number;
   markets: MarketSummary[];
+  attention_count: number;
 }
 
 export async function getMarkets(): Promise<Market[]> {
@@ -41,6 +49,31 @@ export async function getMarket(slug: string): Promise<Market> {
 
 export async function getSuperDashboard(): Promise<SuperDashboard> {
   const { data } = await apiClient.get<SuperDashboard>("/markets/super/dashboard");
+  return data;
+}
+
+export interface RailwayDeployment {
+  id: string;
+  status: string;
+  created_at: string | null;
+  url: string | null;
+}
+
+export interface RailwayOverview {
+  configured: boolean;
+  metrics?: {
+    cpu_vcpu_latest?: number;
+    cpu_vcpu_avg?: number;
+    ram_gb_latest?: number;
+    ram_gb_avg?: number;
+  };
+  metrics_error?: string;
+  deployments?: RailwayDeployment[];
+  deployments_error?: string;
+}
+
+export async function getRailwayOverview(): Promise<RailwayOverview> {
+  const { data } = await apiClient.get<RailwayOverview>("/markets/super/railway");
   return data;
 }
 
