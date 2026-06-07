@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Store, Plus, Trash2, KeyRound, Power, PowerOff, Check, X, Copy,
   AlertTriangle, CalendarClock, LogOut, CreditCard, ArrowRight, ArrowUpRight,
-  Cpu, MemoryStick, Server, Rocket, CircleCheck, CircleX, Circle,
+  Rocket, CircleCheck, Server,
   Activity, Wallet, Crown, Eye, ShieldAlert, Sparkles,
 } from "lucide-react";
 import {
@@ -12,6 +12,7 @@ import {
   ownerMarkPayment, ownerBlockMarket, getOwnerRailway,
   type OwnerMarket, type NewMarketResult, type RailwayOverview,
 } from "@/api/owner";
+import { MetricCard, DeploymentRow, ServiceChips } from "@/components/Railway/RailwayWidgets";
 import { useAuthStore } from "@/store/authStore";
 import { fmtUZS } from "@/lib/utils";
 import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
@@ -178,7 +179,7 @@ export function OwnerPage() {
         {/* ===== RAILWAY MONITOR ===== */}
         {railway?.configured && (
           <div className="mb-7 animate-fade-up" style={{ animationDelay: "300ms" }}>
-            <RailwayMonitor railway={railway} />
+            <RailwayMonitor railway={railway} onDetails={() => navigate("/owner/railway")} />
           </div>
         )}
 
@@ -475,15 +476,21 @@ function ActBtn({ children, onClick }: { children: React.ReactNode; onClick: () 
 }
 
 /* ============ RAILWAY MONITOR ============ */
-function RailwayMonitor({ railway }: { railway: RailwayOverview }) {
-  const m = railway.metrics || {};
+function RailwayMonitor({ railway, onDetails }: { railway: RailwayOverview; onDetails: () => void }) {
   const deploys = railway.deployments || [];
   return (
     <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl">
-      <div className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
-        <Server size={14} className="text-[#5b9dff]" /> Railway server holati
-        <span className="ml-1 flex h-2 w-2"><span className="absolute inline-flex h-2 w-2 animate-ping rounded-full bg-[#4ade80] opacity-75" /><span className="relative inline-flex h-2 w-2 rounded-full bg-[#4ade80]" /></span>
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+          <Server size={14} className="text-[#5b9dff]" /> Railway server holati
+          <span className="ml-1 flex h-2 w-2"><span className="absolute inline-flex h-2 w-2 animate-ping rounded-full bg-[#4ade80] opacity-75" /><span className="relative inline-flex h-2 w-2 rounded-full bg-[#4ade80]" /></span>
+        </div>
+        <button onClick={onDetails}
+          className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-[#5b9dff] transition-colors hover:bg-white/10 hover:text-white">
+          Batafsil <ArrowRight size={14} />
+        </button>
       </div>
+
       {(railway.metrics_error || railway.deployments_error) && (
         <div className="mb-3 rounded-xl border border-[#dc2626]/30 bg-[#dc2626]/10 px-3 py-2 text-xs text-[#f87171]">
           <div className="font-bold">Diagnostika (xato matni):</div>
@@ -491,55 +498,22 @@ function RailwayMonitor({ railway }: { railway: RailwayOverview }) {
           {railway.deployments_error && <div className="mt-1 break-all font-mono opacity-90">Deploy: {railway.deployments_error}</div>}
         </div>
       )}
-      <div className="grid gap-4 lg:grid-cols-[1fr_1fr_2fr]">
-        <Gauge icon={<Cpu size={15} />} label="CPU" accent="#0066ff" err={railway.metrics_error}
-          value={m.cpu_vcpu_latest != null ? `${m.cpu_vcpu_latest}` : "—"} unit="vCPU"
-          avg={m.cpu_vcpu_avg != null ? `${m.cpu_vcpu_avg} vCPU` : undefined} />
-        <Gauge icon={<MemoryStick size={15} />} label="RAM" accent="#7c3aed" err={railway.metrics_error}
-          value={m.ram_gb_latest != null ? `${m.ram_gb_latest}` : "—"} unit="GB"
-          avg={m.ram_gb_avg != null ? `${m.ram_gb_avg} GB` : undefined} />
+
+      <div className="mb-3"><ServiceChips railway={railway} /></div>
+
+      <div className="grid gap-4 lg:grid-cols-[1fr_1fr_1.4fr]">
+        <MetricCard kind="cpu" railway={railway} />
+        <MetricCard kind="ram" railway={railway} />
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
-          <div className="mb-2.5 flex items-center gap-2 text-xs font-semibold text-slate-400"><Rocket size={14} /> Oxirgi deploymentlar</div>
+          <div className="mb-1.5 flex items-center gap-2 text-xs font-semibold text-slate-400"><Rocket size={14} /> Oxirgi deploymentlar</div>
           {railway.deployments_error ? <div className="text-xs text-[#f87171]">Ma'lumot yuklanmadi</div>
             : deploys.length === 0 ? <div className="text-xs text-slate-500">Deployment topilmadi</div> : (
-            <div className="space-y-2">
-              {deploys.slice(0, 5).map((d) => {
-                const st = deployStatusStyle(d.status);
-                const Icon = st.icon;
-                return (
-                  <div key={d.id} className="flex items-center gap-2 text-xs">
-                    <Icon size={14} style={{ color: st.color }} />
-                    <span className="font-semibold" style={{ color: st.color }}>{st.label}</span>
-                    <span className="ml-auto font-mono text-slate-500">
-                      {d.created_at ? new Date(d.created_at).toLocaleString("uz-UZ", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}
-                    </span>
-                  </div>
-                );
-              })}
+            <div className="space-y-0.5">
+              {deploys.slice(0, 4).map((d) => <DeploymentRow key={d.id} d={d} />)}
             </div>
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-function Gauge({ icon, label, accent, value, unit, avg, err }: {
-  icon: React.ReactNode; label: string; accent: string; value: string; unit: string;
-  avg?: string; err?: string;
-}) {
-  return (
-    <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02] p-4">
-      <div className="pointer-events-none absolute -right-6 -top-6 h-20 w-20 rounded-full opacity-20 blur-xl" style={{ background: accent }} />
-      <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-slate-400" style={{ color: accent }}>{icon} {label}</div>
-      {err ? <div className="text-xs text-[#f87171]">Ma'lumot yo'q</div> : (
-        <>
-          <div className="font-display text-2xl font-extrabold tabnum text-white">
-            {value}<span className="ml-1 text-sm font-bold text-slate-500">{unit}</span>
-          </div>
-          {avg && <div className="text-[11px] text-slate-500">1 soat o'rtacha: {avg}</div>}
-        </>
-      )}
     </div>
   );
 }
@@ -592,12 +566,4 @@ function AttentionDot({ attention }: { attention: string }) {
       <span className="relative inline-flex h-3.5 w-3.5 rounded-full ring-2 ring-[#0c1424]" style={{ background: color }} />
     </span>
   );
-}
-function deployStatusStyle(status: string): { color: string; icon: any; label: string } {
-  const s = (status || "").toUpperCase();
-  if (s === "SUCCESS") return { color: "#4ade80", icon: CircleCheck, label: "Muvaffaqiyatli" };
-  if (s === "FAILED" || s === "CRASHED") return { color: "#f87171", icon: CircleX, label: "Xato" };
-  if (s === "BUILDING" || s === "DEPLOYING" || s === "INITIALIZING") return { color: "#fbbf24", icon: Circle, label: "Jarayonda" };
-  if (s === "REMOVED") return { color: "#64748b", icon: Circle, label: "O'chirilgan" };
-  return { color: "#64748b", icon: Circle, label: status || "—" };
 }

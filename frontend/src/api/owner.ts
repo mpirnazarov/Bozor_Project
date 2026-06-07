@@ -98,7 +98,22 @@ export interface RailwayDeployment {
   id: string;
   status: string;
   created_at: string | null;
+  updated_at?: string | null;
   url: string | null;
+  can_redeploy?: boolean | null;
+  commit_message?: string | null;
+  commit_sha?: string | null;
+  branch?: string | null;
+}
+
+export interface RailwayService {
+  name?: string | null;
+  created_at?: string | null;
+  region?: string | null;
+  replicas?: number | null;
+  builder?: string | null;
+  cpu_limit?: number | null;
+  ram_limit_gb?: number | null;
 }
 
 export interface RailwayOverview {
@@ -112,6 +127,10 @@ export interface RailwayOverview {
   metrics_error?: string;
   deployments?: RailwayDeployment[];
   deployments_error?: string;
+  service?: RailwayService;
+  service_error?: string;
+  limits?: { cpu_vcpu: number; ram_gb: number; source: string; plan: string };
+  usage_pct?: { cpu?: number; ram?: number };
 }
 
 export async function getOwnerRailway(): Promise<RailwayOverview> {

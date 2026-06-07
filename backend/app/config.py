@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     RAILWAY_PROJECT_ID: str = ""
     RAILWAY_ENVIRONMENT_ID: str = ""
     RAILWAY_SERVICE_ID: str = ""
+    # Plan: "trial" | "hobby" | "pro" — CPU/RAM foizini hisoblash uchun limit
+    RAILWAY_PLAN: str = "pro"
 
     @computed_field  # type: ignore[misc]
     @property

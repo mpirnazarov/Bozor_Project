@@ -73,8 +73,35 @@ query Deployments($projectId: String!, $environmentId: String!, $serviceId: Stri
         id
         status
         createdAt
+        updatedAt
         staticUrl
+        url
+        canRedeploy
         meta
+      }
+    }
+  }
+}
+"""
+
+# Servis konfiguratsiyasi + plan limiti (CPU/RAM cheklovini olish uchun).
+# limitOverride bo'lsa — o'sha, bo'lmasa plan limitiga tayanаmiz.
+_SERVICE_QUERY = """
+query ServiceInfo($serviceId: String!, $environmentId: String!) {
+  service(id: $serviceId) {
+    id
+    name
+    createdAt
+    serviceInstances {
+      edges {
+        node {
+          environmentId
+          region
+          numReplicas
+          limitOverride
+          startCommand
+          builder
+        }
       }
     }
   }
@@ -153,7 +180,7 @@ def _metrics_vars(variant: dict, start: str) -> dict[str, Any]:
 
 
 async def get_deployments() -> list[dict]:
-    """Oxirgi deploymentlar ro'yxati."""
+    """Oxirgi deploymentlar ro'yxati (kengaytirilgan ma'lumot bilan)."""
     if not is_configured():
         return []
     data = await _gql(_DEPLOYMENTS_QUERY, {
@@ -164,13 +191,58 @@ async def get_deployments() -> list[dict]:
     out = []
     for edge in (data.get("deployments") or {}).get("edges") or []:
         node = edge.get("node") or {}
+        meta = node.get("meta") or {}
+        # meta odatda commit/branch ma'lumotini saqlaydi (struktura o'zgaruvchan)
+        commit_msg = None
+        commit_sha = None
+        branch = None
+        if isinstance(meta, dict):
+            commit_msg = meta.get("commitMessage") or meta.get("commit_message")
+            commit_sha = meta.get("commitHash") or meta.get("commitSha") or meta.get("commit")
+            branch = meta.get("branch")
         out.append({
             "id": node.get("id"),
             "status": node.get("status"),
             "created_at": node.get("createdAt"),
-            "url": node.get("staticUrl"),
+            "updated_at": node.get("updatedAt"),
+            "url": node.get("staticUrl") or node.get("url"),
+            "can_redeploy": node.get("canRedeploy"),
+            "commit_message": commit_msg,
+            "commit_sha": (commit_sha[:7] if isinstance(commit_sha, str) else None),
+            "branch": branch,
         })
     return out
+
+
+async def get_service_info() -> dict:
+    """Servis konfiguratsiyasi: region, replicas, CPU/RAM limiti."""
+    if not is_configured():
+        return {}
+    data = await _gql(_SERVICE_QUERY, {
+        "serviceId": settings.RAILWAY_SERVICE_ID,
+        "environmentId": settings.RAILWAY_ENVIRONMENT_ID,
+    })
+    svc = data.get("service") or {}
+    info: dict[str, Any] = {
+        "name": svc.get("name"),
+        "created_at": svc.get("createdAt"),
+    }
+    # Joriy environment'ga mos serviceInstance'ni topamiz
+    for edge in (svc.get("serviceInstances") or {}).get("edges") or []:
+        node = edge.get("node") or {}
+        if node.get("environmentId") == settings.RAILWAY_ENVIRONMENT_ID:
+            info["region"] = node.get("region")
+            info["replicas"] = node.get("numReplicas")
+            info["builder"] = node.get("builder")
+            limit = node.get("limitOverride") or {}
+            # limitOverride: {"containers": {"cpu": X, "memoryGB": Y}} ko'rinishida bo'lishi mumkin
+            if isinstance(limit, dict):
+                cont = limit.get("containers") or limit
+                if isinstance(cont, dict):
+                    info["cpu_limit"] = cont.get("cpu")
+                    info["ram_limit_gb"] = cont.get("memoryGB") or cont.get("memory")
+            break
+    return info
 
 
 async def get_metrics() -> dict:
@@ -222,8 +294,23 @@ def _parse_metrics(data: dict) -> dict:
     return result
 
 
+# Plan limitlari (foiz hisoblash uchun fallback). Railway'dan aniq limit
+# olinmasa, plan turiga qarab standart qiymat ishlatamiz.
+# settings.RAILWAY_PLAN: "hobby" | "pro" | "trial" (default "pro")
+_PLAN_LIMITS = {
+    "trial": {"cpu": 2.0, "ram": 1.0},
+    "hobby": {"cpu": 8.0, "ram": 8.0},
+    "pro": {"cpu": 32.0, "ram": 32.0},
+}
+
+
+def _plan_limit() -> dict:
+    plan = (getattr(settings, "RAILWAY_PLAN", "") or "pro").lower()
+    return _PLAN_LIMITS.get(plan, _PLAN_LIMITS["pro"])
+
+
 async def get_railway_overview() -> dict:
-    """Super dashboard uchun Railway umumiy holati (xatoga chidamli)."""
+    """Owner dashboard uchun Railway umumiy holati (xatoga chidamli)."""
     if not is_configured():
         return {"configured": False}
 
@@ -236,9 +323,34 @@ async def get_railway_overview() -> dict:
         overview["metrics"] = {}
 
     try:
+        overview["service"] = await get_service_info()
+    except Exception as e:  # noqa: BLE001
+        overview["service_error"] = str(e)[:200]
+        overview["service"] = {}
+
+    try:
         overview["deployments"] = await get_deployments()
     except Exception as e:  # noqa: BLE001
         overview["deployments_error"] = str(e)[:200]
         overview["deployments"] = []
+
+    # CPU/RAM foizini hisoblaymiz: limit Railway'dan kelса o'sha, bo'lmasa plan limiti
+    plan = _plan_limit()
+    svc = overview.get("service") or {}
+    metrics = overview.get("metrics") or {}
+    cpu_limit = svc.get("cpu_limit") or plan["cpu"]
+    ram_limit = svc.get("ram_limit_gb") or plan["ram"]
+    overview["limits"] = {
+        "cpu_vcpu": cpu_limit,
+        "ram_gb": ram_limit,
+        "source": "railway" if svc.get("cpu_limit") else "plan",
+        "plan": (getattr(settings, "RAILWAY_PLAN", "") or "pro").lower(),
+    }
+    pct: dict[str, Any] = {}
+    if metrics.get("cpu_vcpu_latest") is not None and cpu_limit:
+        pct["cpu"] = round(metrics["cpu_vcpu_latest"] / cpu_limit * 100, 1)
+    if metrics.get("ram_gb_latest") is not None and ram_limit:
+        pct["ram"] = round(metrics["ram_gb_latest"] / ram_limit * 100, 1)
+    overview["usage_pct"] = pct
 
     return overview
