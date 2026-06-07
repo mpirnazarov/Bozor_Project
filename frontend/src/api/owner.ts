@@ -1,5 +1,7 @@
 import { apiClient } from "./client";
 
+export type MarketAttention = "ok" | "yellow" | "red" | "blocked" | "free";
+
 export interface SupportStatus {
   free_period: boolean;
   free_until: string;
@@ -9,6 +11,7 @@ export interface SupportStatus {
   pending: boolean;
   support_blocked: boolean;
   due_day: number;
+  attention: MarketAttention;
 }
 
 export interface OwnerMarket {
@@ -87,5 +90,31 @@ export async function ownerBlockMarket(id: number, blocked: boolean): Promise<vo
 // Bozor uchun (public): joriy bozorning tex-podderjka holati
 export async function getMarketSupportStatus(): Promise<SupportStatus> {
   const { data } = await apiClient.get<SupportStatus>("/settings/support-status");
+  return data;
+}
+
+// === Railway server holati (CPU/RAM + deploymentlar) ===
+export interface RailwayDeployment {
+  id: string;
+  status: string;
+  created_at: string | null;
+  url: string | null;
+}
+
+export interface RailwayOverview {
+  configured: boolean;
+  metrics?: {
+    cpu_vcpu_latest?: number;
+    cpu_vcpu_avg?: number;
+    ram_gb_latest?: number;
+    ram_gb_avg?: number;
+  };
+  metrics_error?: string;
+  deployments?: RailwayDeployment[];
+  deployments_error?: string;
+}
+
+export async function getOwnerRailway(): Promise<RailwayOverview> {
+  const { data } = await apiClient.get<RailwayOverview>("/owner/railway");
   return data;
 }

@@ -16,7 +16,6 @@ from app.models.market import Market
 from app.schemas.market import MarketOut, MarketUpdate, SuperDashboardOut
 from app.services.audit_service import write_audit
 from app.services.support_service import get_support_status
-from app.services.railway_service import get_railway_overview
 
 router = APIRouter()
 
@@ -107,17 +106,6 @@ async def super_dashboard(
         markets=per_market,
         attention_count=attention_count,
     )
-
-
-@router.get("/super/railway")
-async def super_railway(
-    _admin: SuperAdminUser,
-) -> dict:
-    """Railway holati (CPU/RAM + deployment ro'yxati) — super dashboard uchun.
-
-    Token sozlanmagan bo'lsa {configured: false} qaytaradi.
-    """
-    return await get_railway_overview()
 
 
 @router.get("/{slug}", response_model=MarketOut)

@@ -24,9 +24,19 @@ from app.models.user import User, UserRole
 from app.services.support_service import (
     get_support_status, list_payments, mark_payment,
 )
+from app.services.railway_service import get_railway_overview
 from app.utils.security import hash_password
 
 router = APIRouter()
+
+
+@router.get("/railway")
+async def owner_railway(_owner: OwnerUser) -> dict:
+    """Railway server holati (CPU/RAM + deploymentlar) — owner dashboard uchun.
+
+    Token sozlanmagan bo'lsa {configured: false} qaytaradi.
+    """
+    return await get_railway_overview()
 
 
 def _gen_password(n: int = 10) -> str:
