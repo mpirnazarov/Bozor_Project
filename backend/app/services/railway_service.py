@@ -43,11 +43,17 @@ async def _gql(query: str, variables: dict[str, Any] | None = None) -> dict[str,
         for headers in _header_variants():
             try:
                 resp = await client.post(RAILWAY_API, json=payload, headers=headers)
-                resp.raise_for_status()
-                data = resp.json()
             except Exception as e:  # noqa: BLE001
                 last_error = str(e)[:250]
                 continue
+
+            # GraphQL javobini o'qiymiz (400 bo'lsa ham — tanasida aniq xato bo'ladi)
+            try:
+                data = resp.json()
+            except Exception:  # noqa: BLE001
+                last_error = f"HTTP {resp.status_code}: {resp.text[:200]}"
+                continue
+
             errors = data.get("errors")
             if errors:
                 msg = str(errors)
@@ -55,58 +61,66 @@ async def _gql(query: str, variables: dict[str, Any] | None = None) -> dict[str,
                 if "Not Authorized" in msg or "Unauthorized" in msg or "auth" in msg.lower():
                     last_error = msg[:250]
                     continue
-                # Boshqa xato (masalan query xatosi) — qaytaramiz
-                raise RuntimeError(msg[:300])
+                # Boshqa xato (masalan query/maydon xatosi) — qaytaramiz
+                raise RuntimeError(msg[:400])
+
+            if resp.status_code >= 400:
+                last_error = f"HTTP {resp.status_code}: {str(data)[:200]}"
+                continue
+
             return data.get("data") or {}
     # Hamma header turi muvaffaqiyatsiz
     raise RuntimeError(last_error or "Avtorizatsiya muvaffaqiyatsiz (token noto'g'ri?)")
 
 
-_DEPLOYMENTS_QUERY = """
+_DEPLOYMENTS_VARIANTS = [
+    # 1) boyitilgan
+    """
 query Deployments($projectId: String!, $environmentId: String!, $serviceId: String!) {
-  deployments(
-    first: 10
-    input: { projectId: $projectId, environmentId: $environmentId, serviceId: $serviceId }
-  ) {
-    edges {
-      node {
-        id
-        status
-        createdAt
-        updatedAt
-        staticUrl
-        url
-        canRedeploy
-        meta
-      }
-    }
+  deployments(first: 10, input: { projectId: $projectId, environmentId: $environmentId, serviceId: $serviceId }) {
+    edges { node { id status createdAt updatedAt staticUrl url canRedeploy meta } }
   }
-}
-"""
+}""",
+    # 2) minimal (avval ishlаgan)
+    """
+query Deployments($projectId: String!, $environmentId: String!, $serviceId: String!) {
+  deployments(first: 10, input: { projectId: $projectId, environmentId: $environmentId, serviceId: $serviceId }) {
+    edges { node { id status createdAt staticUrl meta } }
+  }
+}""",
+]
 
-# Servis konfiguratsiyasi + plan limiti (CPU/RAM cheklovini olish uchun).
-# limitOverride bo'lsa — o'sha, bo'lmasa plan limitiga tayanаmiz.
-_SERVICE_QUERY = """
-query ServiceInfo($serviceId: String!, $environmentId: String!) {
+# Servis konfiguratsiyasi + plan limiti. serviceInstance maydonlari sxemada
+# o'zgaruvchan, shuning uchun eng ishonchlidan boshlab bir nechta variant sinaymiz.
+_SERVICE_VARIANTS = [
+    # 1) to'liq: region + replicas + limit + builder
+    """
+query ServiceInfo($serviceId: String!) {
   service(id: $serviceId) {
-    id
-    name
-    createdAt
+    id name createdAt
     serviceInstances {
-      edges {
-        node {
-          environmentId
-          region
-          numReplicas
-          limitOverride
-          startCommand
-          builder
-        }
-      }
+      edges { node { environmentId region numReplicas limitOverride builder } }
     }
   }
-}
-"""
+}""",
+    # 2) limitsiz: region + replicas
+    """
+query ServiceInfo($serviceId: String!) {
+  service(id: $serviceId) {
+    id name createdAt
+    serviceInstances {
+      edges { node { environmentId region numReplicas } }
+    }
+  }
+}""",
+    # 3) eng minimal: faqat nom
+    """
+query ServiceInfo($serviceId: String!) {
+  service(id: $serviceId) {
+    id name createdAt
+  }
+}""",
+]
 
 # Metrikalar. Railway metrics() so'rovi sxemasi to'liq hujjatlanmagan va o'zgaruvchan,
 # shuning uchun bir nechta ehtimoliy enum/argument variantini ketma-ket sinaymiz.
@@ -183,19 +197,28 @@ async def get_deployments() -> list[dict]:
     """Oxirgi deploymentlar ro'yxati (kengaytirilgan ma'lumot bilan)."""
     if not is_configured():
         return []
-    data = await _gql(_DEPLOYMENTS_QUERY, {
+    variables = {
         "projectId": settings.RAILWAY_PROJECT_ID,
         "environmentId": settings.RAILWAY_ENVIRONMENT_ID,
         "serviceId": settings.RAILWAY_SERVICE_ID,
-    })
+    }
+    data: dict[str, Any] = {}
+    last_error: str | None = None
+    for query in _DEPLOYMENTS_VARIANTS:
+        try:
+            data = await _gql(query, variables)
+            break
+        except Exception as e:  # noqa: BLE001
+            last_error = str(e)[:250]
+            continue
+    if not data and last_error:
+        raise RuntimeError(last_error)
+
     out = []
     for edge in (data.get("deployments") or {}).get("edges") or []:
         node = edge.get("node") or {}
         meta = node.get("meta") or {}
-        # meta odatda commit/branch ma'lumotini saqlaydi (struktura o'zgaruvchan)
-        commit_msg = None
-        commit_sha = None
-        branch = None
+        commit_msg = commit_sha = branch = None
         if isinstance(meta, dict):
             commit_msg = meta.get("commitMessage") or meta.get("commit_message")
             commit_sha = meta.get("commitHash") or meta.get("commitSha") or meta.get("commit")
@@ -215,13 +238,26 @@ async def get_deployments() -> list[dict]:
 
 
 async def get_service_info() -> dict:
-    """Servis konfiguratsiyasi: region, replicas, CPU/RAM limiti."""
+    """Servis konfiguratsiyasi: region, replicas, CPU/RAM limiti.
+
+    Bir nechta query variantini sinaymiz (sxema o'zgaruvchan).
+    """
     if not is_configured():
         return {}
-    data = await _gql(_SERVICE_QUERY, {
-        "serviceId": settings.RAILWAY_SERVICE_ID,
-        "environmentId": settings.RAILWAY_ENVIRONMENT_ID,
-    })
+    data: dict[str, Any] = {}
+    last_error: str | None = None
+    for query in _SERVICE_VARIANTS:
+        try:
+            data = await _gql(query, {"serviceId": settings.RAILWAY_SERVICE_ID})
+            break  # ishladi
+        except Exception as e:  # noqa: BLE001
+            last_error = str(e)[:250]
+            continue
+    if not data:
+        if last_error:
+            raise RuntimeError(last_error)
+        return {}
+
     svc = data.get("service") or {}
     info: dict[str, Any] = {
         "name": svc.get("name"),
@@ -235,7 +271,6 @@ async def get_service_info() -> dict:
             info["replicas"] = node.get("numReplicas")
             info["builder"] = node.get("builder")
             limit = node.get("limitOverride") or {}
-            # limitOverride: {"containers": {"cpu": X, "memoryGB": Y}} ko'rinishida bo'lishi mumkin
             if isinstance(limit, dict):
                 cont = limit.get("containers") or limit
                 if isinstance(cont, dict):
