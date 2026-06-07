@@ -484,6 +484,13 @@ function RailwayMonitor({ railway }: { railway: RailwayOverview }) {
         <Server size={14} className="text-[#5b9dff]" /> Railway server holati
         <span className="ml-1 flex h-2 w-2"><span className="absolute inline-flex h-2 w-2 animate-ping rounded-full bg-[#4ade80] opacity-75" /><span className="relative inline-flex h-2 w-2 rounded-full bg-[#4ade80]" /></span>
       </div>
+      {(railway.metrics_error || railway.deployments_error) && (
+        <div className="mb-3 rounded-xl border border-[#dc2626]/30 bg-[#dc2626]/10 px-3 py-2 text-xs text-[#f87171]">
+          <div className="font-bold">Diagnostika (xato matni):</div>
+          {railway.metrics_error && <div className="mt-1 break-all font-mono opacity-90">Metrics: {railway.metrics_error}</div>}
+          {railway.deployments_error && <div className="mt-1 break-all font-mono opacity-90">Deploy: {railway.deployments_error}</div>}
+        </div>
+      )}
       <div className="grid gap-4 lg:grid-cols-[1fr_1fr_2fr]">
         <Gauge icon={<Cpu size={15} />} label="CPU" accent="#0066ff" err={railway.metrics_error}
           value={m.cpu_vcpu_latest != null ? `${m.cpu_vcpu_latest}` : "—"} unit="vCPU"

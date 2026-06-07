@@ -59,22 +59,75 @@ query Deployments($projectId: String!, $environmentId: String!, $serviceId: Stri
 }
 """
 
-# Metrikalar: CPU (vCPU), RAM (bytes) — oxirgi soatlik o'rtacha
-_METRICS_QUERY = """
-query Metrics($projectId: String!, $startDate: DateTime!, $measurements: [MetricMeasurement!]!) {
-  metrics(
-    projectId: $projectId
-    startDate: $startDate
-    measurements: $measurements
-  ) {
+# Metrikalar. Railway metrics() so'rovi sxemasi to'liq hujjatlanmagan va o'zgaruvchan,
+# shuning uchun bir nechta ehtimoliy enum/argument variantini ketma-ket sinaymiz.
+# Birortasi ishlasa — o'shani ishlatamiz. Hammasi xato bersa — oxirgi xatoni qaytaramiz.
+
+# Variant query'lar: har biri (query, measurements, extra_vars) ko'rinishida.
+_METRICS_VARIANTS = [
+    # 1) serviceId bilan scope, GB o'lchovi
+    {
+        "query": """
+query Metrics($serviceId: String!, $startDate: DateTime!, $measurements: [MetricMeasurement!]!) {
+  metrics(serviceId: $serviceId, startDate: $startDate, measurements: $measurements) {
     measurement
-    values {
-      ts
-      value
-    }
+    values { ts value }
   }
-}
-"""
+}""",
+        "measurements": ["CPU_USAGE", "MEMORY_USAGE_GB"],
+        "key": "serviceId",
+    },
+    # 2) projectId + environmentId + serviceId
+    {
+        "query": """
+query Metrics($projectId: String!, $environmentId: String!, $serviceId: String!, $startDate: DateTime!, $measurements: [MetricMeasurement!]!) {
+  metrics(projectId: $projectId, environmentId: $environmentId, serviceId: $serviceId, startDate: $startDate, measurements: $measurements) {
+    measurement
+    values { ts value }
+  }
+}""",
+        "measurements": ["CPU_USAGE", "MEMORY_USAGE_GB"],
+        "key": "all",
+    },
+    # 3) bytes o'lchovi (MEMORY_USAGE_BYTES)
+    {
+        "query": """
+query Metrics($serviceId: String!, $startDate: DateTime!, $measurements: [MetricMeasurement!]!) {
+  metrics(serviceId: $serviceId, startDate: $startDate, measurements: $measurements) {
+    measurement
+    values { ts value }
+  }
+}""",
+        "measurements": ["CPU_USAGE", "MEMORY_USAGE_BYTES"],
+        "key": "serviceId",
+    },
+    # 4) faqat projectId (eski usul)
+    {
+        "query": """
+query Metrics($projectId: String!, $startDate: DateTime!, $measurements: [MetricMeasurement!]!) {
+  metrics(projectId: $projectId, startDate: $startDate, measurements: $measurements) {
+    measurement
+    values { ts value }
+  }
+}""",
+        "measurements": ["CPU_USAGE", "MEMORY_USAGE_GB"],
+        "key": "projectId",
+    },
+]
+
+
+def _metrics_vars(variant: dict, start: str) -> dict[str, Any]:
+    base = {"startDate": start, "measurements": variant["measurements"]}
+    key = variant["key"]
+    if key == "serviceId":
+        base["serviceId"] = settings.RAILWAY_SERVICE_ID
+    elif key == "projectId":
+        base["projectId"] = settings.RAILWAY_PROJECT_ID
+    else:  # all
+        base["projectId"] = settings.RAILWAY_PROJECT_ID
+        base["environmentId"] = settings.RAILWAY_ENVIRONMENT_ID
+        base["serviceId"] = settings.RAILWAY_SERVICE_ID
+    return base
 
 
 async def get_deployments() -> list[dict]:
@@ -99,29 +152,51 @@ async def get_deployments() -> list[dict]:
 
 
 async def get_metrics() -> dict:
-    """Oxirgi soatdagi CPU/RAM o'rtacha va oxirgi qiymat."""
+    """Oxirgi soatdagi CPU/RAM o'rtacha va oxirgi qiymat.
+
+    Bir nechta query variantini ketma-ket sinaymiz (Railway sxemasi noaniq).
+    Birortasi ma'lumot qaytarsa — o'shani ishlatamiz.
+    """
     if not is_configured():
         return {}
     start = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
-    data = await _gql(_METRICS_QUERY, {
-        "projectId": settings.RAILWAY_PROJECT_ID,
-        "startDate": start,
-        "measurements": ["CPU_USAGE", "MEMORY_USAGE_GB"],
-    })
+
+    last_error: str | None = None
+    for variant in _METRICS_VARIANTS:
+        try:
+            data = await _gql(variant["query"], _metrics_vars(variant, start))
+        except Exception as e:  # noqa: BLE001
+            last_error = str(e)[:250]
+            continue  # bu variant ishlamadi, keyingisini sinaymiz
+
+        result = _parse_metrics(data)
+        if result:
+            return result  # ma'lumot topildi
+
+    # Hech bir variant ma'lumot bermadi
+    if last_error:
+        raise RuntimeError(last_error)
+    return {}
+
+
+def _parse_metrics(data: dict) -> dict:
+    """metrics javobini cpu/ram qiymatlariga aylantiradi."""
     result: dict[str, Any] = {}
     for m in data.get("metrics") or []:
-        name = m.get("measurement")
+        name = (m.get("measurement") or "").upper()
         values = [v.get("value") for v in (m.get("values") or []) if v.get("value") is not None]
         if not values:
             continue
         latest = values[-1]
         avg = sum(values) / len(values)
-        if name == "CPU_USAGE":
+        if "CPU" in name:
             result["cpu_vcpu_latest"] = round(latest, 3)
             result["cpu_vcpu_avg"] = round(avg, 3)
-        elif name == "MEMORY_USAGE_GB":
-            result["ram_gb_latest"] = round(latest, 3)
-            result["ram_gb_avg"] = round(avg, 3)
+        elif "MEM" in name or "RAM" in name:
+            # Bytes bo'lsa GB ga aylantiramiz (qiymat katta bo'lsa)
+            div = 1_073_741_824 if latest > 1024 else 1
+            result["ram_gb_latest"] = round(latest / div, 3)
+            result["ram_gb_avg"] = round(avg / div, 3)
     return result
 
 
