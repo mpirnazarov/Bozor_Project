@@ -41,6 +41,7 @@ _SERVICE_MAP = {
 
 @dataclass
 class BillingImportResult:
+    ok: bool = True
     rows_read: int = 0
     counterparties: int = 0
     records: int = 0
@@ -70,6 +71,19 @@ def _num(v: object) -> Decimal:
         return Decimal(0)
 
 
+def _num_strict(v: object) -> tuple[Decimal, bool]:
+    """(qiymat, ok). Bo'sh => 0. Raqam emas => (0, False)."""
+    if v in (None, ""):
+        return Decimal(0), True
+    try:
+        return Decimal(str(v).replace(" ", "").replace(",", ".")), True
+    except Exception:  # noqa: BLE001
+        return Decimal(0), False
+
+
+_MAX_ERRORS = 100  # logда saqlanadigan xato chegarasi
+
+
 async def import_billing_xlsx(
     db: AsyncSession,
     content: bytes,
@@ -86,6 +100,7 @@ async def import_billing_xlsx(
     try:
         raw_header = next(rows)
     except StopIteration:
+        res.ok = False
         res.errors.append("Bo'sh fayl")
         wb.close()
         return res
@@ -98,11 +113,20 @@ async def import_billing_xlsx(
     i_name = _find_col(header, "контрагент", "kontragent", "nom")
 
     if i_inn is None:
-        res.errors.append("'ИНН' ustuni topilmadi")
+        res.ok = False
+        res.errors.append("Format xato: 'ИНН' (Контрагент.ИНН) ustuni topilmadi")
         wb.close()
         return res
     if i_svc is None or i_deb is None or i_kre is None:
-        res.errors.append("'Виды взаиморасчетов', 'Дебет' yoki 'Кредит' ustuni topilmadi")
+        res.ok = False
+        missing = []
+        if i_svc is None:
+            missing.append("'Виды взаиморасчетов'")
+        if i_deb is None:
+            missing.append("'Дебет'")
+        if i_kre is None:
+            missing.append("'Кредит'")
+        res.errors.append(f"Format xato: quyidagi ustun(lar) topilmadi: {', '.join(missing)}")
         wb.close()
         return res
 
@@ -114,28 +138,74 @@ async def import_billing_xlsx(
     def cell(row: tuple, idx: int | None):
         return row[idx] if idx is not None and idx < len(row) else None
 
+    def add_error(msg: str) -> None:
+        if len(res.errors) < _MAX_ERRORS:
+            res.errors.append(msg)
+
     for n, row in enumerate(rows, start=2):
         if row is None or all(c is None for c in row):
             continue
         res.rows_read += 1
+
         inn = _norm(cell(row, i_inn))
+        svc_raw = _norm(cell(row, i_svc))
+        deb_raw = cell(row, i_deb)
+        kre_raw = cell(row, i_kre)
+
+        # Butunlay bo'sh ma'lumotli qator (INN ham, summa ham yo'q) — e'tiborsiz
+        if not inn and not svc_raw and deb_raw in (None, "") and kre_raw in (None, ""):
+            continue
+
+        # --- Validatsiya (xato bo'lsa import bekor qilinadi) ---
         if not inn:
-            res.skipped += 1
+            res.ok = False
+            add_error(f"{n}-qator: INN bo'sh")
             continue
-        svc_raw = _norm(cell(row, i_svc)).lower()
-        category = _SERVICE_MAP.get(svc_raw)
+
+        category = _SERVICE_MAP.get(svc_raw.lower())
         if category is None:
-            res.skipped += 1
-            if len(res.errors) < 50:
-                res.errors.append(f"{n}-qator: noma'lum xizmat turi «{svc_raw}»")
+            res.ok = False
+            add_error(f"{n}-qator (INN {inn}): noma'lum xizmat turi «{svc_raw}» "
+                      f"(faqat Аренда / Электроэнергия / Вода)")
             continue
-        agg[(inn, category)]["due"] += _num(cell(row, i_deb))    # Дебет = qarz
-        agg[(inn, category)]["paid"] += _num(cell(row, i_kre))   # Кредит = ortiqcha
+
+        deb, deb_ok = _num_strict(deb_raw)
+        kre, kre_ok = _num_strict(kre_raw)
+        if not deb_ok:
+            res.ok = False
+            add_error(f"{n}-qator (INN {inn}): Дебет qiymati raqam emas: «{deb_raw}»")
+            continue
+        if not kre_ok:
+            res.ok = False
+            add_error(f"{n}-qator (INN {inn}): Кредит qiymati raqam emas: «{kre_raw}»")
+            continue
+        if deb < 0 or kre < 0:
+            res.ok = False
+            add_error(f"{n}-qator (INN {inn}): summa manfiy bo'lishi mumkin emas "
+                      f"(Дебет={deb}, Кредит={kre})")
+            continue
+        # Mantiqiy xato: bir qatorda ham Дебет, ham Кредит > 0 bo'lishi mumkin emas
+        # (saldo formati — yo qarz, yo ortiqcha to'lov)
+        if deb > 0 and kre > 0:
+            res.ok = False
+            add_error(f"{n}-qator (INN {inn}, {svc_raw}): Дебет ham, Кредит ham > 0 "
+                      f"({deb} / {kre}) — bittasi 0 bo'lishi kerak")
+            continue
+
+        agg[(inn, category)]["due"] += deb     # Дебет = qarz
+        agg[(inn, category)]["paid"] += kre    # Кредит = ortiqcha
 
     wb.close()
 
+    if not res.ok:
+        # Xato bor — hech narsa import qilinmaydi
+        res.errors.insert(0, f"Import bekor qilindi: {len(res.errors)} ta xato topildi. "
+                             f"Hech qanday ma'lumot saqlanmadi.")
+        return res
+
     if not agg:
-        res.errors.append("Hech qanday yozuv topilmadi")
+        res.ok = False
+        res.errors.append("Faylda hech qanday yaroqli yozuv topilmadi")
         return res
 
     # === Snapshot: shu (year, month, market) dagi MAVJUD balanslarning oldingi holati ===

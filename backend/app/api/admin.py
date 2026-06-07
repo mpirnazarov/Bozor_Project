@@ -1,10 +1,12 @@
 """Admin endpointlari — /api/admin/* (hammasi require_admin)."""
+import base64
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 from pydantic import BaseModel
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi.responses import Response
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -39,6 +41,7 @@ from app.services.rollback_service import (
     save_snapshot,
 )
 from app.models.change_snapshot import ChangeSnapshot
+from app.models.import_log import ImportLog
 from app.utils.safe_fetch import UnsafeUrlError, fetch_url_safely
 from app.services.dashboard_service import get_dashboard_from_settings
 from app.services.import_service import import_balances_xlsx
@@ -242,12 +245,14 @@ async def import_excel(
 
 
 class BillingImportOut(BaseModel):
-    rows_read: int
-    counterparties: int
-    records: int
-    skipped: int
-    errors: list[str]
+    ok: bool = True
+    rows_read: int = 0
+    counterparties: int = 0
+    records: int = 0
+    skipped: int = 0
+    errors: list[str] = []
     snapshot_id: int | None = None
+    log_id: int | None = None
 
 
 @router.post("/import/billing", response_model=BillingImportOut)
@@ -262,7 +267,9 @@ async def import_billing(
     """Billing Excel import (1C buxgalteriya formati).
 
     Дебет=qarz (due_amount), Кредит=ortiqcha to'lov (paid_amount).
-    Import oldidan snapshot olinadi — keyin 24 soat ichida qaytarish mumkin.
+    Avval to'liq validatsiya — biror xato bo'lsa HECH NARSA import qilinmaydi,
+    xatolar va yuklangan fayl logga yoziladi (logdan yuklab olish mumkin).
+    Muvaffaqiyatli importda snapshot olinadi (24 soat ichida qaytarish mumkin).
     """
     if not file.filename or not file.filename.lower().endswith((".xlsx", ".xlsm")):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Faqat .xlsx fayl")
@@ -272,38 +279,108 @@ async def import_billing(
 
     result = await import_billing_xlsx(db, content, year, month, market.id)
 
-    snapshot_id: int | None = None
-    if result.records > 0:
-        # Audit + snapshot (rollback uchun)
+    # === XATO: import qilinmaydi, fayl + xatolar logga yoziladi ===
+    if not result.ok:
         audit = await write_audit(
-            db, admin.id, "import_billing", "monthly_balances",
+            db, admin.id, "import_billing_failed", "import_log",
             f"{file.filename} ({year}-{month:02d})",
-            {
-                "year": year, "month": month, "market": market.slug,
-                "counterparties": result.counterparties, "records": result.records,
-            },
+            {"year": year, "month": month, "market": market.slug,
+             "error_count": len(result.errors)},
         )
-        snap = await save_snapshot(
-            db,
-            action="import_billing",
-            table_name="monthly_balances",
-            before_rows=result.snapshot_rows,
+        log = ImportLog(
             user_id=admin.id,
             market_id=market.id,
-            summary=f"Billing import: {file.filename} — {year}-{month:02d}, "
-                    f"{result.counterparties} kontragent, {result.records} yozuv",
+            filename=file.filename,
+            year=year,
+            month=month,
+            status="failed",
+            rows_read=result.rows_read,
+            records=0,
+            counterparties=0,
+            errors=result.errors,
+            file_data=base64.b64encode(content).decode("ascii"),
+            file_mime=file.content_type or "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             audit_id=audit.id,
         )
-        snapshot_id = snap.id
+        db.add(log)
+        await db.commit()
+        await db.refresh(log)
+        return BillingImportOut(
+            ok=False,
+            rows_read=result.rows_read,
+            counterparties=0,
+            records=0,
+            skipped=result.skipped,
+            errors=result.errors,
+            snapshot_id=None,
+            log_id=log.id,
+        )
 
+    # === OK: import + snapshot + muvaffaqiyat logi ===
+    audit = await write_audit(
+        db, admin.id, "import_billing", "monthly_balances",
+        f"{file.filename} ({year}-{month:02d})",
+        {"year": year, "month": month, "market": market.slug,
+         "counterparties": result.counterparties, "records": result.records},
+    )
+    snap = await save_snapshot(
+        db,
+        action="import_billing",
+        table_name="monthly_balances",
+        before_rows=result.snapshot_rows,
+        user_id=admin.id,
+        market_id=market.id,
+        summary=f"Billing import: {file.filename} — {year}-{month:02d}, "
+                f"{result.counterparties} kontragent, {result.records} yozuv",
+        audit_id=audit.id,
+    )
+    log = ImportLog(
+        user_id=admin.id,
+        market_id=market.id,
+        filename=file.filename,
+        year=year,
+        month=month,
+        status="success",
+        rows_read=result.rows_read,
+        records=result.records,
+        counterparties=result.counterparties,
+        errors=None,
+        file_data=None,  # muvaffaqiyatli faylni saqlamaymiz (joy tejash)
+        audit_id=audit.id,
+    )
+    db.add(log)
     await db.commit()
     return BillingImportOut(
+        ok=True,
         rows_read=result.rows_read,
         counterparties=result.counterparties,
         records=result.records,
         skipped=result.skipped,
         errors=result.errors,
-        snapshot_id=snapshot_id,
+        snapshot_id=snap.id,
+        log_id=log.id,
+    )
+
+
+@router.get("/import/logs/{log_id}/file")
+async def download_import_file(
+    _admin: AdminUser,
+    log_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> Response:
+    """Logdagi (xatoli) yuklangan billing faylni qaytaradi."""
+    log = await db.get(ImportLog, log_id)
+    if log is None or not log.file_data:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Fayl topilmadi")
+    try:
+        raw = base64.b64decode(log.file_data)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Fayl buzilgan") from e
+    fname = log.filename or "billing.xlsx"
+    return Response(
+        content=raw,
+        media_type=log.file_mime or "application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
     )
 
 
@@ -398,6 +475,7 @@ async def get_audit_log(
     # Shu auditlarga bog'liq snapshotlar (rollback uchun)
     audit_ids = [log.id for log, _ in rows]
     snap_map: dict[int, ChangeSnapshot] = {}
+    log_map: dict[int, ImportLog] = {}
     if audit_ids:
         snaps = await db.execute(
             select(ChangeSnapshot).where(ChangeSnapshot.audit_id.in_(audit_ids))
@@ -405,6 +483,12 @@ async def get_audit_log(
         for s in snaps.scalars():
             if s.audit_id is not None:
                 snap_map[s.audit_id] = s
+        imp_logs = await db.execute(
+            select(ImportLog).where(ImportLog.audit_id.in_(audit_ids))
+        )
+        for il in imp_logs.scalars():
+            if il.audit_id is not None:
+                log_map[il.audit_id] = il
 
     now = datetime.now(timezone.utc)
 
@@ -433,6 +517,17 @@ async def get_audit_log(
                 created = created.replace(tzinfo=timezone.utc)
             revertable = (now - created) <= timedelta(hours=REVERT_WINDOW_HOURS)
 
+        imp = log_map.get(log.id)
+        import_log_id = None
+        import_failed = False
+        error_count = 0
+        if imp is not None:
+            import_failed = imp.status == "failed"
+            error_count = len(imp.errors or [])
+            # Faqat fayl saqlangan bo'lsa yuklab olish mumkin (xatoli importlar)
+            if imp.file_data:
+                import_log_id = imp.id
+
         out.append(
             AuditLogOut(
                 id=log.id,
@@ -450,6 +545,9 @@ async def get_audit_log(
                 snapshot_id=snapshot_id,
                 revertable=revertable,
                 reverted=reverted,
+                import_log_id=import_log_id,
+                import_failed=import_failed,
+                error_count=error_count,
             )
         )
     return out

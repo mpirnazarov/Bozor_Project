@@ -14,6 +14,7 @@ ACTION_LABELS: dict[str, str] = {
     "import_balances": "Balanslar import qilindi (Excel)",
     "import_excel": "Balanslar import qilindi (Excel)",
     "import_billing": "Billing import qilindi",
+    "import_billing_failed": "Billing import RAD ETILDI (xato)",
     "revert": "Amal ortga qaytarildi",
     "update_dashboard": "Dashboard summalari yangilandi",
     "update_shop": "Magazin tahrirlandi",
@@ -34,6 +35,7 @@ RESOURCE_LABELS: dict[str, str] = {
     "balances": "Balanslar",
     "monthly_balances": "Billing (oylik balanslar)",
     "change_snapshot": "Amal (snapshot)",
+    "import_log": "Import jurnali (fayl)",
     "dashboard": "Dashboard",
 }
 

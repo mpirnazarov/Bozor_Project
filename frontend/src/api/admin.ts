@@ -29,6 +29,9 @@ export interface AuditLog {
   snapshot_id: number | null;
   revertable: boolean;
   reverted: boolean;
+  import_log_id: number | null;
+  import_failed: boolean;
+  error_count: number;
 }
 
 export async function getAuditLog(limit = 50): Promise<AuditLog[]> {
@@ -39,12 +42,14 @@ export async function getAuditLog(limit = 50): Promise<AuditLog[]> {
 }
 
 export interface BillingImportResult {
+  ok: boolean;
   rows_read: number;
   counterparties: number;
   records: number;
   skipped: number;
   errors: string[];
   snapshot_id: number | null;
+  log_id: number | null;
 }
 
 export async function importBilling(
@@ -66,6 +71,10 @@ export async function revertAction(snapshotId: number): Promise<{ ok: boolean; m
     `/admin/revert/${snapshotId}`,
   );
   return data;
+}
+
+export function importLogFileUrl(logId: number): string {
+  return `${apiClient.defaults.baseURL}/admin/import/logs/${logId}/file`;
 }
 
 export interface ImportResult {

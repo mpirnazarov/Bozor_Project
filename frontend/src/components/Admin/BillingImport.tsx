@@ -20,10 +20,15 @@ export function BillingImport() {
     mutationFn: () => importBilling(file!, year, month),
     onSuccess: (r) => {
       setResult(r);
-      // Xarita/dashboard yangilansin
-      qc.invalidateQueries({ queryKey: ["pavilions"] });
-      qc.invalidateQueries({ queryKey: ["dashboard"] });
-      qc.invalidateQueries({ queryKey: ["audit-log"] });
+      // Faqat haqiqiy muvaffaqiyatda keshni yangilaymiz
+      if (r.ok) {
+        qc.invalidateQueries({ queryKey: ["pavilions"] });
+        qc.invalidateQueries({ queryKey: ["dashboard"] });
+        qc.invalidateQueries({ queryKey: ["audit-log"] });
+      } else {
+        // Xatoli import ham audit logga tushadi
+        qc.invalidateQueries({ queryKey: ["audit-log"] });
+      }
     },
   });
 
@@ -92,11 +97,11 @@ export function BillingImport() {
 
       {mutation.isError && (
         <div className="flex items-center gap-2 rounded-lg bg-red-50 px-4 py-2 text-sm font-semibold text-red-600">
-          <AlertTriangle size={16} /> Import xatosi — faylni tekshiring
+          <AlertTriangle size={16} /> Server xatosi — qayta urinib ko'ring
         </div>
       )}
 
-      {result && (
+      {result && result.ok && (
         <div className="card space-y-2 p-4 text-sm">
           <div className="flex items-center gap-2 font-bold text-status-paid">
             <CheckCircle2 size={18} /> Import muvaffaqiyatli
@@ -110,11 +115,24 @@ export function BillingImport() {
           <p className="text-xs text-ink-faint">
             Ma'lumotlar {MONTHS[month - 1]} {year} uchun yangilandi. Xato bo'lsa — Audit jurnalidan ortga qaytaring.
           </p>
-          {result.errors.length > 0 && (
-            <div className="mt-2 max-h-40 overflow-y-auto rounded bg-amber-50 p-2 text-xs text-amber-700">
-              {result.errors.map((e, i) => <div key={i}>{e}</div>)}
-            </div>
-          )}
+        </div>
+      )}
+
+      {result && !result.ok && (
+        <div className="space-y-2 rounded-xl border-2 border-red-200 bg-red-50 p-4 text-sm">
+          <div className="flex items-center gap-2 font-bold text-red-600">
+            <AlertTriangle size={18} /> Import bekor qilindi — hech narsa saqlanmadi
+          </div>
+          <p className="text-red-700">
+            Faylda <b>{result.errors.length}</b> ta muammo topildi ({result.rows_read} qator o'qildi).
+            Quyidagi xatolarni tuzatib, qaytadan yuklang. Bu urinish Audit jurnalida saqlandi
+            (faylni o'sha yerdan ham yuklab olishingiz mumkin).
+          </p>
+          <div className="max-h-56 overflow-y-auto rounded-lg bg-white p-3 text-xs text-red-700">
+            {result.errors.map((e, i) => (
+              <div key={i} className="border-b border-red-100 py-1 last:border-0">{e}</div>
+            ))}
+          </div>
         </div>
       )}
     </div>

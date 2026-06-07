@@ -98,3 +98,7 @@ class AuditLogOut(BaseModel):
     snapshot_id: int | None = None
     revertable: bool = False
     reverted: bool = False
+    # Xatoli import fayli (logdan yuklab olish uchun)
+    import_log_id: int | None = None
+    import_failed: bool = False
+    error_count: int = 0

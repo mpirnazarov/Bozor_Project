@@ -2,6 +2,7 @@
 from app.models.audit_log import AuditLog
 from app.models.change_snapshot import ChangeSnapshot
 from app.models.counterparty import Counterparty
+from app.models.import_log import ImportLog
 from app.models.market import Market
 from app.models.monthly_balance import (
     RU_TYPE_TO_CATEGORY,
@@ -33,4 +34,5 @@ __all__ = [
     "HIDE_UNMATCHED_KEY",
     "AuditLog",
     "ChangeSnapshot",
+    "ImportLog",
 ]

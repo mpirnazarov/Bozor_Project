@@ -2,15 +2,16 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
   Plus, Pencil, Trash2, Upload, Palette, EyeOff, LayoutDashboard,
-  Power, Activity, User as UserIcon, Clock, Undo2, RotateCcw,
+  Power, Activity, User as UserIcon, Clock, Undo2, RotateCcw, Download, AlertTriangle,
 } from "lucide-react";
-import { getAuditLog, revertAction } from "@/api/admin";
+import { getAuditLog, revertAction, importLogFileUrl } from "@/api/admin";
 import { useT } from "@/i18n/useT";
 
 // Amalga qarab rang va ikonka
 function actionStyle(action: string): { color: string; bg: string; icon: React.ReactNode } {
   if (action.startsWith("create")) return { color: "#16a34a", bg: "rgba(22,163,74,0.1)", icon: <Plus size={16} /> };
   if (action.startsWith("delete")) return { color: "#dc2626", bg: "rgba(220,38,38,0.1)", icon: <Trash2 size={16} /> };
+  if (action === "import_billing_failed") return { color: "#dc2626", bg: "rgba(220,38,38,0.1)", icon: <AlertTriangle size={16} /> };
   if (action.startsWith("import")) return { color: "#0066ff", bg: "rgba(0,102,255,0.1)", icon: <Upload size={16} /> };
   if (action === "update_theme") return { color: "#7c3aed", bg: "rgba(124,58,237,0.1)", icon: <Palette size={16} /> };
   if (action === "update_hide_unmatched") return { color: "#d97706", bg: "rgba(217,119,6,0.1)", icon: <EyeOff size={16} /> };
@@ -91,6 +92,25 @@ export function AuditLogView() {
                   )}
                 </span>
               </div>
+
+              {/* Xatoli billing import — fayl + xatolar soni */}
+              {(row.import_failed || row.import_log_id != null) && (
+                <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                  {row.import_failed && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700">
+                      <AlertTriangle size={12} /> {row.error_count} ta xato — saqlanmadi
+                    </span>
+                  )}
+                  {row.import_log_id != null && (
+                    <a
+                      href={importLogFileUrl(row.import_log_id)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-ink-soft transition-colors hover:bg-slate-100"
+                    >
+                      <Download size={14} /> Faylni yuklab olish
+                    </a>
+                  )}
+                </div>
+              )}
 
               {/* Ortga qaytarish (rollback) — faqat 24 soat ichidagi snapshotli amallar */}
               {row.snapshot_id != null && (row.revertable || row.reverted) && (
