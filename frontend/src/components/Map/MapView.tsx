@@ -36,6 +36,18 @@ export function MapView({ onSelectPavilion }: Props) {
     queryFn: () => getPavilions(activeLayer?.id),
   });
 
+  // Joriy qavat rasmi manbasi
+  const mapSrc = activeLayer?.has_image ? mapImageUrl(activeLayer.id) : "/map.jpg";
+
+  // Rasm yuklanmaguncha progress. DIQQAT: hook'lar har doim early return'lardan
+  // OLDIN chaqirilishi kerak (React hooks qoidasi).
+  const [imgLoading, setImgLoading] = useState(true);
+  useEffect(() => {
+    setImgLoading(true);
+    const tmr = window.setTimeout(() => setImgLoading(false), 4000);
+    return () => window.clearTimeout(tmr);
+  }, [mapSrc]);
+
   const svgRef = useRef<SVGSVGElement>(null);
   const [vb, setVb] = useState<ViewBox>({ x: 0, y: 0, w: VIEW_W, h: VIEW_H });
   const pan = useRef<{ active: boolean; moved: boolean; sx: number; sy: number; ox: number; oy: number }>({
@@ -143,19 +155,6 @@ export function MapView({ onSelectPavilion }: Props) {
   }
 
   const safePavilions = Array.isArray(pavilions) ? pavilions : [];
-
-  // Joriy qavat rasmi manbasi
-  const mapSrc = activeLayer?.has_image ? mapImageUrl(activeLayer.id) : "/map.jpg";
-
-  // Rasm to'liq yuklanmaguncha progress ko'rsatamiz (xarita almashganda).
-  // Yashirin <img> preloader orqali ishonchli kuzatamiz + xavfsizlik timeout.
-  const [imgLoading, setImgLoading] = useState(true);
-  useEffect(() => {
-    setImgLoading(true);
-    // Agar rasm 4s ichида kelmasa — baribir ko'rsatamiz (overlay qotib qolmasin)
-    const tmr = window.setTimeout(() => setImgLoading(false), 4000);
-    return () => window.clearTimeout(tmr);
-  }, [mapSrc]);
 
   return (
     <div className="card relative overflow-hidden">
