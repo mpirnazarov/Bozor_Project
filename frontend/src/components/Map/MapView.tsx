@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 import { Plus, Minus, Maximize2, ChevronLeft, ChevronRight, Layers } from "lucide-react";
 import { getPavilions } from "@/api/pavilions";
 import { getMapLayers, mapImageUrl } from "@/api/maps";
@@ -126,7 +126,11 @@ export function MapView({ onSelectPavilion }: Props) {
     );
   }
 
-  if (!Array.isArray(pavilions) || pavilions.length === 0) {
+  // Faqat HECH narsa bo'lmaganda (xarita ham, region ham yo'q) xabar ko'rsatamiz.
+  // Agar xarita (qavat) bo'lsa — regionlar bo'sh bo'lsa ham xaritani ko'rsatamiz.
+  const hasLayer = Array.isArray(layers) && layers.length > 0;
+  const noPavilions = !Array.isArray(pavilions) || pavilions.length === 0;
+  if (noPavilions && !hasLayer) {
     return (
       <div className="card p-6 text-center text-sm text-slate-400">
         Pavilionlar topilmadi. Ma'lumotlar bazasi seed qilinmagan yoki API
@@ -135,8 +139,40 @@ export function MapView({ onSelectPavilion }: Props) {
     );
   }
 
+  const safePavilions = Array.isArray(pavilions) ? pavilions : [];
+
+  // Joriy qavat rasmi manbasi
+  const mapSrc = activeLayer?.has_image ? mapImageUrl(activeLayer.id) : "/map.jpg";
+
+  // Rasm to'liq yuklanmaguncha progress ko'rsatamiz (xarita almashganda).
+  const [imgLoading, setImgLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    setImgLoading(true);
+    const img = new Image();
+    img.onload = () => { if (!cancelled) setImgLoading(false); };
+    img.onerror = () => { if (!cancelled) setImgLoading(false); };
+    img.src = mapSrc;
+    // Agar rasm keshda bo'lsa, onload darrov ishlamasligi mumkin — tekshiramiz
+    if (img.complete) setImgLoading(false);
+    return () => { cancelled = true; };
+  }, [mapSrc]);
+
   return (
     <div className="card relative overflow-hidden">
+      {/* Rasm yuklanayotganda progress overlay (xarita almashganda kutiladi) */}
+      {imgLoading && (
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-white/75 backdrop-blur-sm">
+          <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-brand/25 border-t-brand" />
+          <span className="text-sm font-semibold text-ink-soft">{t("map.loading")}</span>
+        </div>
+      )}
+      {/* Bu qavatda hali region chizilmagan bo'lsa — xabar (xarita baribir ko'rinadi) */}
+      {!imgLoading && safePavilions.length === 0 && (
+        <div className="pointer-events-none absolute left-1/2 top-4 z-10 -translate-x-1/2 rounded-full bg-ink/70 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur">
+          Bu qavatda hali region yo'q
+        </div>
+      )}
       {/* Zoom boshqaruvi */}
       <div className="absolute right-3 top-3 z-10 flex flex-col gap-1.5">
         <button
@@ -213,7 +249,7 @@ export function MapView({ onSelectPavilion }: Props) {
         onPointerLeave={handlePointerUp}
       >
         <image
-          href={activeLayer?.has_image ? mapImageUrl(activeLayer.id) : "/map.jpg"}
+          href={mapSrc}
           x="0"
           y="0"
           width={VIEW_W}
@@ -224,7 +260,7 @@ export function MapView({ onSelectPavilion }: Props) {
           }}
         />
 
-        {pavilions.map((p) => {
+        {safePavilions.map((p) => {
           const meta = p.meta ?? {};
           const extra = (meta.extra_polygons as string[] | undefined) ?? [];
           const fontSize = (meta.label_font_size as number | undefined) ?? 20;
