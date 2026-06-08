@@ -31,6 +31,7 @@ class Invoice(Base):
 
     # To'lov holati (faqat owner boshqaradi)
     is_paid: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    paid_amount: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=0, nullable=False)
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     paid_note: Mapped[str | None] = mapped_column(String(300), nullable=True)
 

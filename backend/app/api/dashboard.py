@@ -42,7 +42,7 @@ async def market_invoices(
 ) -> dict:
     """Bozorning o'z schyotlari (faqat ko'rish). market_admin/viewer uchun."""
     from app.services.invoice_service import (
-        list_invoices, stats_by_market, compute_status, days_left,
+        list_invoices, stats_by_market, compute_status, days_left, remaining,
     )
     items, total = await list_invoices(db, market_id=market.id, limit=200)
     stats = await stats_by_market(db, market_id=market.id)
@@ -53,6 +53,8 @@ async def market_invoices(
             "title": inv.title,
             "description": inv.description,
             "amount": float(inv.amount),
+            "paid_amount": float(inv.paid_amount or 0),
+            "remaining": remaining(inv),
             "currency": inv.currency,
             "due_date": inv.due_date.isoformat() if inv.due_date else None,
             "is_paid": inv.is_paid,

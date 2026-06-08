@@ -4,16 +4,18 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Receipt, Plus, Search, ArrowLeft, CircleCheck, Clock, AlertTriangle,
   Paperclip, Trash2, X, Loader2, FileText, Calendar, Wallet, Filter,
+  Pencil, Coins,
 } from "lucide-react";
 import {
-  getInvoices, createInvoice, setInvoicePaid, deleteInvoice, invoiceDocUrl,
-  ownerListMarkets, type Invoice, type InvoiceCreateInput,
+  getInvoices, createInvoice, setInvoicePaid, setInvoicePaidAmount, updateInvoice,
+  deleteInvoice, invoiceDocUrl, ownerListMarkets, type Invoice, type InvoiceCreateInput,
 } from "@/api/owner";
 
-type StatusFilter = "all" | "paid" | "pending" | "overdue";
+type StatusFilter = "all" | "paid" | "partial" | "pending" | "overdue";
 
 const STATUS = {
   paid:    { label: "To'langan",    color: "#16a34a", icon: CircleCheck },
+  partial: { label: "Qisman",       color: "#0ea5e9", icon: Coins },
   pending: { label: "Kutilmoqda",   color: "#eab308", icon: Clock },
   overdue: { label: "Muddati o'tgan", color: "#dc2626", icon: AlertTriangle },
 } as const;
@@ -33,6 +35,8 @@ export function InvoicesPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [marketFilter, setMarketFilter] = useState<number | "all">("all");
   const [showCreate, setShowCreate] = useState(false);
+  const [editInv, setEditInv] = useState<Invoice | null>(null);
+  const [payInv, setPayInv] = useState<Invoice | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["owner-invoices"],
@@ -121,7 +125,7 @@ export function InvoicesPage() {
 
         {/* Status filtr tablari */}
         <div className="mb-5 flex flex-wrap gap-2">
-          {(["all", "pending", "overdue", "paid"] as StatusFilter[]).map((s) => {
+          {(["all", "pending", "partial", "overdue", "paid"] as StatusFilter[]).map((s) => {
             const active = statusFilter === s;
             const meta = s === "all" ? null : STATUS[s];
             const color = meta?.color || "#5b9dff";
@@ -153,6 +157,8 @@ export function InvoicesPage() {
             {filtered.map((inv) => (
               <InvoiceCard key={inv.id} inv={inv}
                 onTogglePaid={() => setInvoicePaid(inv.id, !inv.is_paid).then(() => qc.invalidateQueries({ queryKey: ["owner-invoices"] }))}
+                onPay={() => setPayInv(inv)}
+                onEdit={() => setEditInv(inv)}
                 onDelete={() => { if (confirm("Bu to'lovni o'chirishni tasdiqlaysizmi?")) deleteInvoice(inv.id).then(() => qc.invalidateQueries({ queryKey: ["owner-invoices"] })); }}
               />
             ))}
@@ -162,6 +168,10 @@ export function InvoicesPage() {
 
       {showCreate && <CreateInvoiceModal onClose={() => setShowCreate(false)}
         onDone={() => { setShowCreate(false); qc.invalidateQueries({ queryKey: ["owner-invoices"] }); }} />}
+      {editInv && <EditInvoiceModal inv={editInv} onClose={() => setEditInv(null)}
+        onDone={() => { setEditInv(null); qc.invalidateQueries({ queryKey: ["owner-invoices"] }); }} />}
+      {payInv && <PayAmountModal inv={payInv} onClose={() => setPayInv(null)}
+        onDone={() => { setPayInv(null); qc.invalidateQueries({ queryKey: ["owner-invoices"] }); }} />}
     </div>
   );
 }
@@ -182,11 +192,13 @@ function StatCard({ label, value, accent, icon, count }: {
   );
 }
 
-function InvoiceCard({ inv, onTogglePaid, onDelete }: {
-  inv: Invoice; onTogglePaid: () => void; onDelete: () => void;
+function InvoiceCard({ inv, onTogglePaid, onPay, onEdit, onDelete }: {
+  inv: Invoice; onTogglePaid: () => void; onPay: () => void; onEdit: () => void; onDelete: () => void;
 }) {
   const meta = STATUS[inv.status];
   const Icon = meta.icon;
+  const hasPartial = inv.paid_amount > 0 && !inv.is_paid;
+  const pct = inv.amount > 0 ? Math.min(100, Math.round((inv.paid_amount / inv.amount) * 100)) : 0;
   return (
     <div className="rounded-2xl border bg-white/[0.04] p-4 transition-colors hover:bg-white/[0.06]"
       style={{ borderColor: `${meta.color}33` }}>
@@ -207,7 +219,7 @@ function InvoiceCard({ inv, onTogglePaid, onDelete }: {
               {inv.status === "overdue" && inv.days_left != null && (
                 <span className="font-bold text-[#f87171]"> ({Math.abs(inv.days_left)} kun o'tdi)</span>
               )}
-              {inv.status === "pending" && inv.days_left != null && inv.days_left >= 0 && (
+              {(inv.status === "pending" || inv.status === "partial") && inv.days_left != null && inv.days_left >= 0 && (
                 <span className="text-amber-400"> ({inv.days_left} kun qoldi)</span>
               )}
             </span>
@@ -224,7 +236,27 @@ function InvoiceCard({ inv, onTogglePaid, onDelete }: {
           {inv.is_paid && inv.paid_at && <div className="text-[11px] text-[#4ade80]">{fmtDate(inv.paid_at)} da to'landi</div>}
         </div>
       </div>
-      <div className="mt-3 flex gap-2 border-t border-white/[0.06] pt-3">
+
+      {/* Qisman to'lov progress */}
+      {hasPartial && (
+        <div className="mt-3">
+          <div className="mb-1 flex items-center justify-between text-xs">
+            <span className="text-[#38bdf8]">To'langan: {fmtMoney(inv.paid_amount, inv.currency)}</span>
+            <span className="text-slate-400">Qoldi: <b className="text-white">{fmtMoney(inv.remaining, inv.currency)}</b></span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-white/[0.08]">
+            <div className="h-full rounded-full bg-gradient-to-r from-[#0ea5e9] to-[#38bdf8] transition-all"
+              style={{ width: `${pct}%` }} />
+          </div>
+          <div className="mt-0.5 text-right text-[10px] font-semibold text-[#38bdf8]">{pct}%</div>
+        </div>
+      )}
+
+      <div className="mt-3 flex flex-wrap gap-2 border-t border-white/[0.06] pt-3">
+        <button onClick={onPay}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-[#0ea5e9]/15 px-3 py-1.5 text-xs font-semibold text-[#38bdf8] transition-colors hover:bg-[#0ea5e9]/25">
+          <Coins size={13} /> To'lov kiritish
+        </button>
         <button onClick={onTogglePaid}
           className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors"
           style={{
@@ -232,6 +264,10 @@ function InvoiceCard({ inv, onTogglePaid, onDelete }: {
             color: inv.is_paid ? "#94a3b8" : "#4ade80",
           }}>
           <CircleCheck size={13} /> {inv.is_paid ? "To'lanmagan deb belgilash" : "To'landi deb belgilash"}
+        </button>
+        <button onClick={onEdit}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold text-slate-300 transition-colors hover:bg-white/10 hover:text-white">
+          <Pencil size={13} /> Tahrirlash
         </button>
         <button onClick={onDelete}
           className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-[#dc2626]/30 px-3 py-1.5 text-xs font-semibold text-[#f87171] transition-colors hover:bg-[#dc2626]/15">
@@ -329,6 +365,152 @@ function CreateInvoiceModal({ onClose, onDone }: { onClose: () => void; onDone: 
             className="mt-1 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#0066ff] to-[#0090ff] px-4 py-3 text-sm font-bold text-white disabled:opacity-40">
             {mut.isPending ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
             To'lovni qo'shish
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PayAmountModal({ inv, onClose, onDone }: { inv: Invoice; onClose: () => void; onDone: () => void }) {
+  const [amount, setAmount] = useState<number>(inv.paid_amount || 0);
+  const [note, setNote] = useState("");
+  const mut = useMutation({
+    mutationFn: () => setInvoicePaidAmount(inv.id, amount, note || undefined),
+    onSuccess: onDone,
+  });
+  const remaining = Math.max(inv.amount - amount, 0);
+  const willBePaid = amount >= inv.amount;
+
+  return (
+    <div className="fixed inset-0 z-[70] grid place-items-center bg-black/70 p-4 backdrop-blur-md animate-fade-in" onClick={onClose}>
+      <div className="w-full max-w-md rounded-3xl border border-white/10 bg-[#0c1424] p-6 shadow-2xl animate-scale-in" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-1 flex items-center justify-between">
+          <div className="flex items-center gap-2 font-display text-lg font-bold text-white">
+            <Coins size={20} className="text-[#38bdf8]" /> To'lov kiritish
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-white"><X size={20} /></button>
+        </div>
+        <p className="mb-4 text-sm text-slate-400">{inv.title} — {inv.market_name}</p>
+
+        <div className="mb-3 rounded-xl bg-white/[0.04] p-3 text-sm">
+          <div className="flex justify-between py-0.5"><span className="text-slate-400">Jami summa</span><span className="font-bold text-white">{fmtMoney(inv.amount, inv.currency)}</span></div>
+          <div className="flex justify-between py-0.5"><span className="text-slate-400">Hozirgача to'langan</span><span className="text-[#38bdf8]">{fmtMoney(inv.paid_amount, inv.currency)}</span></div>
+        </div>
+
+        <Field label="Jami to'langan summa (qisman bo'lsa ham)">
+          <input type="number" min={0} max={inv.amount} value={amount || ""} onChange={(e) => setAmount(Number(e.target.value))}
+            className="w-full rounded-xl border border-white/10 bg-[#0a1120] px-3 py-2.5 text-sm text-white outline-none focus:border-[#0ea5e9]" />
+        </Field>
+        <div className="mt-1 flex gap-2">
+          <button onClick={() => setAmount(inv.amount)}
+            className="rounded-lg border border-white/10 px-2.5 py-1 text-[11px] font-semibold text-slate-300 hover:bg-white/10">To'liq summa</button>
+          <button onClick={() => setAmount(0)}
+            className="rounded-lg border border-white/10 px-2.5 py-1 text-[11px] font-semibold text-slate-300 hover:bg-white/10">Nol</button>
+        </div>
+
+        <div className="mt-3 rounded-xl p-3 text-sm" style={{ background: willBePaid ? "#16a34a14" : "#0ea5e914" }}>
+          {willBePaid ? (
+            <span className="font-semibold text-[#4ade80]">✓ To'liq to'langan deb belgilanadi (yashil)</span>
+          ) : (
+            <span className="text-slate-300">Qoladi: <b className="text-white">{fmtMoney(remaining, inv.currency)}</b> — "Qisman" holatida qoladi</span>
+          )}
+        </div>
+
+        <div className="mt-3">
+          <Field label="Izoh (ixtiyoriy)">
+            <input value={note} onChange={(e) => setNote(e.target.value)}
+              className="w-full rounded-xl border border-white/10 bg-[#0a1120] px-3 py-2.5 text-sm text-white outline-none focus:border-[#0ea5e9]" />
+          </Field>
+        </div>
+
+        {mut.isError && <div className="mt-2 text-xs font-semibold text-[#f87171]">Xato: saqlab bo'lmadi.</div>}
+
+        <button onClick={() => mut.mutate()} disabled={mut.isPending}
+          className="mt-4 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#0ea5e9] to-[#38bdf8] px-4 py-3 text-sm font-bold text-white disabled:opacity-40">
+          {mut.isPending ? <Loader2 size={16} className="animate-spin" /> : <Coins size={16} />}
+          Saqlash
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function EditInvoiceModal({ inv, onClose, onDone }: { inv: Invoice; onClose: () => void; onDone: () => void }) {
+  const [title, setTitle] = useState(inv.title);
+  const [description, setDescription] = useState(inv.description || "");
+  const [amount, setAmount] = useState(inv.amount);
+  const [dueDate, setDueDate] = useState(inv.due_date || "");
+  const [docName, setDocName] = useState<string | null>(null);
+  const [docPayload, setDocPayload] = useState<{ doc_data: string; doc_name: string; doc_mime: string } | null>(null);
+
+  const mut = useMutation({
+    mutationFn: () => updateInvoice(inv.id, {
+      title: title.trim(), description, amount, due_date: dueDate || null,
+      ...(docPayload || {}),
+    }),
+    onSuccess: onDone,
+  });
+
+  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 8 * 1024 * 1024) { alert("Fayl 8 MB dan kichik bo'lsin"); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const base64 = result.includes(",") ? result.split(",", 2)[1] : result;
+      setDocPayload({ doc_data: base64, doc_name: file.name, doc_mime: file.type });
+      setDocName(file.name);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  const valid = title.trim().length > 0 && amount > 0;
+
+  return (
+    <div className="fixed inset-0 z-[70] grid place-items-center bg-black/70 p-4 backdrop-blur-md animate-fade-in" onClick={onClose}>
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-white/10 bg-[#0c1424] p-6 shadow-2xl animate-scale-in" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-2 font-display text-lg font-bold text-white">
+            <Pencil size={18} className="text-[#5b9dff]" /> To'lovni tahrirlash
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-white"><X size={20} /></button>
+        </div>
+
+        <div className="space-y-3">
+          <Field label="Nima uchun (sarlavha) *">
+            <input value={title} onChange={(e) => setTitle(e.target.value)}
+              className="w-full rounded-xl border border-white/10 bg-[#0a1120] px-3 py-2.5 text-sm text-white outline-none focus:border-[#0066ff]" />
+          </Field>
+          <Field label="Batafsil izoh">
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2}
+              className="w-full resize-none rounded-xl border border-white/10 bg-[#0a1120] px-3 py-2.5 text-sm text-white outline-none focus:border-[#0066ff]" />
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Summa *">
+              <input type="number" min={0} value={amount || ""} onChange={(e) => setAmount(Number(e.target.value))}
+                className="w-full rounded-xl border border-white/10 bg-[#0a1120] px-3 py-2.5 text-sm text-white outline-none focus:border-[#0066ff]" />
+            </Field>
+            <Field label="Muddat (deadline)">
+              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)}
+                className="w-full rounded-xl border border-white/10 bg-[#0a1120] px-3 py-2.5 text-sm text-white outline-none focus:border-[#0066ff]" />
+            </Field>
+          </div>
+          <Field label="Hujjatni almashtirish (ixtiyoriy)">
+            <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-white/15 bg-[#0a1120] px-3 py-2.5 text-sm text-slate-400 hover:border-[#0066ff]">
+              <FileText size={16} className="text-[#5b9dff]" />
+              {docName || (inv.has_doc ? `Joriy: ${inv.doc_name || "hujjat"} (almashtirish)` : "PDF yoki rasm tanlang")}
+              <input type="file" accept=".pdf,image/*" onChange={onFile} className="hidden" />
+            </label>
+          </Field>
+
+          {mut.isError && <div className="text-xs font-semibold text-[#f87171]">Xato: saqlab bo'lmadi.</div>}
+
+          <button onClick={() => mut.mutate()} disabled={!valid || mut.isPending}
+            className="mt-1 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#0066ff] to-[#0090ff] px-4 py-3 text-sm font-bold text-white disabled:opacity-40">
+            {mut.isPending ? <Loader2 size={16} className="animate-spin" /> : <CircleCheck size={16} />}
+            Saqlash
           </button>
         </div>
       </div>

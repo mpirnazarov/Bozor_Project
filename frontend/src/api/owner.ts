@@ -202,12 +202,14 @@ export interface Invoice {
   title: string;
   description: string | null;
   amount: number;
+  paid_amount: number;
+  remaining: number;
   currency: string;
   due_date: string | null;
   is_paid: boolean;
   paid_at: string | null;
   paid_note: string | null;
-  status: "paid" | "pending" | "overdue";
+  status: "paid" | "partial" | "pending" | "overdue";
   days_left: number | null;
   has_doc: boolean;
   doc_name: string | null;
@@ -216,11 +218,12 @@ export interface Invoice {
 
 export interface InvoiceStats {
   count: number;
-  counts: { paid: number; pending: number; overdue: number };
+  counts: { paid: number; partial: number; pending: number; overdue: number };
   total_amount: number;
   paid_amount: number;
   pending_amount: number;
   overdue_amount: number;
+  outstanding_amount: number;
 }
 
 export interface InvoiceList {
@@ -255,6 +258,16 @@ export async function createInvoice(input: InvoiceCreateInput): Promise<Invoice>
 
 export async function setInvoicePaid(id: number, is_paid: boolean, note?: string): Promise<Invoice> {
   const { data } = await apiClient.post<Invoice>(`/owner/invoices/${id}/paid`, { is_paid, note });
+  return data;
+}
+
+export async function setInvoicePaidAmount(id: number, paid_amount: number, note?: string): Promise<Invoice> {
+  const { data } = await apiClient.post<Invoice>(`/owner/invoices/${id}/pay-amount`, { paid_amount, note });
+  return data;
+}
+
+export async function updateInvoice(id: number, input: Partial<InvoiceCreateInput>): Promise<Invoice> {
+  const { data } = await apiClient.patch<Invoice>(`/owner/invoices/${id}`, input);
   return data;
 }
 

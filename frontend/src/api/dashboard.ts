@@ -14,11 +14,13 @@ export interface MarketInvoice {
   title: string;
   description: string | null;
   amount: number;
+  paid_amount: number;
+  remaining: number;
   currency: string;
   due_date: string | null;
   is_paid: boolean;
   paid_at: string | null;
-  status: "paid" | "pending" | "overdue";
+  status: "paid" | "partial" | "pending" | "overdue";
   days_left: number | null;
   has_doc: boolean;
   doc_name: string | null;
@@ -31,11 +33,12 @@ export interface MarketInvoiceList {
   total: number;
   stats: {
     count: number;
-    counts: { paid: number; pending: number; overdue: number };
+    counts: { paid: number; partial: number; pending: number; overdue: number };
     total_amount: number;
     paid_amount: number;
     pending_amount: number;
     overdue_amount: number;
+    outstanding_amount: number;
   };
 }
 

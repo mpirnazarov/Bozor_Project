@@ -39,7 +39,7 @@ export function HomePage() {
     retry: false,
     enabled: isMarketAdmin,
   });
-  const unpaidCount = (marketInvoices?.stats?.counts.pending ?? 0) + (marketInvoices?.stats?.counts.overdue ?? 0);
+  const unpaidCount = (marketInvoices?.stats?.counts.pending ?? 0) + (marketInvoices?.stats?.counts.overdue ?? 0) + (marketInvoices?.stats?.counts.partial ?? 0);
   const t = useT();
 
   const [activePavilion, setActivePavilion] = useState<Pavilion | null>(null);

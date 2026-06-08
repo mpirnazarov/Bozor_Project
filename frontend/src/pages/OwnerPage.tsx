@@ -140,7 +140,11 @@ export function OwnerPage() {
     const ist = invoiceData?.stats;
     if (ist) {
       if (ist.counts.overdue > 0) { invLevel = "crit"; invMsg = `${ist.counts.overdue} ta to'lov muddati o'tgan`; }
-      else if (ist.counts.pending > 0) { invLevel = "warn"; invMsg = `${ist.counts.pending} ta to'lov kutilmoqda`; }
+      else if (ist.counts.pending > 0 || ist.counts.partial > 0) {
+        invLevel = "warn";
+        const waiting = ist.counts.pending + ist.counts.partial;
+        invMsg = `${waiting} ta to'lov kutilmoqda${ist.counts.partial > 0 ? ` (${ist.counts.partial} qisman)` : ""}`;
+      }
       else if (ist.count > 0) { invMsg = "Hamma to'lov amalga oshgan"; }
     }
 

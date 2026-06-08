@@ -7,6 +7,7 @@ import { getMarketInvoices, marketInvoiceDocUrl } from "@/api/dashboard";
 
 const STATUS = {
   paid:    { label: "To'langan",      color: "#16a34a", bg: "#16a34a14", icon: Clock },
+  partial: { label: "Qisman to'langan", color: "#0ea5e9", bg: "#0ea5e914", icon: Clock },
   pending: { label: "Kutilmoqda",     color: "#b45309", bg: "#eab30814", icon: Clock },
   overdue: { label: "Muddati o'tgan", color: "#dc2626", bg: "#dc262614", icon: AlertTriangle },
 } as const;
@@ -74,7 +75,7 @@ export function MarketInvoicesSection() {
                       {inv.status === "overdue" && inv.days_left != null && (
                         <span className="font-bold text-red-600"> ({Math.abs(inv.days_left)} kun o'tdi)</span>
                       )}
-                      {inv.status === "pending" && inv.days_left != null && inv.days_left >= 0 && (
+                      {(inv.status === "pending" || inv.status === "partial") && inv.days_left != null && inv.days_left >= 0 && (
                         <span className="font-semibold text-amber-700"> ({inv.days_left} kun qoldi)</span>
                       )}
                     </span>

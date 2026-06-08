@@ -370,8 +370,24 @@ class InvoicePaidBody(BaseModel):
     note: str | None = None
 
 
+class InvoicePaidAmountBody(BaseModel):
+    paid_amount: float
+    note: str | None = None
+
+
+class InvoiceUpdateBody(BaseModel):
+    title: str | None = None
+    amount: float | None = None
+    description: str | None = None
+    currency: str | None = None
+    due_date: date | None = None
+    doc_data: str | None = None
+    doc_name: str | None = None
+    doc_mime: str | None = None
+
+
 def _invoice_out(inv, market_name: str | None = None) -> dict:
-    from app.services.invoice_service import compute_status, days_left
+    from app.services.invoice_service import compute_status, days_left, remaining
     return {
         "id": inv.id,
         "market_id": inv.market_id,
@@ -379,6 +395,8 @@ def _invoice_out(inv, market_name: str | None = None) -> dict:
         "title": inv.title,
         "description": inv.description,
         "amount": float(inv.amount),
+        "paid_amount": float(inv.paid_amount or 0),
+        "remaining": remaining(inv),
         "currency": inv.currency,
         "due_date": inv.due_date.isoformat() if inv.due_date else None,
         "is_paid": inv.is_paid,
@@ -463,6 +481,65 @@ async def owner_set_invoice_paid(
     if inv is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Schyot topilmadi")
     await set_paid(db, inv, body.is_paid, body.note)
+    market = await db.get(Market, inv.market_id)
+    return _invoice_out(inv, market.name if market else None)
+
+
+@router.post("/invoices/{invoice_id}/pay-amount")
+async def owner_set_invoice_paid_amount(
+    _owner: OwnerUser,
+    invoice_id: int,
+    body: InvoicePaidAmountBody,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    """Qisman (yoki to'liq) to'lov summasini belgilash."""
+    from decimal import Decimal
+    from app.services.invoice_service import set_paid_amount
+    from app.models.invoice import Invoice
+    inv = await db.get(Invoice, invoice_id)
+    if inv is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Schyot topilmadi")
+    if body.paid_amount < 0:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Summa manfiy bo'lmasligi kerak")
+    await set_paid_amount(db, inv, Decimal(str(body.paid_amount)), body.note)
+    market = await db.get(Market, inv.market_id)
+    return _invoice_out(inv, market.name if market else None)
+
+
+@router.patch("/invoices/{invoice_id}")
+async def owner_update_invoice(
+    _owner: OwnerUser,
+    invoice_id: int,
+    body: InvoiceUpdateBody,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    """Schyotni tahrirlash."""
+    from decimal import Decimal
+    from app.services.invoice_service import update_invoice
+    from app.models.invoice import Invoice
+    inv = await db.get(Invoice, invoice_id)
+    if inv is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Schyot topilmadi")
+    fields: dict = {}
+    if body.title is not None:
+        if not body.title.strip():
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Sarlavha bo'sh bo'lmasin")
+        fields["title"] = body.title.strip()
+    if body.amount is not None:
+        if body.amount <= 0:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Summa 0 dan katta bo'lsin")
+        fields["amount"] = Decimal(str(body.amount))
+    if body.description is not None:
+        fields["description"] = body.description
+    if body.currency is not None:
+        fields["currency"] = body.currency
+    if body.due_date is not None:
+        fields["due_date"] = body.due_date
+    if body.doc_data is not None:
+        fields["doc_data"] = body.doc_data
+        fields["doc_name"] = body.doc_name
+        fields["doc_mime"] = body.doc_mime
+    await update_invoice(db, inv, **fields)
     market = await db.get(Market, inv.market_id)
     return _invoice_out(inv, market.name if market else None)
 

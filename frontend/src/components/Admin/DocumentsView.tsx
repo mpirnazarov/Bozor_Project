@@ -7,6 +7,7 @@ import { fmtUZS } from "@/lib/utils";
 
 const STATUS = {
   paid:    { label: "To'langan",      color: "#16a34a", bg: "#16a34a14", icon: CircleCheck },
+  partial: { label: "Qisman to'langan", color: "#0ea5e9", bg: "#0ea5e914", icon: Clock },
   pending: { label: "Kutilmoqda",     color: "#b45309", bg: "#eab30814", icon: Clock },
   overdue: { label: "Muddati o'tgan", color: "#dc2626", bg: "#dc262614", icon: AlertTriangle },
 } as const;
@@ -60,6 +61,8 @@ export function DocumentsView() {
             {toPay.map((inv) => {
               const meta = STATUS[inv.status === "paid" ? "pending" : inv.status];
               const Icon = meta.icon;
+              const hasPartial = inv.paid_amount > 0;
+              const pct = inv.amount > 0 ? Math.min(100, Math.round((inv.paid_amount / inv.amount) * 100)) : 0;
               return (
                 <div key={inv.id} className="rounded-xl border p-3" style={{ borderColor: meta.color + "33", background: meta.bg }}>
                   <div className="flex flex-wrap items-start justify-between gap-2">
@@ -75,7 +78,7 @@ export function DocumentsView() {
                           {inv.status === "overdue" && inv.days_left != null && (
                             <span className="font-bold text-red-600"> ({Math.abs(inv.days_left)} kun o'tdi)</span>
                           )}
-                          {inv.status === "pending" && inv.days_left != null && inv.days_left >= 0 && (
+                          {(inv.status === "pending" || inv.status === "partial") && inv.days_left != null && inv.days_left >= 0 && (
                             <span className="text-amber-600"> ({inv.days_left} kun qoldi)</span>
                           )}
                         </span>
@@ -86,6 +89,17 @@ export function DocumentsView() {
                           </a>
                         )}
                       </div>
+                      {hasPartial && (
+                        <div className="mt-2">
+                          <div className="mb-1 flex items-center justify-between text-xs">
+                            <span className="text-sky-600">To'langan: {fmtUZS(inv.paid_amount)}</span>
+                            <span className="text-ink-soft">Qoldi: <b className="text-ink">{fmtUZS(inv.remaining)}</b></span>
+                          </div>
+                          <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+                            <div className="h-full rounded-full bg-sky-500" style={{ width: pct + "%" }} />
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <div className="font-display text-lg font-extrabold text-ink">{fmtUZS(inv.amount)}</div>
                   </div>

@@ -17,12 +17,21 @@ from app.models.market import Market
 
 def compute_status(inv: Invoice, today: date | None = None) -> str:
     """Schyot holatini rang sifatida qaytaradi: paid | pending | overdue."""
-    if inv.is_paid:
+    paid_amt = inv.paid_amount or 0
+    if inv.is_paid or (paid_amt >= inv.amount and inv.amount > 0):
         return "paid"
     today = today or datetime.now(timezone.utc).date()
     if inv.due_date is not None and inv.due_date < today:
         return "overdue"
+    if paid_amt and paid_amt > 0:
+        return "partial"
     return "pending"
+
+
+def remaining(inv: Invoice) -> float:
+    """Qolgan to'lov summasi."""
+    rem = float(inv.amount) - float(inv.paid_amount or 0)
+    return rem if rem > 0 else 0.0
 
 
 def days_left(inv: Invoice, today: date | None = None) -> int | None:
@@ -66,10 +75,55 @@ async def create_invoice(
 
 
 async def set_paid(db: AsyncSession, inv: Invoice, is_paid: bool, note: str | None = None) -> Invoice:
+    """To'liq to'landi/to'lanmadi (eski tugma). To'langanda paid_amount = amount."""
     inv.is_paid = is_paid
+    inv.paid_amount = inv.amount if is_paid else Decimal("0")
     inv.paid_at = datetime.now(timezone.utc) if is_paid else None
     if note is not None:
         inv.paid_note = note
+    await db.commit()
+    await db.refresh(inv)
+    return inv
+
+
+async def set_paid_amount(db: AsyncSession, inv: Invoice, paid_amount: Decimal, note: str | None = None) -> Invoice:
+    """Qisman/to'liq to'lov summasini belgilaydi.
+
+    Faqat to'liq (paid_amount >= amount) bo'lsa is_paid = True (yashil) bo'ladi.
+    """
+    if paid_amount < 0:
+        paid_amount = Decimal("0")
+    if paid_amount > inv.amount:
+        paid_amount = inv.amount
+    inv.paid_amount = paid_amount
+    fully = paid_amount >= inv.amount and inv.amount > 0
+    inv.is_paid = bool(fully)
+    inv.paid_at = datetime.now(timezone.utc) if fully else None
+    if note is not None:
+        inv.paid_note = note
+    await db.commit()
+    await db.refresh(inv)
+    return inv
+
+
+async def update_invoice(db: AsyncSession, inv: Invoice, **fields) -> Invoice:
+    """Schyotni tahrirlash (title, amount, description, due_date, currency, doc_*)."""
+    allowed = {
+        "title", "amount", "description", "currency", "due_date",
+        "doc_data", "doc_name", "doc_mime",
+    }
+    for key, val in fields.items():
+        if key in allowed and val is not None:
+            setattr(inv, key, val)
+    # Agar summa o'zgargan bo'lsa va paid_amount endi to'liq bo'lsa — paid holatini yangilaymiz
+    if inv.amount > 0 and (inv.paid_amount or 0) >= inv.amount:
+        inv.is_paid = True
+        if inv.paid_at is None:
+            inv.paid_at = datetime.now(timezone.utc)
+    elif inv.is_paid and (inv.paid_amount or 0) < inv.amount:
+        # summa oshirilgan, endi to'liq emas
+        inv.is_paid = False
+        inv.paid_at = None
     await db.commit()
     await db.refresh(inv)
     return inv
@@ -97,7 +151,7 @@ async def list_invoices(
     items = list(rows.scalars())
 
     # Holat bo'yicha filtr (hisoblanadigan maydon — Python tomonda)
-    if status in ("paid", "pending", "overdue"):
+    if status in ("paid", "partial", "pending", "overdue"):
         items = [i for i in items if compute_status(i) == status]
 
     total = len(items)
@@ -105,7 +159,10 @@ async def list_invoices(
 
 
 async def stats_by_market(db: AsyncSession, market_id: int | None = None) -> dict:
-    """Umumiy statistika: jami, to'langan, kutilayotgan, muddati o'tgan summalar."""
+    """Umumiy statistika: jami, to'langan, kutilayotgan, muddati o'tgan summalar.
+
+    paid_amount — haqiqatda to'langan summa (qisman to'lovlar ham qo'shiladi).
+    """
     stmt = select(Invoice)
     if market_id is not None:
         stmt = stmt.where(Invoice.market_id == market_id)
@@ -114,20 +171,25 @@ async def stats_by_market(db: AsyncSession, market_id: int | None = None) -> dic
     today = datetime.now(timezone.utc).date()
 
     total_amount = Decimal("0")
-    paid_amount = Decimal("0")
+    paid_amount = Decimal("0")       # haqiqatda yig'ilgan (qisman ham)
+    outstanding_amount = Decimal("0")  # qolgan (to'lanmagan) jami
     overdue_amount = Decimal("0")
     pending_amount = Decimal("0")
-    counts = {"paid": 0, "pending": 0, "overdue": 0}
+    counts = {"paid": 0, "partial": 0, "pending": 0, "overdue": 0}
     for i in items:
         total_amount += i.amount
+        pa = i.paid_amount or Decimal("0")
+        paid_amount += pa
+        rem = i.amount - pa
+        if rem < 0:
+            rem = Decimal("0")
         st = compute_status(i, today)
         counts[st] += 1
-        if st == "paid":
-            paid_amount += i.amount
-        elif st == "overdue":
-            overdue_amount += i.amount
-        else:
-            pending_amount += i.amount
+        if st == "overdue":
+            overdue_amount += rem
+        elif st in ("pending", "partial"):
+            pending_amount += rem
+        outstanding_amount += rem
 
     return {
         "count": len(items),
@@ -136,4 +198,5 @@ async def stats_by_market(db: AsyncSession, market_id: int | None = None) -> dic
         "paid_amount": float(paid_amount),
         "pending_amount": float(pending_amount),
         "overdue_amount": float(overdue_amount),
+        "outstanding_amount": float(outstanding_amount),
     }
