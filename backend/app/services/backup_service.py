@@ -39,9 +39,29 @@ def _backup_dir() -> Path:
         return fallback
 
 
+_PG_BIN_DIRS = [
+    "/usr/lib/postgresql/18/bin",
+    "/usr/lib/postgresql/17/bin",
+    "/usr/local/bin",
+    "/usr/bin",
+]
+
+
+def _find_bin(name: str) -> str | None:
+    """pg_dump/psql ni PATH'dan yoki ma'lum papkalardan topadi."""
+    found = shutil.which(name)
+    if found:
+        return found
+    for d in _PG_BIN_DIRS:
+        candidate = os.path.join(d, name)
+        if os.path.exists(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+    return None
+
+
 def is_available() -> bool:
     """pg_dump o'rnatilganmi?"""
-    return shutil.which("pg_dump") is not None
+    return _find_bin("pg_dump") is not None
 
 
 async def _run(cmd: list[str], stdin_bytes: bytes | None = None) -> tuple[int, bytes, bytes]:
@@ -73,8 +93,9 @@ async def create_backup(db: AsyncSession, trigger: str = "manual", user_id: int 
             raise RuntimeError("pg_dump topilmadi (postgresql-client o'rnatilmagan)")
 
         # pg_dump --no-owner --no-acl --clean --if-exists  <DATABASE_URL>
+        pg_dump_bin = _find_bin("pg_dump") or "pg_dump"
         cmd = [
-            "pg_dump", settings.database_url_raw,
+            pg_dump_bin, settings.database_url_raw,
             "--no-owner", "--no-acl", "--clean", "--if-exists",
         ]
         code, out, err = await _run(cmd)
@@ -166,13 +187,14 @@ async def restore_backup(db: AsyncSession, backup_id: int) -> tuple[bool, str]:
             return False, f"Lokal fayl yo'q, S3 dan yuklab bo'lmadi: {dl_err}"
     if fp is None:
         return False, "Backup fayli topilmadi (lokal ham, tashqi ham yo'q)"
-    if not is_available() or shutil.which("psql") is None:
+    psql_bin = _find_bin("psql")
+    if not is_available() or psql_bin is None:
         return False, "psql topilmadi (postgresql-client o'rnatilmagan)"
 
     try:
         with gzip.open(fp, "rb") as f:
             sql_bytes = f.read()
-        code, out, err = await _run(["psql", settings.database_url_raw], stdin_bytes=sql_bytes)
+        code, out, err = await _run([psql_bin, settings.database_url_raw], stdin_bytes=sql_bytes)
         if code != 0:
             return False, f"Restore xato (code {code}): {err.decode('utf-8', 'replace')[:300]}"
         return True, "Backup muvaffaqiyatli qaytarildi"
