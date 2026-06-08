@@ -239,6 +239,101 @@ async def delete_payment(db: AsyncSession, payment_id: int) -> tuple[bool, str]:
     return True, "O'chirildi"
 
 
+async def payment_discipline(db: AsyncSession, market_id: int, today: date | None = None) -> dict:
+    """Bozorning to'lov intizomi: o'z vaqtidami yoki kechikadimi?
+
+    Har bir muddatli (due_date'li) invoice uchun:
+    - to'liq to'langan bo'lsa: oxirgi to'lov sanasi due_date bilan solishtiriladi
+    - to'lanmagan va muddati o'tgan bo'lsa: hozirgacha kechikkan deb hisoblanadi
+
+    Qaytaradi: on_time, late, late_days_total, avg_late_days, on_time_rate (0-100),
+    rating ("excellent"|"good"|"fair"|"poor"), va har bir invoice tafsiloti.
+    """
+    today = today or datetime.now(timezone.utc).date()
+    rows = await db.execute(
+        select(Invoice).where(Invoice.market_id == market_id, Invoice.due_date.is_not(None))
+    )
+    invoices = list(rows.scalars())
+
+    on_time = 0
+    late = 0
+    late_days_total = 0
+    pending_overdue = 0
+    details: list[dict] = []
+
+    for inv in invoices:
+        due = inv.due_date
+        if inv.is_paid:
+            # To'liq to'langan — qachon to'liq bo'lganini topamiz
+            pays = await list_payments(db, inv.id)
+            # list_payments desc tartibda — eng oxirgi (vaqt bo'yicha) to'lov = birinchi element
+            paid_date = None
+            if pays:
+                latest = max(pays, key=lambda p: p.created_at)
+                pd = latest.created_at
+                if pd.tzinfo is None:
+                    pd = pd.replace(tzinfo=timezone.utc)
+                paid_date = pd.date()
+            elif inv.paid_at:
+                paid_date = inv.paid_at.date()
+            if paid_date is None:
+                continue
+            diff = (paid_date - due).days
+            if diff <= 0:
+                on_time += 1
+                status_ = "on_time"
+            else:
+                late += 1
+                late_days_total += diff
+                status_ = "late"
+            details.append({
+                "id": inv.id, "title": inv.title, "due_date": due.isoformat(),
+                "paid_date": paid_date.isoformat(), "late_days": max(diff, 0),
+                "status": status_,
+            })
+        else:
+            # To'lanmagan — muddati o'tганmi?
+            if due < today:
+                diff = (today - due).days
+                pending_overdue += 1
+                late += 1
+                late_days_total += diff
+                details.append({
+                    "id": inv.id, "title": inv.title, "due_date": due.isoformat(),
+                    "paid_date": None, "late_days": diff, "status": "overdue_unpaid",
+                })
+
+    total_judged = on_time + late
+    on_time_rate = round(on_time / total_judged * 100) if total_judged else 100
+    avg_late = round(late_days_total / late, 1) if late else 0.0
+
+    if total_judged == 0:
+        rating = "none"
+    elif on_time_rate >= 90:
+        rating = "excellent"
+    elif on_time_rate >= 70:
+        rating = "good"
+    elif on_time_rate >= 50:
+        rating = "fair"
+    else:
+        rating = "poor"
+
+    # eng kechikkanlar birinchi
+    details.sort(key=lambda d: d["late_days"], reverse=True)
+    return {
+        "market_id": market_id,
+        "total_judged": total_judged,
+        "on_time": on_time,
+        "late": late,
+        "pending_overdue": pending_overdue,
+        "on_time_rate": on_time_rate,
+        "avg_late_days": avg_late,
+        "late_days_total": late_days_total,
+        "rating": rating,
+        "details": details[:20],
+    }
+
+
 # ===== Avtomatik tex-podderjka invoice (kind="support") =====
 
 async def ensure_support_invoice(

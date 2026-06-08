@@ -15,6 +15,7 @@ import {
 import { MetricCard, DeploymentRow, ServiceChips } from "@/components/Railway/RailwayWidgets";
 import { BackupPanel } from "@/components/Railway/BackupPanel";
 import { RecentInvoicesWidget } from "@/components/RecentInvoicesWidget";
+import { PaymentDisciplinePanel } from "@/components/PaymentDisciplinePanel";
 import { useAuthStore } from "@/store/authStore";
 import { fmtUZS } from "@/lib/utils";
 import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
@@ -276,6 +277,11 @@ export function OwnerPage() {
         {/* ===== OXIRGI TO'LOVLAR ===== */}
         <div className="mb-7 animate-fade-up" style={{ animationDelay: "315ms" }}>
           <RecentInvoicesWidget />
+        </div>
+
+        {/* ===== TO'LOV INTIZOMI ===== */}
+        <div className="mb-7 animate-fade-up" style={{ animationDelay: "322ms" }}>
+          <PaymentDisciplinePanel onMarket={(id) => navigate(`/owner/invoices?market=${id}`)} />
         </div>
 
         {/* ===== BACKUP ===== */}

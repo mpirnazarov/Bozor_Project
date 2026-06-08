@@ -611,6 +611,51 @@ async def owner_delete_payment(
     return {"ok": True, "message": msg}
 
 
+@router.get("/markets/{market_id}/discipline")
+async def owner_market_discipline(
+    _owner: OwnerUser,
+    market_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    """Bozorning to'lov intizomi (o'z vaqtida/kechikish bilan)."""
+    from app.services.invoice_service import payment_discipline
+    market = await db.get(Market, market_id)
+    if market is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Bozor topilmadi")
+    data = await payment_discipline(db, market_id)
+    data["market_name"] = market.name
+    return data
+
+
+@router.get("/discipline")
+async def owner_all_discipline(
+    _owner: OwnerUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> list[dict]:
+    """Barcha bozorlar to'lov intizomi (dashboard uchun, eng yomon birinchi)."""
+    from app.services.invoice_service import payment_discipline
+    rows = await db.execute(select(Market).order_by(Market.display_order, Market.id))
+    markets = list(rows.scalars())
+    out: list[dict] = []
+    for m in markets:
+        d = await payment_discipline(db, m.id)
+        if d["total_judged"] == 0:
+            continue  # hali baholanadigan to'lov yo'q
+        out.append({
+            "market_id": m.id,
+            "market_name": m.name,
+            "on_time": d["on_time"],
+            "late": d["late"],
+            "pending_overdue": d["pending_overdue"],
+            "on_time_rate": d["on_time_rate"],
+            "avg_late_days": d["avg_late_days"],
+            "rating": d["rating"],
+        })
+    # eng yomon (on_time_rate past) birinchi
+    out.sort(key=lambda x: x["on_time_rate"])
+    return out
+
+
 @router.patch("/invoices/{invoice_id}")
 async def owner_update_invoice(
     _owner: OwnerUser,

@@ -55,3 +55,28 @@ export async function getMarketInvoices(market?: string): Promise<MarketInvoiceL
 export function marketInvoiceDocUrl(id: number): string {
   return `${apiClient.defaults.baseURL}/dashboard/invoices/${id}/doc`;
 }
+
+export interface MarketPayment {
+  id: number;
+  amount: number;
+  note: string | null;
+  created_at: string;
+  edited_at: string | null;
+}
+
+export async function getMarketInvoicePayments(invoiceId: number): Promise<MarketPayment[]> {
+  const { data } = await apiClient.get<{ payments: MarketPayment[] }>(`/dashboard/invoices/${invoiceId}/payments`);
+  return data.payments;
+}
+
+export interface MarketDiscipline {
+  total_judged: number;
+  on_time: number;
+  on_time_rate: number;
+  rating: "excellent" | "good" | "fair" | "poor" | "none";
+}
+
+export async function getMarketDiscipline(): Promise<MarketDiscipline> {
+  const { data } = await apiClient.get<MarketDiscipline>("/dashboard/discipline");
+  return data;
+}

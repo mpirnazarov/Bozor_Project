@@ -306,6 +306,36 @@ export async function deleteInvoicePayment(paymentId: number) {
   return data;
 }
 
+export interface DisciplineRow {
+  market_id: number;
+  market_name: string;
+  on_time: number;
+  late: number;
+  pending_overdue: number;
+  on_time_rate: number;
+  avg_late_days: number;
+  rating: "excellent" | "good" | "fair" | "poor" | "none";
+}
+
+export async function getAllDiscipline(): Promise<DisciplineRow[]> {
+  const { data } = await apiClient.get<DisciplineRow[]>("/owner/discipline");
+  return data;
+}
+
+export interface DisciplineDetail extends DisciplineRow {
+  late_days_total: number;
+  total_judged: number;
+  details: {
+    id: number; title: string; due_date: string;
+    paid_date: string | null; late_days: number; status: string;
+  }[];
+}
+
+export async function getMarketDisciplineDetail(marketId: number): Promise<DisciplineDetail> {
+  const { data } = await apiClient.get<DisciplineDetail>(`/owner/markets/${marketId}/discipline`);
+  return data;
+}
+
 export async function updateInvoice(id: number, input: Partial<InvoiceCreateInput>): Promise<Invoice> {
   const { data } = await apiClient.patch<Invoice>(`/owner/invoices/${id}`, input);
   return data;

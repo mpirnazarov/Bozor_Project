@@ -77,6 +77,54 @@ async def market_invoices(
     }
 
 
+@router.get("/discipline")
+async def market_discipline_summary(
+    _user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    market=Depends(get_current_market),
+) -> dict:
+    """Bozorning o'z to'lov intizomi (ijobiy ko'rinish — kechikish ta'kidlanmaydi)."""
+    from app.services.invoice_service import payment_discipline
+    d = await payment_discipline(db, market.id)
+    # Bozorga faqat ijobiy/neytral ma'lumot: nechta o'z vaqtida to'langan
+    return {
+        "total_judged": d["total_judged"],
+        "on_time": d["on_time"],
+        "on_time_rate": d["on_time_rate"],
+        "rating": d["rating"],
+    }
+
+
+@router.get("/invoices/{invoice_id}/payments")
+async def market_invoice_payments(
+    _user: CurrentUser,
+    invoice_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    market=Depends(get_current_market),
+) -> dict:
+    """Bozor o'z schyotining to'lov tarixini ko'radi (read-only, faqat o'z bozori)."""
+    from fastapi import HTTPException, status
+    from app.models.invoice import Invoice
+    from app.services.invoice_service import list_payments
+    inv = await db.get(Invoice, invoice_id)
+    if inv is None or inv.market_id != market.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Schyot topilmadi")
+    payments = await list_payments(db, invoice_id)
+    return {
+        "invoice_id": invoice_id,
+        "payments": [
+            {
+                "id": p.id,
+                "amount": float(p.amount),
+                "note": p.note,
+                "created_at": p.created_at.isoformat(),
+                "edited_at": p.edited_at.isoformat() if p.edited_at else None,
+            }
+            for p in payments
+        ],
+    }
+
+
 @router.get("/invoices/{invoice_id}/doc")
 async def market_invoice_doc(
     _user: CurrentUser,

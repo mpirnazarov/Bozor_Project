@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Receipt, Plus, Search, ArrowLeft, CircleCheck, Clock, AlertTriangle,
@@ -35,7 +35,11 @@ export function InvoicesPage() {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [marketFilter, setMarketFilter] = useState<number | "all">("all");
+  const [searchParams] = useSearchParams();
+  const marketParam = searchParams.get("market");
+  const [marketFilter, setMarketFilter] = useState<number | "all">(
+    marketParam ? Number(marketParam) : "all"
+  );
   const [showCreate, setShowCreate] = useState(false);
   const [editInv, setEditInv] = useState<Invoice | null>(null);
   const [payInv, setPayInv] = useState<Invoice | null>(null);
