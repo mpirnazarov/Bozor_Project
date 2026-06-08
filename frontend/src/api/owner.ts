@@ -287,11 +287,23 @@ export interface InvoicePayment {
   amount: number;
   note: string | null;
   created_at: string;
+  edited_at: string | null;
+  editable: boolean;
 }
 
 export async function getInvoicePayments(id: number): Promise<InvoicePayment[]> {
   const { data } = await apiClient.get<{ payments: InvoicePayment[] }>(`/owner/invoices/${id}/payments`);
   return data.payments;
+}
+
+export async function editInvoicePayment(paymentId: number, amount?: number, note?: string) {
+  const { data } = await apiClient.patch(`/owner/invoices/payments/${paymentId}`, { amount, note });
+  return data;
+}
+
+export async function deleteInvoicePayment(paymentId: number) {
+  const { data } = await apiClient.delete(`/owner/invoices/payments/${paymentId}`);
+  return data;
 }
 
 export async function updateInvoice(id: number, input: Partial<InvoiceCreateInput>): Promise<Invoice> {

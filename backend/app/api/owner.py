@@ -552,6 +552,7 @@ async def owner_invoice_payments(
     if inv is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Schyot topilmadi")
     payments = await list_payments(db, invoice_id)
+    from app.services.invoice_service import _within_24h
     return {
         "invoice_id": invoice_id,
         "payments": [
@@ -560,10 +561,54 @@ async def owner_invoice_payments(
                 "amount": float(p.amount),
                 "note": p.note,
                 "created_at": p.created_at.isoformat(),
+                "edited_at": p.edited_at.isoformat() if p.edited_at else None,
+                "editable": _within_24h(p),
             }
             for p in payments
         ],
     }
+
+
+class PaymentEditBody(BaseModel):
+    amount: float | None = None
+    note: str | None = None
+
+
+@router.patch("/invoices/payments/{payment_id}")
+async def owner_edit_payment(
+    _owner: OwnerUser,
+    payment_id: int,
+    body: PaymentEditBody,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    """To'lov yozuvini tahrirlash — faqat 24 soat ichida."""
+    from decimal import Decimal
+    from app.services.invoice_service import edit_payment
+    amt = Decimal(str(body.amount)) if body.amount is not None else None
+    ok, msg, p = await edit_payment(db, payment_id, amount=amt, note=body.note)
+    if not ok:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, msg)
+    return {
+        "id": p.id,
+        "amount": float(p.amount),
+        "note": p.note,
+        "created_at": p.created_at.isoformat(),
+        "edited_at": p.edited_at.isoformat() if p.edited_at else None,
+    }
+
+
+@router.delete("/invoices/payments/{payment_id}")
+async def owner_delete_payment(
+    _owner: OwnerUser,
+    payment_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    """To'lov yozuvini o'chirish — faqat 24 soat ichida."""
+    from app.services.invoice_service import delete_payment
+    ok, msg = await delete_payment(db, payment_id)
+    if not ok:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, msg)
+    return {"ok": True, "message": msg}
 
 
 @router.patch("/invoices/{invoice_id}")

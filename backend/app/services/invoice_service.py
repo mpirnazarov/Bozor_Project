@@ -184,6 +184,61 @@ async def list_payments(db: AsyncSession, invoice_id: int) -> list[InvoicePaymen
     return list(rows.scalars())
 
 
+def _within_24h(p: InvoicePayment) -> bool:
+    """To'lov yozuvi 24 soat ichida yaratilganmi (tahrirlash mumkinmi)."""
+    created = p.created_at
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - created).total_seconds() <= 24 * 3600
+
+
+async def edit_payment(
+    db: AsyncSession, payment_id: int,
+    amount: Decimal | None = None, note: str | None = None,
+) -> tuple[bool, str, InvoicePayment | None]:
+    """To'lov yozuvini tahrirlaydi — faqat 24 soat ichida.
+
+    Tahrirlanса edited_at o'rnatiladi va invoice paid_amount qayta hisoblanadi.
+    """
+    p = await db.get(InvoicePayment, payment_id)
+    if p is None:
+        return False, "To'lov yozuvi topilmadi", None
+    if not _within_24h(p):
+        return False, "Bu to'lovni o'zgartirish muddati (24 soat) o'tib ketgan", None
+    if amount is not None:
+        if amount == 0:
+            return False, "Summa 0 bo'lmasligi kerak", None
+        p.amount = amount
+    if note is not None:
+        p.note = note
+    p.edited_at = datetime.now(timezone.utc)
+    await db.flush()
+    # Invoice'ni qayta hisoblaymiz
+    inv = await db.get(Invoice, p.invoice_id)
+    if inv is not None:
+        await _recompute_paid(db, inv)
+    await db.commit()
+    await db.refresh(p)
+    return True, "Tahrirlandi", p
+
+
+async def delete_payment(db: AsyncSession, payment_id: int) -> tuple[bool, str]:
+    """To'lov yozuvini o'chiradi — faqat 24 soat ichida."""
+    p = await db.get(InvoicePayment, payment_id)
+    if p is None:
+        return False, "To'lov yozuvi topilmadi"
+    if not _within_24h(p):
+        return False, "Bu to'lovni o'chirish muddati (24 soat) o'tib ketgan"
+    invoice_id = p.invoice_id
+    await db.delete(p)
+    await db.flush()
+    inv = await db.get(Invoice, invoice_id)
+    if inv is not None:
+        await _recompute_paid(db, inv)
+    await db.commit()
+    return True, "O'chirildi"
+
+
 # ===== Avtomatik tex-podderjka invoice (kind="support") =====
 
 async def ensure_support_invoice(

@@ -8,8 +8,9 @@ import {
 } from "lucide-react";
 import {
   getInvoices, createInvoice, setInvoicePaid, setInvoicePaidAmount, updateInvoice,
-  deleteInvoice, invoiceDocUrl, getInvoicePayments, ownerListMarkets,
-  type Invoice, type InvoiceCreateInput,
+  deleteInvoice, invoiceDocUrl, getInvoicePayments, editInvoicePayment, deleteInvoicePayment,
+  ownerListMarkets,
+  type Invoice, type InvoiceCreateInput, type InvoicePayment,
 } from "@/api/owner";
 
 type StatusFilter = "all" | "paid" | "partial" | "pending" | "overdue";
@@ -425,11 +426,17 @@ function PayAmountModal({ inv, onClose, onDone }: { inv: Invoice; onClose: () =>
   const [amount, setAmount] = useState<number>(0);
   const [note, setNote] = useState("");
   const remainingBefore = Math.max(inv.amount - inv.paid_amount, 0);
+  const qc = useQueryClient();
 
   const { data: history } = useQuery({
     queryKey: ["invoice-payments", inv.id],
     queryFn: () => getInvoicePayments(inv.id),
   });
+
+  function refreshAll() {
+    qc.invalidateQueries({ queryKey: ["invoice-payments", inv.id] });
+    qc.invalidateQueries({ queryKey: ["owner-invoices"] });
+  }
 
   const mut = useMutation({
     mutationFn: () => setInvoicePaidAmount(inv.id, amount, note || undefined, "add"),
@@ -501,19 +508,87 @@ function PayAmountModal({ inv, onClose, onDone }: { inv: Invoice; onClose: () =>
             </div>
             <div className="space-y-1.5">
               {history.map((p) => (
-                <div key={p.id} className="flex items-center justify-between rounded-lg bg-white/[0.03] px-3 py-2 text-sm">
-                  <div className="min-w-0">
-                    <div className={`font-semibold ${p.amount < 0 ? "text-amber-400" : "text-[#38bdf8]"}`}>
-                      {p.amount < 0 ? "−" : "+"}{fmtMoney(Math.abs(p.amount), inv.currency)}
-                    </div>
-                    {p.note && <div className="truncate text-[11px] text-slate-500">{p.note}</div>}
-                  </div>
-                  <div className="shrink-0 text-[11px] text-slate-500">
-                    {new Date(p.created_at).toLocaleString("uz-UZ", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
-                  </div>
-                </div>
+                <PaymentRow key={p.id} p={p} currency={inv.currency} onChanged={refreshAll} />
               ))}
             </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PaymentRow({ p, currency, onChanged }: {
+  p: InvoicePayment; currency: string; onChanged: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [amt, setAmt] = useState(Math.abs(p.amount));
+  const [note, setNote] = useState(p.note || "");
+
+  const fmtDT = (s: string) =>
+    new Date(s).toLocaleString("uz-UZ", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+
+  const editMut = useMutation({
+    mutationFn: () => editInvoicePayment(p.id, p.amount < 0 ? -Math.abs(amt) : Math.abs(amt), note),
+    onSuccess: () => { setEditing(false); onChanged(); },
+  });
+  const delMut = useMutation({
+    mutationFn: () => deleteInvoicePayment(p.id),
+    onSuccess: onChanged,
+  });
+
+  if (editing) {
+    return (
+      <div className="rounded-lg border border-[#0ea5e9]/40 bg-[#0ea5e9]/10 px-3 py-2.5">
+        <div className="mb-2 flex items-center gap-2">
+          <input type="number" min={0} value={amt || ""} onChange={(e) => setAmt(Number(e.target.value))}
+            className="w-32 rounded-lg border border-white/10 bg-[#0a1120] px-2 py-1.5 text-sm text-white outline-none focus:border-[#0ea5e9]" />
+          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Izoh"
+            className="min-w-0 flex-1 rounded-lg border border-white/10 bg-[#0a1120] px-2 py-1.5 text-sm text-white outline-none focus:border-[#0ea5e9]" />
+        </div>
+        {editMut.isError && <div className="mb-1.5 text-[11px] font-semibold text-[#f87171]">Xato: muddati o'tgan bo'lishi mumkin.</div>}
+        <div className="flex gap-2">
+          <button onClick={() => editMut.mutate()} disabled={amt <= 0 || editMut.isPending}
+            className="inline-flex items-center gap-1 rounded-lg bg-[#0ea5e9] px-2.5 py-1 text-[11px] font-bold text-white disabled:opacity-40">
+            {editMut.isPending ? <Loader2 size={12} className="animate-spin" /> : <CircleCheck size={12} />} Saqlash
+          </button>
+          <button onClick={() => { setEditing(false); setAmt(Math.abs(p.amount)); setNote(p.note || ""); }}
+            className="rounded-lg border border-white/10 px-2.5 py-1 text-[11px] font-semibold text-slate-300 hover:bg-white/10">Bekor</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-between rounded-lg bg-white/[0.03] px-3 py-2 text-sm">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          <span className={`font-semibold ${p.amount < 0 ? "text-amber-400" : "text-[#38bdf8]"}`}>
+            {p.amount < 0 ? "−" : "+"}{fmtMoney(Math.abs(p.amount), currency)}
+          </span>
+          {p.edited_at && (
+            <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-400">
+              <Pencil size={8} /> O'zgartirilgan
+            </span>
+          )}
+        </div>
+        {p.note && <div className="truncate text-[11px] text-slate-500">{p.note}</div>}
+        {p.edited_at && (
+          <div className="text-[10px] text-amber-400/70">O'zgartirildi: {fmtDT(p.edited_at)}</div>
+        )}
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <div className="text-right text-[11px] text-slate-500">{fmtDT(p.created_at)}</div>
+        {p.editable && (
+          <div className="flex gap-1">
+            <button onClick={() => setEditing(true)} title="Tahrirlash (24 soat ichida)"
+              className="grid h-6 w-6 place-items-center rounded-md text-slate-400 hover:bg-white/10 hover:text-[#38bdf8]">
+              <Pencil size={12} />
+            </button>
+            <button onClick={() => { if (confirm("Bu to'lov yozuvini o'chirasizmi?")) delMut.mutate(); }} title="O'chirish (24 soat ichida)"
+              className="grid h-6 w-6 place-items-center rounded-md text-slate-400 hover:bg-[#dc2626]/15 hover:text-[#f87171]">
+              {delMut.isPending ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+            </button>
           </div>
         )}
       </div>

@@ -24,6 +24,8 @@ class InvoicePayment(Base):
     amount: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)  # shu to'lov summasi
     note: Mapped[str | None] = mapped_column(String(300), nullable=True)
     created_by: Mapped[int | None] = mapped_column(Integer, nullable=True)  # owner user id
+    # Tahrirlangan bo'lsa — oxirgi o'zgartirish vaqti (24 soat ichida ruxsat)
+    edited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
