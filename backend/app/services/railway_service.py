@@ -380,11 +380,11 @@ query Usage($projectId: String!, $startDate: String!, $endDate: String!) {
 }""",
         "kind": "estimatedUsage",
     },
-    # 3) usage — nested
+    # 3) usage — measurements bilan (Railway buni majburiy talab qiladi)
     {
         "query": """
-query Usage($projectId: String!, $startDate: String!, $endDate: String!) {
-  usage(projectId: $projectId, startDate: $startDate, endDate: $endDate) {
+query Usage($projectId: String!, $startDate: String!, $endDate: String!, $measurements: [MetricMeasurement!]!) {
+  usage(projectId: $projectId, startDate: $startDate, endDate: $endDate, measurements: $measurements) {
     measurement value
   }
 }""",

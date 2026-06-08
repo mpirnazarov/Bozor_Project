@@ -150,3 +150,42 @@ export async function getOwnerRailway(): Promise<RailwayOverview> {
   const { data } = await apiClient.get<RailwayOverview>("/owner/railway");
   return data;
 }
+
+// === Backup ===
+export interface BackupLog {
+  id: number;
+  filename: string;
+  trigger: string;       // auto | manual
+  status: string;        // success | failed | running
+  size_bytes: number;
+  size_mb: number;
+  duration_ms: number;
+  error: string | null;
+  created_at: string;
+}
+
+export interface BackupList {
+  available: boolean;
+  backups: BackupLog[];
+}
+
+export async function getBackups(): Promise<BackupList> {
+  const { data } = await apiClient.get<BackupList>("/owner/backups");
+  return data;
+}
+
+export async function createBackup(): Promise<BackupLog> {
+  const { data } = await apiClient.post<BackupLog>("/owner/backups");
+  return data;
+}
+
+export function backupDownloadUrl(id: number): string {
+  return `${apiClient.defaults.baseURL}/owner/backups/${id}/download`;
+}
+
+export async function restoreBackup(id: number, password: string): Promise<{ ok: boolean; message: string }> {
+  const { data } = await apiClient.post<{ ok: boolean; message: string }>(
+    `/owner/backups/${id}/restore`, { password },
+  );
+  return data;
+}

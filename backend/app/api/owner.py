@@ -12,6 +12,7 @@ from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,7 +26,10 @@ from app.services.support_service import (
     get_support_status, list_payments, mark_payment,
 )
 from app.services.railway_service import get_railway_overview
-from app.utils.security import hash_password
+from app.services.backup_service import (
+    create_backup, list_backups, restore_backup, backup_path, is_available,
+)
+from app.utils.security import hash_password, verify_password
 
 router = APIRouter()
 
@@ -37,6 +41,90 @@ async def owner_railway(_owner: OwnerUser) -> dict:
     Token sozlanmagan bo'lsa {configured: false} qaytaradi.
     """
     return await get_railway_overview()
+
+
+# ===== Backup =====
+
+class RestoreRequest(BaseModel):
+    password: str
+
+
+def _backup_out(log) -> dict:
+    return {
+        "id": log.id,
+        "filename": log.filename,
+        "trigger": log.trigger,
+        "status": log.status,
+        "size_bytes": log.size_bytes,
+        "size_mb": round(log.size_bytes / 1_048_576, 2) if log.size_bytes else 0,
+        "duration_ms": log.duration_ms,
+        "error": log.error,
+        "created_at": log.created_at.isoformat(),
+    }
+
+
+@router.get("/backups")
+async def owner_list_backups(
+    _owner: OwnerUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    """Backup jurnalini qaytaradi."""
+    logs = await list_backups(db)
+    return {
+        "available": is_available(),
+        "backups": [_backup_out(b) for b in logs],
+    }
+
+
+@router.post("/backups")
+async def owner_create_backup(
+    owner: OwnerUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    """Qo'lda (manual) backup yaratadi."""
+    if not is_available():
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "Backup imkoni yo'q — serverda pg_dump (postgresql-client) o'rnatilmagan",
+        )
+    log = await create_backup(db, trigger="manual", user_id=owner.id)
+    if log.status != "success":
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, log.error or "Backup xatosi")
+    return _backup_out(log)
+
+
+@router.get("/backups/{backup_id}/download")
+async def owner_download_backup(
+    _owner: OwnerUser,
+    backup_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> FileResponse:
+    """Backup faylini yuklab olish (.sql.gz)."""
+    from app.models.backup_log import BackupLog
+    log = await db.get(BackupLog, backup_id)
+    if log is None or log.status != "success":
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Backup topilmadi")
+    fp = backup_path(log.filename)
+    if fp is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Backup fayli diskda topilmadi")
+    return FileResponse(path=str(fp), filename=log.filename, media_type="application/gzip")
+
+
+@router.post("/backups/{backup_id}/restore")
+async def owner_restore_backup(
+    owner: OwnerUser,
+    backup_id: int,
+    body: RestoreRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    """Backupни qaytaradi — XAVFLI. Owner parolini tasdiqlash majburiy."""
+    # Parol tekshiruvi
+    if not body.password or not verify_password(body.password, owner.password_hash):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Parol noto'g'ri")
+    ok, msg = await restore_backup(db, backup_id)
+    if not ok:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, msg)
+    return {"ok": True, "message": msg}
 
 
 def _gen_password(n: int = 10) -> str:

@@ -10,6 +10,7 @@ ENV PYTHONUNBUFFERED=1 \
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
         libpq-dev \
+        postgresql-client \
         curl \
     && rm -rf /var/lib/apt/lists/*
 

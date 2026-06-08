@@ -3,6 +3,7 @@ from app.models.audit_log import AuditLog
 from app.models.change_snapshot import ChangeSnapshot
 from app.models.counterparty import Counterparty
 from app.models.import_log import ImportLog
+from app.models.backup_log import BackupLog
 from app.models.market import Market
 from app.models.monthly_balance import (
     RU_TYPE_TO_CATEGORY,
@@ -35,4 +36,5 @@ __all__ = [
     "AuditLog",
     "ChangeSnapshot",
     "ImportLog",
+    "BackupLog",
 ]

@@ -49,6 +49,14 @@ class Settings(BaseSettings):
     # Plan: "trial" | "hobby" | "pro" — CPU/RAM foizini hisoblash uchun limit
     RAILWAY_PLAN: str = "pro"
 
+    # === Backup ===
+    # Railway Volume mount nuqtasi (masalan /data). Backup shu yerga saqlanadi.
+    BACKUP_DIR: str = "/data/backups"
+    # Saqlanadigan backup'lar soni (eskilari avtomatik o'chiriladi)
+    BACKUP_KEEP: int = 14
+    # Avtomatik kunlik backup vaqti (soat, 0-23, server vaqti UTC)
+    BACKUP_HOUR_UTC: int = 19  # 19:00 UTC = 00:00 Toshkent (UTC+5)
+
     @computed_field  # type: ignore[misc]
     @property
     def allowed_origins_list(self) -> list[str]:
@@ -67,6 +75,17 @@ class Settings(BaseSettings):
             url = "postgresql://" + url[len("postgres://") :]
         if url.startswith("postgresql://"):
             url = "postgresql+asyncpg://" + url[len("postgresql://") :]
+        return url
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def database_url_raw(self) -> str:
+        """pg_dump/psql uchun toza 'postgresql://' URL (asyncpg drayverisiz)."""
+        url = self.DATABASE_URL
+        if url.startswith("postgres://"):
+            url = "postgresql://" + url[len("postgres://") :]
+        if url.startswith("postgresql+asyncpg://"):
+            url = "postgresql://" + url[len("postgresql+asyncpg://") :]
         return url
 
     # Google Sheets (yerto'la uchun)

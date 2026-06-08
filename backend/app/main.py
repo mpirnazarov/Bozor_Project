@@ -25,7 +25,17 @@ async def lifespan(app: FastAPI):
         # — bu _set_auth_cookie'da production'da avtomatik ta'minlanadi.
         print("🔐 Production xavfsizlik tekshiruvi o'tdi")
     print(f"🚀 Orikzor backend starting (env: {settings.ENVIRONMENT})")
+    # Kunlik avtomatik backup rejalashtiruvchini ishga tushiramiz
+    try:
+        from app.services.backup_scheduler import start_scheduler, stop_scheduler
+        start_scheduler()
+        print("🗄️  Backup scheduler ishga tushdi")
+    except Exception as e:  # noqa: BLE001
+        print(f"⚠️ Backup scheduler ishga tushmadi: {e}")
+        stop_scheduler = None  # type: ignore[assignment]
     yield
+    if stop_scheduler:
+        stop_scheduler()
     print("👋 Orikzor backend shutting down")
 
 
