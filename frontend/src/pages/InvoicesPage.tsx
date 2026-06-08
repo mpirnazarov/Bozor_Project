@@ -210,6 +210,19 @@ function InvoiceCard({ inv, onTogglePaid, onPay, onEdit, onDelete }: {
               style={{ background: `${meta.color}22`, color: meta.color }}>
               <Icon size={11} /> {meta.label}
             </span>
+            {inv.kind === "support" && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-[#7c3aed]/15 px-2 py-0.5 text-[10px] font-bold text-[#a855f7]">
+                🔄 Tex-podderjka
+              </span>
+            )}
+            {inv.payment_method === "cash" && (
+              <span className="rounded-full bg-[#16a34a]/15 px-2 py-0.5 text-[10px] font-bold text-[#4ade80]">💵 Naqd</span>
+            )}
+            {inv.payment_method === "contract" && (
+              <span className="rounded-full bg-[#0066ff]/15 px-2 py-0.5 text-[10px] font-bold text-[#5b9dff]">
+                📄 Dogovor{inv.contract_no ? ` #${inv.contract_no}` : ""}
+              </span>
+            )}
             {inv.market_name && <span className="text-xs font-semibold text-[#5b9dff]">{inv.market_name}</span>}
           </div>
           <h3 className="mt-1.5 font-display text-lg font-bold text-white">{inv.title}</h3>
@@ -282,6 +295,7 @@ function InvoiceCard({ inv, onTogglePaid, onPay, onEdit, onDelete }: {
 function CreateInvoiceModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const [form, setForm] = useState<InvoiceCreateInput>({
     market_id: 0, title: "", amount: 0, description: "", currency: "UZS", due_date: null,
+    payment_method: "cash", contract_no: "",
   });
   const [docName, setDocName] = useState<string | null>(null);
 
@@ -352,13 +366,47 @@ function CreateInvoiceModal({ onClose, onDone }: { onClose: () => void; onDone: 
             </Field>
           </div>
 
-          <Field label="Hujjat biriktirish (ixtiyoriy)">
-            <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-white/15 bg-[#0a1120] px-3 py-2.5 text-sm text-slate-400 hover:border-[#0066ff]">
-              <FileText size={16} className="text-[#5b9dff]" />
-              {docName || "PDF yoki rasm tanlang (maks 8 MB)"}
-              <input type="file" accept=".pdf,image/*" onChange={onFile} className="hidden" />
-            </label>
+          {/* To'lov turi */}
+          <Field label="To'lov turi *">
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setForm({ ...form, payment_method: "cash" })}
+                className="flex-1 rounded-xl border px-3 py-2.5 text-sm font-semibold transition-all"
+                style={{
+                  borderColor: form.payment_method === "cash" ? "#16a34a" : "rgba(255,255,255,0.1)",
+                  background: form.payment_method === "cash" ? "#16a34a1a" : "transparent",
+                  color: form.payment_method === "cash" ? "#4ade80" : "#94a3b8",
+                }}>
+                💵 Naqd
+              </button>
+              <button type="button" onClick={() => setForm({ ...form, payment_method: "contract" })}
+                className="flex-1 rounded-xl border px-3 py-2.5 text-sm font-semibold transition-all"
+                style={{
+                  borderColor: form.payment_method === "contract" ? "#0066ff" : "rgba(255,255,255,0.1)",
+                  background: form.payment_method === "contract" ? "#0066ff1a" : "transparent",
+                  color: form.payment_method === "contract" ? "#5b9dff" : "#94a3b8",
+                }}>
+                📄 Dogovor
+              </button>
+            </div>
           </Field>
+
+          {/* Dogovor tanlansa — raqam + fayl */}
+          {form.payment_method === "contract" && (
+            <>
+              <Field label="Dogovor raqami">
+                <input value={form.contract_no || ""} onChange={(e) => setForm({ ...form, contract_no: e.target.value })}
+                  placeholder="Masalan: 2026/D-102"
+                  className="w-full rounded-xl border border-white/10 bg-[#0a1120] px-3 py-2.5 text-sm text-white outline-none placeholder:text-slate-500 focus:border-[#0066ff]" />
+              </Field>
+              <Field label="Dogovor fayli (ixtiyoriy)">
+                <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-white/15 bg-[#0a1120] px-3 py-2.5 text-sm text-slate-400 hover:border-[#0066ff]">
+                  <FileText size={16} className="text-[#5b9dff]" />
+                  {docName || "PDF yoki rasm tanlang (maks 8 MB)"}
+                  <input type="file" accept=".pdf,image/*" onChange={onFile} className="hidden" />
+                </label>
+              </Field>
+            </>
+          )}
 
           {mut.isError && <div className="text-xs font-semibold text-[#f87171]">Xato: to'lovni saqlab bo'lmadi.</div>}
 

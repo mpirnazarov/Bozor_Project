@@ -58,6 +58,8 @@ export function MarketInvoicesSection() {
         {urgent.map((inv) => {
           const meta = STATUS[inv.status];
           const Icon = meta.icon;
+          const hasPartial = inv.paid_amount > 0;
+          const pct = inv.amount > 0 ? Math.min(100, Math.round((inv.paid_amount / inv.amount) * 100)) : 0;
           return (
             <div key={inv.id} className="rounded-xl border bg-white/70 p-3"
               style={{ borderColor: meta.color + "33" }}>
@@ -86,8 +88,22 @@ export function MarketInvoicesSection() {
                       </a>
                     )}
                   </div>
+                  {hasPartial && (
+                    <div className="mt-2">
+                      <div className="mb-1 flex items-center justify-between text-xs">
+                        <span className="text-sky-600">To'langan: {fmtMoney(inv.paid_amount, inv.currency)}</span>
+                        <span className="text-ink-soft">Qoldi: <b className="text-ink">{fmtMoney(inv.remaining, inv.currency)}</b></span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+                        <div className="h-full rounded-full bg-sky-500" style={{ width: pct + "%" }} />
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="font-display text-lg font-extrabold text-ink">{fmtMoney(inv.amount, inv.currency)}</div>
+                <div className="text-right">
+                  <div className="font-display text-lg font-extrabold text-ink">{fmtMoney(inv.amount, inv.currency)}</div>
+                  {hasPartial && <div className="text-[11px] text-sky-600">{pct}% to'langan</div>}
+                </div>
               </div>
             </div>
           );

@@ -47,8 +47,17 @@ export async function ownerListMarkets(): Promise<OwnerMarket[]> {
   return data;
 }
 
-export async function ownerCreateMarket(name: string, slug?: string): Promise<NewMarketResult> {
-  const { data } = await apiClient.post<NewMarketResult>("/owner/markets", { name, slug });
+export interface MarketContractInput {
+  contract_no?: string | null;
+  contract_data?: string | null;
+  contract_name?: string | null;
+  contract_mime?: string | null;
+}
+
+export async function ownerCreateMarket(
+  name: string, slug?: string, contract?: MarketContractInput,
+): Promise<NewMarketResult> {
+  const { data } = await apiClient.post<NewMarketResult>("/owner/markets", { name, slug, ...(contract || {}) });
   return data;
 }
 
@@ -205,6 +214,9 @@ export interface Invoice {
   paid_amount: number;
   remaining: number;
   currency: string;
+  kind: "support" | "extra";
+  payment_method: "cash" | "contract" | null;
+  contract_no: string | null;
   due_date: string | null;
   is_paid: boolean;
   paid_at: string | null;
@@ -239,6 +251,8 @@ export interface InvoiceCreateInput {
   description?: string | null;
   currency?: string;
   due_date?: string | null;
+  payment_method?: "cash" | "contract" | null;
+  contract_no?: string | null;
   doc_data?: string | null;
   doc_name?: string | null;
   doc_mime?: string | null;

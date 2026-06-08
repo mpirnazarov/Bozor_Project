@@ -5,7 +5,7 @@ import {
   Store, Plus, Trash2, KeyRound, Power, PowerOff, Check, X, Copy,
   AlertTriangle, CalendarClock, LogOut, CreditCard, ArrowRight, ArrowUpRight,
   Rocket, CircleCheck, Server,
-  Activity, Wallet, Crown, Eye, ShieldAlert, Sparkles,
+  Activity, Wallet, Crown, Eye, ShieldAlert, Sparkles, FileText,
 } from "lucide-react";
 import {
   ownerListMarkets, ownerCreateMarket, ownerDeleteMarket, ownerChangePassword,
@@ -41,6 +41,8 @@ export function OwnerPage() {
 
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
+  const [newContractNo, setNewContractNo] = useState("");
+  const [newContractDoc, setNewContractDoc] = useState<{ data: string; name: string; mime: string } | null>(null);
   const [created, setCreated] = useState<NewMarketResult | null>(null);
   const [pwdFor, setPwdFor] = useState<OwnerMarket | null>(null);
   const [newPwd, setNewPwd] = useState("");
@@ -55,8 +57,13 @@ export function OwnerPage() {
   const invalidate = () => qc.invalidateQueries({ queryKey: ["owner-markets"] });
 
   const createMut = useMutation({
-    mutationFn: () => ownerCreateMarket(newName.trim()),
-    onSuccess: (r) => { setCreated(r); setNewName(""); setShowCreate(false); invalidate(); },
+    mutationFn: () => ownerCreateMarket(newName.trim(), undefined, {
+      contract_no: newContractNo.trim() || null,
+      contract_data: newContractDoc?.data || null,
+      contract_name: newContractDoc?.name || null,
+      contract_mime: newContractDoc?.mime || null,
+    }),
+    onSuccess: (r) => { setCreated(r); setNewName(""); setNewContractNo(""); setNewContractDoc(null); setShowCreate(false); invalidate(); },
   });
   const delMut = useMutation({ mutationFn: (id: number) => ownerDeleteMarket(id), onSuccess: invalidate });
   const blockMut = useMutation({
@@ -332,8 +339,31 @@ export function OwnerPage() {
           <label className="mb-1.5 block text-xs font-bold text-slate-400">Bozor nomi</label>
           <input autoFocus value={newName} onChange={(e) => setNewName(e.target.value)}
             placeholder="Masalan: Chorsu bozori"
-            onKeyDown={(e) => { if (e.key === "Enter" && newName.trim()) createMut.mutate(); }}
             className="w-full rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm text-white outline-none transition-all placeholder:text-slate-500 focus:border-[#0066ff] focus:ring-4 focus:ring-[#0066ff]/20" />
+
+          <label className="mb-1.5 mt-3 block text-xs font-bold text-slate-400">Dogovor raqami (tex-podderjka)</label>
+          <input value={newContractNo} onChange={(e) => setNewContractNo(e.target.value)}
+            placeholder="Masalan: 2026/TP-014"
+            className="w-full rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm text-white outline-none transition-all placeholder:text-slate-500 focus:border-[#0066ff] focus:ring-4 focus:ring-[#0066ff]/20" />
+
+          <label className="mb-1.5 mt-3 block text-xs font-bold text-slate-400">Dogovor fayli (ixtiyoriy)</label>
+          <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-white/15 bg-white/[0.04] px-3 py-2.5 text-sm text-slate-400 hover:border-[#0066ff]">
+            <FileText size={16} className="text-[#5b9dff]" />
+            {newContractDoc?.name || "PDF yoki rasm tanlang (maks 8 MB)"}
+            <input type="file" accept=".pdf,image/*" className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0]; if (!f) return;
+                if (f.size > 8 * 1024 * 1024) { alert("Fayl 8 MB dan kichik bo'lsin"); return; }
+                const reader = new FileReader();
+                reader.onload = () => {
+                  const res = reader.result as string;
+                  const b64 = res.includes(",") ? res.split(",", 2)[1] : res;
+                  setNewContractDoc({ data: b64, name: f.name, mime: f.type });
+                };
+                reader.readAsDataURL(f);
+              }} />
+          </label>
+
           <div className="mt-4 flex gap-2">
             <button onClick={() => createMut.mutate()} disabled={!newName.trim() || createMut.isPending}
               className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#0066ff] to-[#0090ff] px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">

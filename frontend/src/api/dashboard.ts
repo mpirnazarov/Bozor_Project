@@ -17,6 +17,9 @@ export interface MarketInvoice {
   paid_amount: number;
   remaining: number;
   currency: string;
+  kind: "support" | "extra";
+  payment_method: "cash" | "contract" | null;
+  contract_no: string | null;
   due_date: string | null;
   is_paid: boolean;
   paid_at: string | null;

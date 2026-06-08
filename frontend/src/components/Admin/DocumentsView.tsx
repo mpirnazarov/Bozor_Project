@@ -70,6 +70,15 @@ export function DocumentsView() {
                       <span className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[11px] font-bold" style={{ color: meta.color }}>
                         <Icon size={11} /> {meta.label}
                       </span>
+                      {inv.kind === "support" && (
+                        <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-bold text-purple-700">Tex-podderjka</span>
+                      )}
+                      {inv.payment_method === "cash" && (
+                        <span className="ml-1 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-700">Naqd</span>
+                      )}
+                      {inv.payment_method === "contract" && (
+                        <span className="ml-1 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700">Dogovor{inv.contract_no ? ` #${inv.contract_no}` : ""}</span>
+                      )}
                       <h4 className="mt-1 font-semibold text-ink">{inv.title}</h4>
                       {inv.description && <p className="mt-0.5 text-sm text-ink-soft">{inv.description}</p>}
                       <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-faint">
