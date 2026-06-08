@@ -116,6 +116,10 @@ export interface RailwayService {
   ram_limit_gb?: number | null;
 }
 
+export interface RailwayMetricPoint { ts?: number | string; v: number; }
+
+export interface RailwayDomain { domain: string; type: string; status: string; }
+
 export interface RailwayOverview {
   configured: boolean;
   metrics?: {
@@ -123,6 +127,11 @@ export interface RailwayOverview {
     cpu_vcpu_avg?: number;
     ram_gb_latest?: number;
     ram_gb_avg?: number;
+    cpu_series?: RailwayMetricPoint[];
+    ram_series?: RailwayMetricPoint[];
+    network_gb_total?: number;
+    network_gb_latest?: number;
+    disk_gb_latest?: number;
   };
   metrics_error?: string;
   deployments?: RailwayDeployment[];
@@ -131,6 +140,10 @@ export interface RailwayOverview {
   service_error?: string;
   limits?: { cpu_vcpu: number; ram_gb: number; source: string; plan: string };
   usage_pct?: { cpu?: number; ram?: number };
+  usage?: { month_cost_usd?: number };
+  domains?: RailwayDomain[];
+  env_count?: number;
+  project?: { name?: string | null; services?: { id: string; name: string }[] };
 }
 
 export async function getOwnerRailway(): Promise<RailwayOverview> {

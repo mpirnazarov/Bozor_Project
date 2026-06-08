@@ -128,7 +128,19 @@ query ServiceInfo($serviceId: String!) {
 
 # Variant query'lar: har biri (query, measurements, extra_vars) ko'rinishida.
 _METRICS_VARIANTS = [
-    # 1) serviceId bilan scope, GB o'lchovi
+    # 1) serviceId scope — CPU/RAM/Network/Disk (to'liq)
+    {
+        "query": """
+query Metrics($serviceId: String!, $startDate: DateTime!, $measurements: [MetricMeasurement!]!) {
+  metrics(serviceId: $serviceId, startDate: $startDate, measurements: $measurements) {
+    measurement
+    values { ts value }
+  }
+}""",
+        "measurements": ["CPU_USAGE", "MEMORY_USAGE_GB", "NETWORK_TX_GB", "DISK_USAGE_GB"],
+        "key": "serviceId",
+    },
+    # 2) serviceId scope — faqat CPU/RAM (network/disk enum xato bo'lsa)
     {
         "query": """
 query Metrics($serviceId: String!, $startDate: DateTime!, $measurements: [MetricMeasurement!]!) {
@@ -140,7 +152,7 @@ query Metrics($serviceId: String!, $startDate: DateTime!, $measurements: [Metric
         "measurements": ["CPU_USAGE", "MEMORY_USAGE_GB"],
         "key": "serviceId",
     },
-    # 2) projectId + environmentId + serviceId
+    # 3) projectId + environmentId + serviceId
     {
         "query": """
 query Metrics($projectId: String!, $environmentId: String!, $serviceId: String!, $startDate: DateTime!, $measurements: [MetricMeasurement!]!) {
@@ -152,7 +164,7 @@ query Metrics($projectId: String!, $environmentId: String!, $serviceId: String!,
         "measurements": ["CPU_USAGE", "MEMORY_USAGE_GB"],
         "key": "all",
     },
-    # 3) bytes o'lchovi (MEMORY_USAGE_BYTES)
+    # 4) bytes o'lchovi (MEMORY_USAGE_BYTES)
     {
         "query": """
 query Metrics($serviceId: String!, $startDate: DateTime!, $measurements: [MetricMeasurement!]!) {
@@ -164,7 +176,7 @@ query Metrics($serviceId: String!, $startDate: DateTime!, $measurements: [Metric
         "measurements": ["CPU_USAGE", "MEMORY_USAGE_BYTES"],
         "key": "serviceId",
     },
-    # 4) faqat projectId (eski usul)
+    # 5) faqat projectId (eski usul)
     {
         "query": """
 query Metrics($projectId: String!, $startDate: DateTime!, $measurements: [MetricMeasurement!]!) {
@@ -288,7 +300,8 @@ async def get_metrics() -> dict:
     """
     if not is_configured():
         return {}
-    start = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+    # 24 soatlik oyna (grafik uchun)
+    start = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
 
     last_error: str | None = None
     for variant in _METRICS_VARIANTS:
@@ -309,11 +322,13 @@ async def get_metrics() -> dict:
 
 
 def _parse_metrics(data: dict) -> dict:
-    """metrics javobini cpu/ram qiymatlariga aylantiradi."""
+    """metrics javobini cpu/ram/network/disk qiymatlari + tarixiga aylantiradi."""
     result: dict[str, Any] = {}
+    GB = 1_073_741_824
     for m in data.get("metrics") or []:
         name = (m.get("measurement") or "").upper()
-        values = [v.get("value") for v in (m.get("values") or []) if v.get("value") is not None]
+        pts = [(v.get("ts"), v.get("value")) for v in (m.get("values") or []) if v.get("value") is not None]
+        values = [v for _, v in pts]
         if not values:
             continue
         latest = values[-1]
@@ -321,12 +336,155 @@ def _parse_metrics(data: dict) -> dict:
         if "CPU" in name:
             result["cpu_vcpu_latest"] = round(latest, 3)
             result["cpu_vcpu_avg"] = round(avg, 3)
+            result["cpu_series"] = [{"ts": t, "v": round(v, 3)} for t, v in pts]
         elif "MEM" in name or "RAM" in name:
-            # Bytes bo'lsa GB ga aylantiramiz (qiymat katta bo'lsa)
-            div = 1_073_741_824 if latest > 1024 else 1
+            div = GB if latest > 1024 else 1
             result["ram_gb_latest"] = round(latest / div, 3)
             result["ram_gb_avg"] = round(avg / div, 3)
+            result["ram_series"] = [{"ts": t, "v": round(v / div, 3)} for t, v in pts]
+        elif "NETWORK" in name or "EGRESS" in name or "TX" in name or "RX" in name:
+            # Yig'indi (GB). Network odatda bytes.
+            total = sum(values)
+            div = GB if total > 1024 else 1
+            result["network_gb_total"] = round(total / div, 4)
+            result["network_gb_latest"] = round(latest / div, 5)
+        elif "DISK" in name or "VOLUME" in name:
+            div = GB if latest > 1024 else 1
+            result["disk_gb_latest"] = round(latest / div, 3)
     return result
+
+
+# ===== Qo'shimcha ma'lumotlar (har biri xatoga chidamli) =====
+
+_USAGE_VARIANTS = [
+    """
+query Usage($projectId: String!) {
+  usage(projectId: $projectId) {
+    estimatedUsage { measurement amount }
+  }
+}""",
+    """
+query Usage($projectId: String!, $startDate: DateTime!, $endDate: DateTime!) {
+  estimatedUsage(projectId: $projectId, startDate: $startDate, endDate: $endDate) {
+    measurement estimatedValue
+  }
+}""",
+]
+
+
+async def get_usage() -> dict:
+    """Bu oygi taxminiy resurs xarajati ($)."""
+    if not is_configured():
+        return {}
+    now = datetime.now(timezone.utc)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    total = 0.0
+    found = False
+    for query in _USAGE_VARIANTS:
+        try:
+            variables: dict[str, Any] = {"projectId": settings.RAILWAY_PROJECT_ID}
+            if "startDate" in query:
+                variables["startDate"] = month_start.isoformat()
+                variables["endDate"] = now.isoformat()
+            data = await _gql(query, variables)
+        except Exception:  # noqa: BLE001
+            continue
+        items = (data.get("usage") or {}).get("estimatedUsage") or data.get("estimatedUsage") or []
+        for it in items:
+            amt = it.get("amount") or it.get("estimatedValue")
+            if amt is not None:
+                total += float(amt)
+                found = True
+        if found:
+            break
+    if not found:
+        return {}
+    # Railway qiymatlari odatda dollarda yoki sentда — katta bo'lsa sentdan $ ga
+    cost = total / 100 if total > 1000 else total
+    return {"month_cost_usd": round(cost, 2)}
+
+
+_DOMAINS_QUERY = """
+query Domains($serviceId: String!, $environmentId: String!) {
+  domains(serviceId: $serviceId, environmentId: $environmentId) {
+    serviceDomains { domain }
+    customDomains { domain status }
+  }
+}"""
+
+
+async def get_domains() -> list[dict]:
+    """Servisning domenlari + SSL/status holati."""
+    if not is_configured():
+        return []
+    try:
+        data = await _gql(_DOMAINS_QUERY, {
+            "serviceId": settings.RAILWAY_SERVICE_ID,
+            "environmentId": settings.RAILWAY_ENVIRONMENT_ID,
+        })
+    except Exception:  # noqa: BLE001
+        return []
+    out = []
+    d = data.get("domains") or {}
+    for sd in d.get("serviceDomains") or []:
+        if sd.get("domain"):
+            out.append({"domain": sd["domain"], "type": "railway", "status": "active"})
+    for cd in d.get("customDomains") or []:
+        if cd.get("domain"):
+            status = cd.get("status")
+            status_str = status if isinstance(status, str) else (status or {}).get("dnsRecords") or "custom"
+            out.append({"domain": cd["domain"], "type": "custom", "status": str(status_str)})
+    return out
+
+
+_ENV_COUNT_QUERY = """
+query Vars($projectId: String!, $environmentId: String!, $serviceId: String!) {
+  variables(projectId: $projectId, environmentId: $environmentId, serviceId: $serviceId)
+}"""
+
+
+async def get_env_count() -> int | None:
+    """Servisdagi environment o'zgaruvchilar soni (qiymatlarsiz)."""
+    if not is_configured():
+        return None
+    try:
+        data = await _gql(_ENV_COUNT_QUERY, {
+            "projectId": settings.RAILWAY_PROJECT_ID,
+            "environmentId": settings.RAILWAY_ENVIRONMENT_ID,
+            "serviceId": settings.RAILWAY_SERVICE_ID,
+        })
+    except Exception:  # noqa: BLE001
+        return None
+    variables = data.get("variables")
+    if isinstance(variables, dict):
+        return len(variables)
+    return None
+
+
+_PROJECT_QUERY = """
+query Project($projectId: String!) {
+  project(id: $projectId) {
+    id name
+    services { edges { node { id name } } }
+  }
+}"""
+
+
+async def get_project_services() -> dict:
+    """Loyihadagi servislar ro'yxati."""
+    if not is_configured():
+        return {}
+    try:
+        data = await _gql(_PROJECT_QUERY, {"projectId": settings.RAILWAY_PROJECT_ID})
+    except Exception:  # noqa: BLE001
+        return {}
+    proj = data.get("project") or {}
+    services = []
+    for edge in (proj.get("services") or {}).get("edges") or []:
+        node = edge.get("node") or {}
+        if node.get("name"):
+            services.append({"id": node.get("id"), "name": node.get("name")})
+    return {"name": proj.get("name"), "services": services}
 
 
 # Plan limitlari (foiz hisoblash uchun fallback). Railway'dan aniq limit
@@ -368,6 +526,14 @@ async def get_railway_overview() -> dict:
     except Exception as e:  # noqa: BLE001
         overview["deployments_error"] = str(e)[:200]
         overview["deployments"] = []
+
+    # Qo'shimcha ma'lumotlar — har biri ixtiyoriy, xato bo'lsa shunchaki tashlab ketamiz
+    overview["usage"] = await get_usage()
+    overview["domains"] = await get_domains()
+    env_count = await get_env_count()
+    if env_count is not None:
+        overview["env_count"] = env_count
+    overview["project"] = await get_project_services()
 
     # CPU/RAM foizini hisoblaymiz: limit Railway'dan kelса o'sha, bo'lmasa plan limiti
     plan = _plan_limit()

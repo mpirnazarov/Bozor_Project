@@ -2,8 +2,9 @@ import { useState } from "react";
 import {
   Cpu, MemoryStick, CircleCheck, CircleX, Circle, X, GitBranch,
   ExternalLink, Clock, Hash, MapPin, Layers, Server,
+  DollarSign, Globe, Network, HardDrive, KeySquare, Boxes, ShieldCheck, ShieldX,
 } from "lucide-react";
-import type { RailwayDeployment, RailwayOverview } from "@/api/owner";
+import type { RailwayDeployment, RailwayOverview, RailwayMetricPoint } from "@/api/owner";
 
 /* Foizga qarab rang: kam qolsa (yuqori foiz) qizil, o'rta sariq, bo'sh yashil */
 export function usageColor(pct: number | undefined): string {
@@ -184,6 +185,154 @@ export function ServiceChips({ railway }: { railway: RailwayOverview }) {
           <span className="text-slate-500">{c.label}:</span> <span className="font-semibold text-white">{c.value}</span>
         </span>
       ))}
+    </div>
+  );
+}
+
+/* ===== Sparkline grafik (24h CPU/RAM) ===== */
+export function Sparkline({ series, color, height = 56 }: {
+  series?: RailwayMetricPoint[]; color: string; height?: number;
+}) {
+  if (!series || series.length < 2) {
+    return <div className="flex h-14 items-center justify-center text-xs text-slate-600">Grafik uchun ma'lumot yetarli emas</div>;
+  }
+  const w = 280;
+  const vals = series.map((p) => p.v);
+  const max = Math.max(...vals, 0.0001);
+  const min = Math.min(...vals, 0);
+  const range = max - min || 1;
+  const step = w / (series.length - 1);
+  const pts = series.map((p, i) => {
+    const x = i * step;
+    const y = height - ((p.v - min) / range) * (height - 6) - 3;
+    return [x, y];
+  });
+  const line = pts.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+  const area = `${line} L${w},${height} L0,${height} Z`;
+  const id = `grad-${color.replace("#", "")}`;
+  return (
+    <svg viewBox={`0 0 ${w} ${height}`} className="w-full" preserveAspectRatio="none" style={{ height }}>
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.35" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={area} fill={`url(#${id})`} />
+      <path d={line} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/* 24h grafik kartasi */
+export function HistoryChart({ railway }: { railway: RailwayOverview }) {
+  const m = railway.metrics || {};
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+      <div className="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">24 soatlik tarix</div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-[#0066ff]"><Cpu size={13} /> CPU (vCPU)</div>
+          <Sparkline series={m.cpu_series} color="#0066ff" />
+        </div>
+        <div>
+          <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-[#a855f7]"><MemoryStick size={13} /> RAM (GB)</div>
+          <Sparkline series={m.ram_series} color="#a855f7" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* Kichik statistik karta (usage, network, disk, env) */
+export function StatTile({ icon, label, value, sub, accent }: {
+  icon: React.ReactNode; label: string; value: string; sub?: string; accent: string;
+}) {
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+      <div className="pointer-events-none absolute -right-6 -top-6 h-20 w-20 rounded-full opacity-20 blur-2xl" style={{ background: accent }} />
+      <div className="mb-2 flex items-center gap-2 text-xs font-semibold" style={{ color: accent }}>
+        <span className="grid h-7 w-7 place-items-center rounded-lg" style={{ background: `${accent}22` }}>{icon}</span>
+        {label}
+      </div>
+      <div className="font-display text-xl font-extrabold tabnum text-white">{value}</div>
+      {sub && <div className="mt-0.5 text-[11px] text-slate-500">{sub}</div>}
+    </div>
+  );
+}
+
+/* Qo'shimcha statistikalar qatori */
+export function ExtraStats({ railway }: { railway: RailwayOverview }) {
+  const m = railway.metrics || {};
+  const tiles: React.ReactNode[] = [];
+  if (railway.usage?.month_cost_usd != null) {
+    tiles.push(<StatTile key="cost" icon={<DollarSign size={15} />} accent="#16a34a"
+      label="Bu oy xarajat" value={`$${railway.usage.month_cost_usd}`} sub="taxminiy resurs narxi" />);
+  }
+  if (m.network_gb_total != null) {
+    tiles.push(<StatTile key="net" icon={<Network size={15} />} accent="#00a3ff"
+      label="Network (egress)" value={`${m.network_gb_total} GB`} sub="24 soatlik chiqish trafigi" />);
+  }
+  if (m.disk_gb_latest != null) {
+    tiles.push(<StatTile key="disk" icon={<HardDrive size={15} />} accent="#eab308"
+      label="Disk" value={`${m.disk_gb_latest} GB`} sub="volume ishlatilishi" />);
+  }
+  if (railway.env_count != null) {
+    tiles.push(<StatTile key="env" icon={<KeySquare size={15} />} accent="#a855f7"
+      label="Env o'zgaruvchilar" value={`${railway.env_count} ta`} sub="sozlangan" />);
+  }
+  if (tiles.length === 0) return null;
+  return <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{tiles}</div>;
+}
+
+/* Domenlar paneli */
+export function DomainsPanel({ railway }: { railway: RailwayOverview }) {
+  const domains = railway.domains || [];
+  if (domains.length === 0) return null;
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+      <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
+        <Globe size={14} className="text-[#5b9dff]" /> Domenlar ({domains.length})
+      </div>
+      <div className="space-y-2">
+        {domains.map((d, i) => {
+          const ok = !/pending|wait|invalid|error/i.test(d.status);
+          return (
+            <div key={i} className="flex items-center gap-2.5 rounded-xl bg-white/[0.03] px-3 py-2 text-sm">
+              {ok ? <ShieldCheck size={15} className="text-[#4ade80]" /> : <ShieldX size={15} className="text-amber-400" />}
+              <a href={`https://${d.domain}`} target="_blank" rel="noreferrer"
+                className="truncate font-medium text-white hover:text-[#5b9dff]">{d.domain}</a>
+              {d.type === "custom" && (
+                <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] font-semibold text-slate-400">custom</span>
+              )}
+              <span className="ml-auto text-xs" style={{ color: ok ? "#4ade80" : "#fbbf24" }}>
+                {ok ? "SSL faol" : d.status}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* Loyiha servislari paneli */
+export function ProjectPanel({ railway }: { railway: RailwayOverview }) {
+  const services = railway.project?.services || [];
+  if (services.length === 0) return null;
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+      <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
+        <Boxes size={14} className="text-[#5b9dff]" /> Loyiha servislari ({services.length})
+        {railway.project?.name && <span className="ml-1 normal-case text-slate-600">· {railway.project.name}</span>}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {services.map((s) => (
+          <span key={s.id} className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm font-medium text-white">
+            <Server size={13} className="text-[#5b9dff]" /> {s.name}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }

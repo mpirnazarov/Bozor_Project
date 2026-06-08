@@ -7,6 +7,7 @@ import {
 import { getOwnerRailway } from "@/api/owner";
 import {
   MetricCard, DeploymentRow, ServiceChips, usageColor, usageLabel,
+  HistoryChart, ExtraStats, DomainsPanel, ProjectPanel,
 } from "@/components/Railway/RailwayWidgets";
 
 export function RailwayDetailPage() {
@@ -116,8 +117,24 @@ export function RailwayDetailPage() {
               );
             })()}
 
+            {/* Qo'shimcha statistikalar: xarajat, network, disk, env */}
+            <div className="mb-6 animate-fade-up" style={{ animationDelay: "200ms" }}>
+              <ExtraStats railway={railway} />
+            </div>
+
+            {/* 24 soatlik grafik */}
+            <div className="mb-6 animate-fade-up" style={{ animationDelay: "230ms" }}>
+              <HistoryChart railway={railway} />
+            </div>
+
+            {/* Domenlar + Loyiha servislari */}
+            <div className="mb-6 grid gap-4 lg:grid-cols-2 animate-fade-up" style={{ animationDelay: "250ms" }}>
+              <DomainsPanel railway={railway} />
+              <ProjectPanel railway={railway} />
+            </div>
+
             {/* Deploymentlar */}
-            <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl animate-fade-up" style={{ animationDelay: "240ms" }}>
+            <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl animate-fade-up" style={{ animationDelay: "270ms" }}>
               <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
                 <Rocket size={14} className="text-[#5b9dff]" /> Deploymentlar tarixi ({deploys.length})
               </div>
