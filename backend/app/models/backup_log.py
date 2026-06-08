@@ -15,6 +15,8 @@ class BackupLog(Base):
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     # trigger: "auto" (kunlik) | "manual" (tugma)
     trigger: Mapped[str] = mapped_column(String(20), nullable=False, default="manual")
+    # category: "daily" | "weekly" | "monthly" | "manual" (GFS retention uchun)
+    category: Mapped[str] = mapped_column(String(20), nullable=False, default="daily")
     # status: "success" | "failed" | "running"
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="running")
     size_bytes: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)

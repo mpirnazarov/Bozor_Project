@@ -138,28 +138,91 @@ async def create_backup(db: AsyncSession, trigger: str = "manual", user_id: int 
 
 
 async def _cleanup_old(db: AsyncSession) -> None:
-    """Faqat oxirgi BACKUP_KEEP ta muvaffaqiyatli backupni saqlaymiz."""
-    keep = max(settings.BACKUP_KEEP, 1)
+    """GFS retention: kunlik(7) + haftalik(4) + oylik(12).
+
+    Manual backuplar hech qachon avtomatik o'chirilmaydi.
+    Har success-backup'ga category beriladi (daily/weekly/monthly) — ko'rsatish uchun.
+    Keep to'plamiga kirmagan AUTO backuplar o'chiriladi.
+    """
     rows = await db.execute(
         select(BackupLog).where(BackupLog.status == "success").order_by(BackupLog.created_at.desc())
     )
-    logs = list(rows.scalars())
+    logs = list(rows.scalars())  # eng yangi birinchi
+
+    keep_ids: set[int] = set()
+    # Har bir backupga "asosiy" kategoriya belgilaymiz (eng kuchli: monthly>weekly>daily)
+    category_of: dict[int, str] = {}
+
+    seen_days: set[str] = set()
+    seen_weeks: set[str] = set()
+    seen_months: set[str] = set()
+    daily_kept = weekly_kept = monthly_kept = 0
+
+    for b in logs:
+        # Manual backup — doim saqlanadi, category=manual
+        if b.trigger == "manual":
+            keep_ids.add(b.id)
+            category_of[b.id] = "manual"
+            continue
+
+        created = b.created_at
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        day_key = created.strftime("%Y-%m-%d")
+        iso = created.isocalendar()
+        week_key = f"{iso[0]}-W{iso[1]:02d}"
+        month_key = created.strftime("%Y-%m")
+
+        cat = None
+        # Kunlik: har kunning eng yangisi, oxirgi 7 kun
+        if day_key not in seen_days and daily_kept < settings.BACKUP_KEEP_DAILY:
+            seen_days.add(day_key)
+            daily_kept += 1
+            keep_ids.add(b.id)
+            cat = "daily"
+        # Haftalik: har ISO-haftaning eng yangisi, 4 ta (kunlikdan tashqari haftalar)
+        if cat is None and week_key not in seen_weeks and weekly_kept < settings.BACKUP_KEEP_WEEKLY:
+            seen_weeks.add(week_key)
+            weekly_kept += 1
+            keep_ids.add(b.id)
+            cat = "weekly"
+        # Oylik: har oyning eng yangisi, 12 ta (yuqoridagilardan tashqari oylar)
+        if cat is None and month_key not in seen_months and monthly_kept < settings.BACKUP_KEEP_MONTHLY:
+            seen_months.add(month_key)
+            monthly_kept += 1
+            keep_ids.add(b.id)
+            cat = "monthly"
+
+        # Kunlik/haftalik saqlangan backup o'z hafta/oyini ham "band" qiladi
+        # (keyingi haftalik/oylik boshqa davrdan tanlansin)
+        if b.id in keep_ids:
+            seen_weeks.add(week_key)
+            seen_months.add(month_key)
+
+        if cat:
+            category_of[b.id] = cat
+
     bdir = _backup_dir()
-    for old in logs[keep:]:
+    for b in logs:
+        if b.id in keep_ids:
+            # Kategoriyani yangilaymiz (ko'rsatish uchun)
+            new_cat = category_of.get(b.id, b.category)
+            if b.category != new_cat:
+                b.category = new_cat
+            continue
+        # Keep'da yo'q — o'chiramiz (faqat auto)
         try:
-            fp = bdir / old.filename
+            fp = bdir / b.filename
             if fp.exists():
                 fp.unlink()
         except Exception:  # noqa: BLE001
             pass
-        # Tashqi nusxani ham o'chiramiz
-        if old.s3_key:
+        if b.s3_key:
             try:
-                s3_service.delete_key(old.s3_key)
+                s3_service.delete_key(b.s3_key)
             except Exception:  # noqa: BLE001
                 pass
-        # Log qatorini ham o'chiramiz (fayl yo'q)
-        await db.delete(old)
+        await db.delete(b)
     await db.commit()
 
 

@@ -1,17 +1,35 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Database, DownloadCloud, RotateCcw, Plus, CircleCheck, CircleX, Loader2,
-  X, ShieldAlert, Clock, HardDriveDownload, Zap,
+  X, ShieldAlert, Clock, Zap, Cloud, CloudOff, CalendarDays, CalendarRange,
+  CalendarClock, Hand, Info,
 } from "lucide-react";
 import {
   getBackups, createBackup, restoreBackup, backupDownloadUrl, type BackupLog,
 } from "@/api/owner";
 
+/* GFS kategoriya uslublari */
+const CAT = {
+  daily:   { label: "Kunlik",   icon: CalendarDays,  color: "#5b9dff", desc: "Oxirgi 7 kun" },
+  weekly:  { label: "Haftalik", icon: CalendarRange, color: "#a855f7", desc: "Oxirgi 4 hafta" },
+  monthly: { label: "Oylik",    icon: CalendarClock, color: "#16a34a", desc: "Oxirgi 12 oy" },
+  manual:  { label: "Qo'lda",   icon: Hand,          color: "#eab308", desc: "O'chirilmaydi" },
+} as const;
+
+type CatKey = keyof typeof CAT;
+const CAT_ORDER: CatKey[] = ["daily", "weekly", "monthly", "manual"];
+
+function catKey(b: BackupLog): CatKey {
+  const c = (b.category || "daily") as CatKey;
+  return CAT[c] ? c : "daily";
+}
+
 export function BackupPanel() {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ["owner-backups"], queryFn: getBackups, refetchInterval: 30_000 });
   const [restoreFor, setRestoreFor] = useState<BackupLog | null>(null);
+  const [filter, setFilter] = useState<CatKey | "all">("all");
 
   const createMut = useMutation({
     mutationFn: createBackup,
@@ -20,6 +38,18 @@ export function BackupPanel() {
 
   const backups = data?.backups || [];
   const available = data?.available ?? false;
+
+  // Faqat muvaffaqiyatli backuplar kategoriyaga ajraladi; xatolar alohida
+  const counts = useMemo(() => {
+    const c: Record<CatKey, number> = { daily: 0, weekly: 0, monthly: 0, manual: 0 };
+    for (const b of backups) if (b.status === "success") c[catKey(b)]++;
+    return c;
+  }, [backups]);
+
+  const visible = useMemo(() => {
+    if (filter === "all") return backups;
+    return backups.filter((b) => b.status !== "success" || catKey(b) === filter);
+  }, [backups, filter]);
 
   return (
     <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl">
@@ -34,19 +64,66 @@ export function BackupPanel() {
         </button>
       </div>
 
+      {/* GFS qoidalari — 4 ta kategoriya kartasi (bosiladigan filtr) */}
+      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {CAT_ORDER.map((k) => {
+          const meta = CAT[k];
+          const Icon = meta.icon;
+          const active = filter === k;
+          return (
+            <button key={k} onClick={() => setFilter(active ? "all" : k)}
+              className="group relative overflow-hidden rounded-2xl border p-3 text-left transition-all"
+              style={{
+                borderColor: active ? meta.color : "rgba(255,255,255,0.08)",
+                background: active ? `${meta.color}14` : "rgba(255,255,255,0.02)",
+              }}>
+              <div className="pointer-events-none absolute -right-4 -top-4 h-14 w-14 rounded-full opacity-20 blur-2xl"
+                style={{ background: meta.color }} />
+              <div className="mb-1 flex items-center gap-1.5 text-[11px] font-bold" style={{ color: meta.color }}>
+                <Icon size={13} /> {meta.label}
+              </div>
+              <div className="font-display text-xl font-extrabold text-white">{counts[k]}</div>
+              <div className="text-[10px] text-slate-500">{meta.desc}</div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Holat chiplari */}
       <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-slate-400">
         <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1">
           <Clock size={12} className="text-[#5b9dff]" /> Har kuni 00:00 (Toshkent) avtomatik
         </span>
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1">
-          <HardDriveDownload size={12} className="text-[#5b9dff]" /> Oxirgi 14 ta saqlanadi
+        {data?.s3_enabled ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-[#16a34a]/30 bg-[#16a34a]/10 px-3 py-1 text-[#4ade80]">
+            <Cloud size={12} /> Tashqi nusxa yoqilgan
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-500/10 px-3 py-1 text-amber-300">
+            <CloudOff size={12} /> Tashqi nusxa o'chiq
+          </span>
+        )}
+        {filter !== "all" && (
+          <button onClick={() => setFilter("all")}
+            className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-slate-300 hover:text-white">
+            <X size={11} /> Filtrni tozalash
+          </button>
+        )}
+      </div>
+
+      {/* GFS qoidasi izohi */}
+      <div className="mb-4 flex items-start gap-2 rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-[11px] leading-relaxed text-slate-500">
+        <Info size={13} className="mt-0.5 shrink-0 text-[#5b9dff]" />
+        <span>
+          <b className="text-slate-400">GFS qoidasi:</b> oxirgi <b className="text-[#5b9dff]">7 kunlik</b>,
+          har haftadan <b className="text-[#a855f7]">4 haftalik</b>, har oydan <b className="text-[#16a34a]">12 oylik</b> backup
+          saqlanadi. Eskirgani avtomatik o'chadi. Qo'lda backup hech qachon o'chmaydi.
         </span>
       </div>
 
       {!available && (
         <div className="mb-3 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
-          <b>Diqqat:</b> serverda <code>pg_dump</code> topilmadi. Backend Dockerfile'ga
-          <code> postgresql-client</code> qo'shilib qayta deploy qilinishi kerak.
+          <b>Diqqat:</b> serverda <code>pg_dump</code> topilmadi. Backend qayta deploy qilinishi kerak.
         </div>
       )}
 
@@ -58,13 +135,13 @@ export function BackupPanel() {
 
       {isLoading ? (
         <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-12 animate-pulse rounded-xl bg-white/[0.04]" />)}</div>
-      ) : backups.length === 0 ? (
+      ) : visible.length === 0 ? (
         <div className="rounded-xl bg-white/[0.02] px-4 py-6 text-center text-sm text-slate-500">
-          Hali backup yo'q. «Hoziroq backup» tugmasini bosing.
+          {backups.length === 0 ? "Hali backup yo'q. «Hoziroq backup» tugmasini bosing." : "Bu turkumda backup yo'q."}
         </div>
       ) : (
         <div className="space-y-1.5">
-          {backups.map((b) => <BackupRow key={b.id} b={b} onRestore={() => setRestoreFor(b)} />)}
+          {visible.map((b) => <BackupRow key={b.id} b={b} onRestore={() => setRestoreFor(b)} />)}
         </div>
       )}
 
@@ -79,6 +156,8 @@ export function BackupPanel() {
 function BackupRow({ b, onRestore }: { b: BackupLog; onRestore: () => void }) {
   const ok = b.status === "success";
   const running = b.status === "running";
+  const meta = CAT[catKey(b)];
+  const CatIcon = meta.icon;
   const when = new Date(b.created_at).toLocaleString("uz-UZ", {
     day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
   });
@@ -88,14 +167,31 @@ function BackupRow({ b, onRestore }: { b: BackupLog; onRestore: () => void }) {
         : ok ? <CircleCheck size={16} className="text-[#4ade80]" />
         : <CircleX size={16} className="text-[#f87171]" />}
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="font-mono text-xs text-slate-300">{when}</span>
-          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${b.trigger === "auto" ? "bg-[#5b9dff]/15 text-[#5b9dff]" : "bg-white/[0.06] text-slate-400"}`}>
+          {ok && (
+            <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold"
+              style={{ background: `${meta.color}22`, color: meta.color }}>
+              <CatIcon size={9} /> {meta.label}
+            </span>
+          )}
+          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${b.trigger === "auto" ? "bg-white/[0.06] text-slate-400" : "bg-[#eab308]/15 text-[#eab308]"}`}>
             {b.trigger === "auto" ? <><Clock size={9} /> avto</> : <><Zap size={9} /> qo'lda</>}
           </span>
         </div>
         {ok ? (
-          <div className="text-xs text-slate-500">{b.size_mb} MB · {(b.duration_ms / 1000).toFixed(1)}s</div>
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <span>{b.size_mb} MB · {(b.duration_ms / 1000).toFixed(1)}s</span>
+            {b.s3_uploaded ? (
+              <span className="inline-flex items-center gap-1 text-[#4ade80]" title="Tashqi nusxa saqlangan">
+                <Cloud size={11} /> Tashqi
+              </span>
+            ) : b.s3_error ? (
+              <span className="inline-flex items-center gap-1 text-amber-400" title={b.s3_error}>
+                <CloudOff size={11} /> Tashqi xato
+              </span>
+            ) : null}
+          </div>
         ) : b.error ? (
           <div className="truncate text-xs text-[#f87171]">{b.error}</div>
         ) : null}

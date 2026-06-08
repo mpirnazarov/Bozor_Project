@@ -156,16 +156,20 @@ export interface BackupLog {
   id: number;
   filename: string;
   trigger: string;       // auto | manual
+  category: string;      // daily | weekly | monthly | manual
   status: string;        // success | failed | running
   size_bytes: number;
   size_mb: number;
   duration_ms: number;
   error: string | null;
+  s3_uploaded: boolean;
+  s3_error: string | null;
   created_at: string;
 }
 
 export interface BackupList {
   available: boolean;
+  s3_enabled: boolean;
   backups: BackupLog[];
 }
 

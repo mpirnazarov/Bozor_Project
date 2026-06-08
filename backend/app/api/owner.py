@@ -54,6 +54,7 @@ def _backup_out(log) -> dict:
         "id": log.id,
         "filename": log.filename,
         "trigger": log.trigger,
+        "category": log.category,
         "status": log.status,
         "size_bytes": log.size_bytes,
         "size_mb": round(log.size_bytes / 1_048_576, 2) if log.size_bytes else 0,

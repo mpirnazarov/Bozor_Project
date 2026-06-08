@@ -52,8 +52,10 @@ class Settings(BaseSettings):
     # === Backup ===
     # Railway Volume mount nuqtasi (masalan /data). Backup shu yerga saqlanadi.
     BACKUP_DIR: str = "/data/backups"
-    # Saqlanadigan backup'lar soni (eskilari avtomatik o'chiriladi)
-    BACKUP_KEEP: int = 14
+    # === GFS (Grandfather-Father-Son) retention ===
+    BACKUP_KEEP_DAILY: int = 7     # oxirgi 7 kunlik
+    BACKUP_KEEP_WEEKLY: int = 4    # oxirgi 4 haftalik
+    BACKUP_KEEP_MONTHLY: int = 12  # oxirgi 12 oylik
     # Avtomatik kunlik backup vaqti (soat, 0-23, server vaqti UTC)
     BACKUP_HOUR_UTC: int = 19  # 19:00 UTC = 00:00 Toshkent (UTC+5)
 
