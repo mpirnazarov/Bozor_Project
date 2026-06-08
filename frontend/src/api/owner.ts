@@ -140,7 +140,7 @@ export interface RailwayOverview {
   service_error?: string;
   limits?: { cpu_vcpu: number; ram_gb: number; source: string; plan: string };
   usage_pct?: { cpu?: number; ram?: number };
-  usage?: { month_cost_usd?: number };
+  usage?: { month_cost_usd?: number; error?: string };
   domains?: RailwayDomain[];
   env_count?: number;
   project?: { name?: string | null; services?: { id: string; name: string }[] };

@@ -356,52 +356,101 @@ def _parse_metrics(data: dict) -> dict:
 
 # ===== Qo'shimcha ma'lumotlar (har biri xatoga chidamli) =====
 
+# Railway pricing (2026): CPU $20/vCPU/oy, RAM $10/GB/oy.
+# estimatedUsage measurement bo'yicha miqdor (vCPU-min, GB-min, GB) qaytaradi.
+# Biz uni taxminiy $ ga aylantiramiz.
 _USAGE_VARIANTS = [
-    """
-query Usage($projectId: String!) {
-  usage(projectId: $projectId) {
-    estimatedUsage { measurement amount }
+    # 1) estimatedUsage — measurements + date range (eng keng tarqalgan)
+    {
+        "query": """
+query Usage($projectId: String!, $startDate: String!, $endDate: String!, $measurements: [MetricMeasurement!]!) {
+  estimatedUsage(projectId: $projectId, startDate: $startDate, endDate: $endDate, measurements: $measurements) {
+    measurement estimatedValue
   }
 }""",
-    """
-query Usage($projectId: String!, $startDate: DateTime!, $endDate: DateTime!) {
+        "kind": "estimatedUsage",
+    },
+    # 2) estimatedUsage — measurementsiz
+    {
+        "query": """
+query Usage($projectId: String!, $startDate: String!, $endDate: String!) {
   estimatedUsage(projectId: $projectId, startDate: $startDate, endDate: $endDate) {
     measurement estimatedValue
   }
 }""",
+        "kind": "estimatedUsage",
+    },
+    # 3) usage — nested
+    {
+        "query": """
+query Usage($projectId: String!, $startDate: String!, $endDate: String!) {
+  usage(projectId: $projectId, startDate: $startDate, endDate: $endDate) {
+    measurement value
+  }
+}""",
+        "kind": "usage",
+    },
 ]
+
+# measurement -> taxminiy oylik narx koeffitsienti ($).
+# estimatedValue odatda "minut" birligida (vCPU-minut, GB-minut) yoki GB bo'ladi.
+_USAGE_PRICE = {
+    "CPU_USAGE": 20.0 / (30 * 24 * 60),       # $/vCPU-minut
+    "MEMORY_USAGE_GB": 10.0 / (30 * 24 * 60),  # $/GB-minut
+    "NETWORK_TX_GB": 0.10,                      # $/GB egress
+    "DISK_USAGE_GB": 0.25 / (30 * 24 * 60),    # $/GB-minut (taxminiy)
+}
 
 
 async def get_usage() -> dict:
-    """Bu oygi taxminiy resurs xarajati ($)."""
+    """Bu oygi taxminiy resurs xarajati ($). Xato bo'lsa sababni qaytaradi."""
     if not is_configured():
         return {}
     now = datetime.now(timezone.utc)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    total = 0.0
-    found = False
-    for query in _USAGE_VARIANTS:
+    measurements = ["CPU_USAGE", "MEMORY_USAGE_GB"]
+
+    last_error: str | None = None
+    for variant in _USAGE_VARIANTS:
+        variables: dict[str, Any] = {
+            "projectId": settings.RAILWAY_PROJECT_ID,
+            "startDate": month_start.isoformat(),
+            "endDate": now.isoformat(),
+        }
+        if "$measurements" in variant["query"]:
+            variables["measurements"] = measurements
         try:
-            variables: dict[str, Any] = {"projectId": settings.RAILWAY_PROJECT_ID}
-            if "startDate" in query:
-                variables["startDate"] = month_start.isoformat()
-                variables["endDate"] = now.isoformat()
-            data = await _gql(query, variables)
-        except Exception:  # noqa: BLE001
+            data = await _gql(variant["query"], variables)
+        except Exception as e:  # noqa: BLE001
+            last_error = str(e)[:250]
             continue
-        items = (data.get("usage") or {}).get("estimatedUsage") or data.get("estimatedUsage") or []
+
+        items = data.get("estimatedUsage") or data.get("usage") or []
+        if not isinstance(items, list):
+            continue
+        total_cost = 0.0
+        raw_total = 0.0
         for it in items:
-            amt = it.get("amount") or it.get("estimatedValue")
-            if amt is not None:
-                total += float(amt)
-                found = True
-        if found:
-            break
-    if not found:
-        return {}
-    # Railway qiymatlari odatda dollarda yoki sentда — katta bo'lsa sentdan $ ga
-    cost = total / 100 if total > 1000 else total
-    return {"month_cost_usd": round(cost, 2)}
+            meas = (it.get("measurement") or "").upper()
+            val = it.get("estimatedValue")
+            if val is None:
+                val = it.get("value")
+            if val is None:
+                continue
+            val = float(val)
+            raw_total += val
+            price = _USAGE_PRICE.get(meas)
+            if price is not None:
+                total_cost += val * price
+        if raw_total > 0:
+            # Agar narx koeffitsienti topilmasa, qiymatning o'zini ($ deb) ko'rsatamiz
+            cost = total_cost if total_cost > 0 else raw_total
+            return {"month_cost_usd": round(cost, 2)}
+
+    # Hech narsa topilmadi — sababni qaytaramiz (diagnostika uchun)
+    if last_error:
+        return {"error": last_error}
+    return {}
 
 
 _DOMAINS_QUERY = """

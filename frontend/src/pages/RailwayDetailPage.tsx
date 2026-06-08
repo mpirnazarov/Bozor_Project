@@ -79,12 +79,13 @@ export function RailwayDetailPage() {
         ) : (
           <>
             {/* Diagnostika */}
-            {(railway.metrics_error || railway.deployments_error || railway.service_error) && (
+            {(railway.metrics_error || railway.deployments_error || railway.service_error || railway.usage?.error) && (
               <div className="mb-5 rounded-2xl border border-[#dc2626]/30 bg-[#dc2626]/10 px-4 py-3 text-xs text-[#f87171] animate-fade-up">
                 <div className="font-bold">Diagnostika:</div>
                 {railway.metrics_error && <div className="mt-1 break-all font-mono opacity-90">Metrics: {railway.metrics_error}</div>}
                 {railway.service_error && <div className="mt-1 break-all font-mono opacity-90">Service: {railway.service_error}</div>}
                 {railway.deployments_error && <div className="mt-1 break-all font-mono opacity-90">Deploy: {railway.deployments_error}</div>}
+                {railway.usage?.error && <div className="mt-1 break-all font-mono opacity-90">Usage: {railway.usage.error}</div>}
               </div>
             )}
 
