@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import * as Tabs from "@radix-ui/react-tabs";
 import { ArrowLeft, Sun, Moon } from "lucide-react";
 import { useThemeStore } from "@/store/themeStore";
@@ -11,6 +12,7 @@ import { ShopsManager } from "@/components/Admin/ShopsManager";
 import { BillingImport } from "@/components/Admin/BillingImport";
 import { AuditLogView } from "@/components/Admin/AuditLogView";
 import { DocumentsView } from "@/components/Admin/DocumentsView";
+import { getMarketInvoices } from "@/api/dashboard";
 
 const TABS = [
   { value: "dashboard", tkey: "admin.tab.dashboard" },
@@ -22,8 +24,24 @@ const TABS = [
 ];
 
 export function AdminPage() {
-  const [tab, setTab] = useState("dashboard");
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get("tab");
+  const [tab, setTab] = useState(
+    initialTab && TABS.some((t) => t.value === initialTab) ? initialTab : "dashboard"
+  );
   const t = useT();
+
+  // To'lanmagan to'lovlar soni — "To'lovlar" vkladkasidagi badge uchun
+  const { data: marketInvoices } = useQuery({
+    queryKey: ["market-invoices"],
+    queryFn: () => getMarketInvoices(),
+    refetchInterval: 60_000,
+    retry: false,
+  });
+  const unpaidCount =
+    (marketInvoices?.stats?.counts.pending ?? 0) +
+    (marketInvoices?.stats?.counts.overdue ?? 0) +
+    (marketInvoices?.stats?.counts.partial ?? 0);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
@@ -47,9 +65,14 @@ export function AdminPage() {
             <Tabs.Trigger
               key={tt.value}
               value={tt.value}
-              className="rounded-xl px-4 py-2 text-sm font-semibold text-ink-soft transition-all hover:text-ink data-[state=active]:bg-brand-grad data-[state=active]:text-white data-[state=active]:shadow-glow"
+              className="relative rounded-xl px-4 py-2 text-sm font-semibold text-ink-soft transition-all hover:text-ink data-[state=active]:bg-brand-grad data-[state=active]:text-white data-[state=active]:shadow-glow"
             >
               {t(tt.tkey)}
+              {tt.value === "documents" && unpaidCount > 0 && (
+                <span className="absolute -right-1 -top-1 grid h-5 min-w-[1.1rem] place-items-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow ring-2 ring-white animate-pulse">
+                  {unpaidCount > 9 ? "9+" : unpaidCount}
+                </span>
+              )}
             </Tabs.Trigger>
           ))}
         </Tabs.List>

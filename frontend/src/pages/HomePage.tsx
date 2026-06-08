@@ -102,7 +102,7 @@ export function HomePage() {
             )}
             {/* Admin tugmasi FAQAT bozor admini uchun (super admin uchun emas) */}
             {isMarketAdmin && (
-              <Link to="/admin" className="relative btn-ghost px-2.5 py-2" title="Admin panel">
+              <Link to={unpaidCount > 0 ? "/admin?tab=documents" : "/admin"} className="relative btn-ghost px-2.5 py-2" title="Admin panel">
                 <Settings size={16} />
                 {unpaidCount > 0 && (
                   <span className="absolute -right-1 -top-1 grid h-5 min-w-[1.25rem] place-items-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow-md ring-2 ring-white animate-pulse">
