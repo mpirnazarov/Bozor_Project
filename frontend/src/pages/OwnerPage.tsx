@@ -14,6 +14,7 @@ import {
 } from "@/api/owner";
 import { MetricCard, DeploymentRow, ServiceChips } from "@/components/Railway/RailwayWidgets";
 import { BackupPanel } from "@/components/Railway/BackupPanel";
+import { RecentInvoicesWidget } from "@/components/RecentInvoicesWidget";
 import { useAuthStore } from "@/store/authStore";
 import { fmtUZS } from "@/lib/utils";
 import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
@@ -183,6 +184,11 @@ export function OwnerPage() {
             <RailwayMonitor railway={railway} onDetails={() => navigate("/owner/railway")} />
           </div>
         )}
+
+        {/* ===== OXIRGI TO'LOVLAR ===== */}
+        <div className="mb-7 animate-fade-up" style={{ animationDelay: "315ms" }}>
+          <RecentInvoicesWidget />
+        </div>
 
         {/* ===== BACKUP ===== */}
         <div className="mb-7 animate-fade-up" style={{ animationDelay: "330ms" }}>

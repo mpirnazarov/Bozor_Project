@@ -5,6 +5,7 @@ import { useAuthStore } from "@/store/authStore";
 import { useT } from "@/i18n/useT";
 import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 import { HeaderStats } from "@/components/Dashboard/HeaderStats";
+import { MarketInvoicesSection } from "@/components/MarketInvoicesSection";
 import { InnSearch } from "@/components/INN/InnSearch";
 import { MapView } from "@/components/Map/MapView";
 import { PavilionModal } from "@/components/Map/PavilionModal";
@@ -116,6 +117,7 @@ export function HomePage() {
           </div>
         )}
         <HeaderStats />
+        <MarketInvoicesSection />
         <InnSearch onSelectInn={setActiveInn} />
         <MapView onSelectPavilion={setActivePavilion} />
       </main>

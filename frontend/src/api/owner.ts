@@ -193,3 +193,75 @@ export async function restoreBackup(id: number, password: string): Promise<{ ok:
   );
   return data;
 }
+
+// === Invoices (qo'shimcha to'lovlar / schyot) ===
+export interface Invoice {
+  id: number;
+  market_id: number;
+  market_name: string | null;
+  title: string;
+  description: string | null;
+  amount: number;
+  currency: string;
+  due_date: string | null;
+  is_paid: boolean;
+  paid_at: string | null;
+  paid_note: string | null;
+  status: "paid" | "pending" | "overdue";
+  days_left: number | null;
+  has_doc: boolean;
+  doc_name: string | null;
+  created_at: string;
+}
+
+export interface InvoiceStats {
+  count: number;
+  counts: { paid: number; pending: number; overdue: number };
+  total_amount: number;
+  paid_amount: number;
+  pending_amount: number;
+  overdue_amount: number;
+}
+
+export interface InvoiceList {
+  invoices: Invoice[];
+  total: number;
+  stats: InvoiceStats;
+}
+
+export interface InvoiceCreateInput {
+  market_id: number;
+  title: string;
+  amount: number;
+  description?: string | null;
+  currency?: string;
+  due_date?: string | null;
+  doc_data?: string | null;
+  doc_name?: string | null;
+  doc_mime?: string | null;
+}
+
+export async function getInvoices(params: {
+  market_id?: number; invoice_status?: string; search?: string;
+} = {}): Promise<InvoiceList> {
+  const { data } = await apiClient.get<InvoiceList>("/owner/invoices", { params });
+  return data;
+}
+
+export async function createInvoice(input: InvoiceCreateInput): Promise<Invoice> {
+  const { data } = await apiClient.post<Invoice>("/owner/invoices", input);
+  return data;
+}
+
+export async function setInvoicePaid(id: number, is_paid: boolean, note?: string): Promise<Invoice> {
+  const { data } = await apiClient.post<Invoice>(`/owner/invoices/${id}/paid`, { is_paid, note });
+  return data;
+}
+
+export async function deleteInvoice(id: number): Promise<void> {
+  await apiClient.delete(`/owner/invoices/${id}`);
+}
+
+export function invoiceDocUrl(id: number): string {
+  return `${apiClient.defaults.baseURL}/owner/invoices/${id}/doc`;
+}

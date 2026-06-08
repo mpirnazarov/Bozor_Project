@@ -9,6 +9,7 @@ import { SuperDashboardPage } from "@/pages/SuperDashboardPage";
 import { SuperAdminPage } from "@/pages/SuperAdminPage";
 import { OwnerPage } from "@/pages/OwnerPage";
 import { RailwayDetailPage } from "@/pages/RailwayDetailPage";
+import { InvoicesPage } from "@/pages/InvoicesPage";
 
 const ADMIN_ROLES = ["admin", "super_admin", "market_admin"];
 
@@ -80,6 +81,14 @@ export function AppRoutes() {
         element={
           <Protected ownerOnly>
             <RailwayDetailPage />
+          </Protected>
+        }
+      />
+      <Route
+        path="/owner/invoices"
+        element={
+          <Protected ownerOnly>
+            <InvoicesPage />
           </Protected>
         }
       />

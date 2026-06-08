@@ -349,3 +349,160 @@ async def owner_block_market(
     market.support_blocked = body.blocked
     await db.commit()
     return {"ok": True, "support_blocked": market.support_blocked}
+
+
+# ===== Invoices (qo'shimcha to'lovlar / schyot) =====
+
+class InvoiceCreate(BaseModel):
+    market_id: int
+    title: str
+    amount: float
+    description: str | None = None
+    currency: str = "UZS"
+    due_date: date | None = None
+    doc_data: str | None = None   # base64 (ixtiyoriy)
+    doc_name: str | None = None
+    doc_mime: str | None = None
+
+
+class InvoicePaidBody(BaseModel):
+    is_paid: bool
+    note: str | None = None
+
+
+def _invoice_out(inv, market_name: str | None = None) -> dict:
+    from app.services.invoice_service import compute_status, days_left
+    return {
+        "id": inv.id,
+        "market_id": inv.market_id,
+        "market_name": market_name,
+        "title": inv.title,
+        "description": inv.description,
+        "amount": float(inv.amount),
+        "currency": inv.currency,
+        "due_date": inv.due_date.isoformat() if inv.due_date else None,
+        "is_paid": inv.is_paid,
+        "paid_at": inv.paid_at.isoformat() if inv.paid_at else None,
+        "paid_note": inv.paid_note,
+        "status": compute_status(inv),
+        "days_left": days_left(inv),
+        "has_doc": bool(inv.doc_data),
+        "doc_name": inv.doc_name,
+        "created_at": inv.created_at.isoformat(),
+    }
+
+
+@router.get("/invoices")
+async def owner_list_invoices(
+    _owner: OwnerUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    market_id: int | None = None,
+    invoice_status: str | None = None,
+    search: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> dict:
+    """Barcha schyotlar (owner) — filtr: market_id, status, search."""
+    from app.services.invoice_service import list_invoices, stats_by_market
+    items, total = await list_invoices(
+        db, market_id=market_id, status=invoice_status, search=search,
+        limit=limit, offset=offset,
+    )
+    # Market nomlarini bir martada olamiz
+    mrows = await db.execute(select(Market.id, Market.name))
+    names = {mid: name for mid, name in mrows.all()}
+    stats = await stats_by_market(db, market_id=market_id)
+    return {
+        "invoices": [_invoice_out(i, names.get(i.market_id)) for i in items],
+        "total": total,
+        "stats": stats,
+    }
+
+
+@router.post("/invoices")
+async def owner_create_invoice(
+    owner: OwnerUser,
+    body: InvoiceCreate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    from decimal import Decimal
+    from app.services.invoice_service import create_invoice
+    market = await db.get(Market, body.market_id)
+    if market is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Bozor topilmadi")
+    if not body.title.strip():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Sarlavha (nima uchun) kerak")
+    if body.amount <= 0:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Summa 0 dan katta bo'lishi kerak")
+    inv = await create_invoice(
+        db,
+        market_id=body.market_id,
+        title=body.title.strip(),
+        amount=Decimal(str(body.amount)),
+        description=body.description,
+        currency=body.currency or "UZS",
+        due_date=body.due_date,
+        doc_data=body.doc_data,
+        doc_name=body.doc_name,
+        doc_mime=body.doc_mime,
+        created_by=owner.id,
+    )
+    return _invoice_out(inv, market.name)
+
+
+@router.post("/invoices/{invoice_id}/paid")
+async def owner_set_invoice_paid(
+    _owner: OwnerUser,
+    invoice_id: int,
+    body: InvoicePaidBody,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    from app.services.invoice_service import set_paid
+    from app.models.invoice import Invoice
+    inv = await db.get(Invoice, invoice_id)
+    if inv is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Schyot topilmadi")
+    await set_paid(db, inv, body.is_paid, body.note)
+    market = await db.get(Market, inv.market_id)
+    return _invoice_out(inv, market.name if market else None)
+
+
+@router.delete("/invoices/{invoice_id}")
+async def owner_delete_invoice(
+    _owner: OwnerUser,
+    invoice_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    from app.models.invoice import Invoice
+    inv = await db.get(Invoice, invoice_id)
+    if inv is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Schyot topilmadi")
+    await db.delete(inv)
+    await db.commit()
+    return {"ok": True}
+
+
+@router.get("/invoices/{invoice_id}/doc")
+async def owner_invoice_doc(
+    _owner: OwnerUser,
+    invoice_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    from fastapi.responses import Response
+    import base64
+    from app.models.invoice import Invoice
+    inv = await db.get(Invoice, invoice_id)
+    if inv is None or not inv.doc_data:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Hujjat topilmadi")
+    raw = inv.doc_data
+    if "," in raw and raw.strip().startswith("data:"):
+        raw = raw.split(",", 1)[1]
+    try:
+        content = base64.b64decode(raw)
+    except Exception:
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Hujjatni o'qib bo'lmadi")
+    return Response(
+        content=content,
+        media_type=inv.doc_mime or "application/octet-stream",
+        headers={"Content-Disposition": f'inline; filename="{inv.doc_name or "document"}"'},
+    )
