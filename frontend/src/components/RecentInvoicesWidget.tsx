@@ -1,12 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
-  Receipt, ChevronRight, CircleCheck, Clock, AlertTriangle, Plus,
+  Receipt, ChevronRight, CircleCheck, Clock, AlertTriangle, Plus, Coins,
 } from "lucide-react";
 import { getInvoices } from "@/api/owner";
 
 const STATUS = {
   paid:    { label: "To'langan",      color: "#16a34a", icon: CircleCheck },
+  partial: { label: "Qisman",         color: "#0ea5e9", icon: Coins },
   pending: { label: "Kutilmoqda",     color: "#eab308", icon: Clock },
   overdue: { label: "Muddati o'tgan", color: "#dc2626", icon: AlertTriangle },
 } as const;
