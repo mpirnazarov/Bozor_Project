@@ -261,9 +261,23 @@ export async function setInvoicePaid(id: number, is_paid: boolean, note?: string
   return data;
 }
 
-export async function setInvoicePaidAmount(id: number, paid_amount: number, note?: string): Promise<Invoice> {
-  const { data } = await apiClient.post<Invoice>(`/owner/invoices/${id}/pay-amount`, { paid_amount, note });
+export async function setInvoicePaidAmount(
+  id: number, paid_amount: number, note?: string, mode: "add" | "set" = "add",
+): Promise<Invoice> {
+  const { data } = await apiClient.post<Invoice>(`/owner/invoices/${id}/pay-amount`, { paid_amount, note, mode });
   return data;
+}
+
+export interface InvoicePayment {
+  id: number;
+  amount: number;
+  note: string | null;
+  created_at: string;
+}
+
+export async function getInvoicePayments(id: number): Promise<InvoicePayment[]> {
+  const { data } = await apiClient.get<{ payments: InvoicePayment[] }>(`/owner/invoices/${id}/payments`);
+  return data.payments;
 }
 
 export async function updateInvoice(id: number, input: Partial<InvoiceCreateInput>): Promise<Invoice> {

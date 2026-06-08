@@ -4,11 +4,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Receipt, Plus, Search, ArrowLeft, CircleCheck, Clock, AlertTriangle,
   Paperclip, Trash2, X, Loader2, FileText, Calendar, Wallet, Filter,
-  Pencil, Coins,
+  Pencil, Coins, History,
 } from "lucide-react";
 import {
   getInvoices, createInvoice, setInvoicePaid, setInvoicePaidAmount, updateInvoice,
-  deleteInvoice, invoiceDocUrl, ownerListMarkets, type Invoice, type InvoiceCreateInput,
+  deleteInvoice, invoiceDocUrl, getInvoicePayments, ownerListMarkets,
+  type Invoice, type InvoiceCreateInput,
 } from "@/api/owner";
 
 type StatusFilter = "all" | "paid" | "partial" | "pending" | "overdue";
@@ -373,18 +374,27 @@ function CreateInvoiceModal({ onClose, onDone }: { onClose: () => void; onDone: 
 }
 
 function PayAmountModal({ inv, onClose, onDone }: { inv: Invoice; onClose: () => void; onDone: () => void }) {
-  const [amount, setAmount] = useState<number>(inv.paid_amount || 0);
+  const [amount, setAmount] = useState<number>(0);
   const [note, setNote] = useState("");
+  const remainingBefore = Math.max(inv.amount - inv.paid_amount, 0);
+
+  const { data: history } = useQuery({
+    queryKey: ["invoice-payments", inv.id],
+    queryFn: () => getInvoicePayments(inv.id),
+  });
+
   const mut = useMutation({
-    mutationFn: () => setInvoicePaidAmount(inv.id, amount, note || undefined),
+    mutationFn: () => setInvoicePaidAmount(inv.id, amount, note || undefined, "add"),
     onSuccess: onDone,
   });
-  const remaining = Math.max(inv.amount - amount, 0);
-  const willBePaid = amount >= inv.amount;
+
+  const newTotal = inv.paid_amount + amount;
+  const remainingAfter = Math.max(inv.amount - newTotal, 0);
+  const willBePaid = newTotal >= inv.amount;
 
   return (
     <div className="fixed inset-0 z-[70] grid place-items-center bg-black/70 p-4 backdrop-blur-md animate-fade-in" onClick={onClose}>
-      <div className="w-full max-w-md rounded-3xl border border-white/10 bg-[#0c1424] p-6 shadow-2xl animate-scale-in" onClick={(e) => e.stopPropagation()}>
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl border border-white/10 bg-[#0c1424] p-6 shadow-2xl animate-scale-in" onClick={(e) => e.stopPropagation()}>
         <div className="mb-1 flex items-center justify-between">
           <div className="flex items-center gap-2 font-display text-lg font-bold text-white">
             <Coins size={20} className="text-[#38bdf8]" /> To'lov kiritish
@@ -395,42 +405,69 @@ function PayAmountModal({ inv, onClose, onDone }: { inv: Invoice; onClose: () =>
 
         <div className="mb-3 rounded-xl bg-white/[0.04] p-3 text-sm">
           <div className="flex justify-between py-0.5"><span className="text-slate-400">Jami summa</span><span className="font-bold text-white">{fmtMoney(inv.amount, inv.currency)}</span></div>
-          <div className="flex justify-between py-0.5"><span className="text-slate-400">Hozirgача to'langan</span><span className="text-[#38bdf8]">{fmtMoney(inv.paid_amount, inv.currency)}</span></div>
+          <div className="flex justify-between py-0.5"><span className="text-slate-400">To'langan</span><span className="text-[#38bdf8]">{fmtMoney(inv.paid_amount, inv.currency)}</span></div>
+          <div className="flex justify-between py-0.5"><span className="text-slate-400">Qoldi</span><span className="font-semibold text-white">{fmtMoney(remainingBefore, inv.currency)}</span></div>
         </div>
 
-        <Field label="Jami to'langan summa (qisman bo'lsa ham)">
-          <input type="number" min={0} max={inv.amount} value={amount || ""} onChange={(e) => setAmount(Number(e.target.value))}
+        <Field label="Yangi to'lov summasi (qo'shiladi)">
+          <input type="number" min={0} max={remainingBefore} value={amount || ""} onChange={(e) => setAmount(Number(e.target.value))}
+            placeholder="0"
             className="w-full rounded-xl border border-white/10 bg-[#0a1120] px-3 py-2.5 text-sm text-white outline-none focus:border-[#0ea5e9]" />
         </Field>
         <div className="mt-1 flex gap-2">
-          <button onClick={() => setAmount(inv.amount)}
-            className="rounded-lg border border-white/10 px-2.5 py-1 text-[11px] font-semibold text-slate-300 hover:bg-white/10">To'liq summa</button>
-          <button onClick={() => setAmount(0)}
-            className="rounded-lg border border-white/10 px-2.5 py-1 text-[11px] font-semibold text-slate-300 hover:bg-white/10">Nol</button>
+          <button onClick={() => setAmount(remainingBefore)}
+            className="rounded-lg border border-white/10 px-2.5 py-1 text-[11px] font-semibold text-slate-300 hover:bg-white/10">Qolganini to'liq ({fmtMoney(remainingBefore, inv.currency)})</button>
         </div>
 
-        <div className="mt-3 rounded-xl p-3 text-sm" style={{ background: willBePaid ? "#16a34a14" : "#0ea5e914" }}>
-          {willBePaid ? (
-            <span className="font-semibold text-[#4ade80]">✓ To'liq to'langan deb belgilanadi (yashil)</span>
-          ) : (
-            <span className="text-slate-300">Qoladi: <b className="text-white">{fmtMoney(remaining, inv.currency)}</b> — "Qisman" holatida qoladi</span>
-          )}
-        </div>
+        {amount > 0 && (
+          <div className="mt-3 rounded-xl p-3 text-sm" style={{ background: willBePaid ? "#16a34a14" : "#0ea5e914" }}>
+            {willBePaid ? (
+              <span className="font-semibold text-[#4ade80]">✓ Ushbu to'lovdan keyin to'liq to'langan bo'ladi (yashil)</span>
+            ) : (
+              <span className="text-slate-300">Yangi jami: <b className="text-white">{fmtMoney(newTotal, inv.currency)}</b> · Qoladi: <b className="text-white">{fmtMoney(remainingAfter, inv.currency)}</b></span>
+            )}
+          </div>
+        )}
 
         <div className="mt-3">
           <Field label="Izoh (ixtiyoriy)">
             <input value={note} onChange={(e) => setNote(e.target.value)}
+              placeholder="Masalan: naqd, o'tkazma..."
               className="w-full rounded-xl border border-white/10 bg-[#0a1120] px-3 py-2.5 text-sm text-white outline-none focus:border-[#0ea5e9]" />
           </Field>
         </div>
 
         {mut.isError && <div className="mt-2 text-xs font-semibold text-[#f87171]">Xato: saqlab bo'lmadi.</div>}
 
-        <button onClick={() => mut.mutate()} disabled={mut.isPending}
+        <button onClick={() => mut.mutate()} disabled={amount <= 0 || mut.isPending}
           className="mt-4 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#0ea5e9] to-[#38bdf8] px-4 py-3 text-sm font-bold text-white disabled:opacity-40">
           {mut.isPending ? <Loader2 size={16} className="animate-spin" /> : <Coins size={16} />}
-          Saqlash
+          To'lovni qo'shish
         </button>
+
+        {/* To'lovlar tarixi */}
+        {history && history.length > 0 && (
+          <div className="mt-5">
+            <div className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-500">
+              <History size={13} /> To'lovlar tarixi ({history.length})
+            </div>
+            <div className="space-y-1.5">
+              {history.map((p) => (
+                <div key={p.id} className="flex items-center justify-between rounded-lg bg-white/[0.03] px-3 py-2 text-sm">
+                  <div className="min-w-0">
+                    <div className={`font-semibold ${p.amount < 0 ? "text-amber-400" : "text-[#38bdf8]"}`}>
+                      {p.amount < 0 ? "−" : "+"}{fmtMoney(Math.abs(p.amount), inv.currency)}
+                    </div>
+                    {p.note && <div className="truncate text-[11px] text-slate-500">{p.note}</div>}
+                  </div>
+                  <div className="shrink-0 text-[11px] text-slate-500">
+                    {new Date(p.created_at).toLocaleString("uz-UZ", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -373,6 +373,7 @@ class InvoicePaidBody(BaseModel):
 class InvoicePaidAmountBody(BaseModel):
     paid_amount: float
     note: str | None = None
+    mode: str = "add"  # "add" = qo'shib boradi | "set" = jami summani belgilaydi
 
 
 class InvoiceUpdateBody(BaseModel):
@@ -470,7 +471,7 @@ async def owner_create_invoice(
 
 @router.post("/invoices/{invoice_id}/paid")
 async def owner_set_invoice_paid(
-    _owner: OwnerUser,
+    owner: OwnerUser,
     invoice_id: int,
     body: InvoicePaidBody,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -480,30 +481,67 @@ async def owner_set_invoice_paid(
     inv = await db.get(Invoice, invoice_id)
     if inv is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Schyot topilmadi")
-    await set_paid(db, inv, body.is_paid, body.note)
+    await set_paid(db, inv, body.is_paid, body.note, created_by=owner.id)
     market = await db.get(Market, inv.market_id)
     return _invoice_out(inv, market.name if market else None)
 
 
 @router.post("/invoices/{invoice_id}/pay-amount")
 async def owner_set_invoice_paid_amount(
-    _owner: OwnerUser,
+    owner: OwnerUser,
     invoice_id: int,
     body: InvoicePaidAmountBody,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict:
-    """Qisman (yoki to'liq) to'lov summasini belgilash."""
+    """To'lov kiritish. mode='add' (default): summani qo'shib boradi. mode='set': jami."""
     from decimal import Decimal
-    from app.services.invoice_service import set_paid_amount
+    from app.services.invoice_service import add_payment, set_paid_amount
     from app.models.invoice import Invoice
     inv = await db.get(Invoice, invoice_id)
     if inv is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Schyot topilmadi")
     if body.paid_amount < 0:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Summa manfiy bo'lmasligi kerak")
-    await set_paid_amount(db, inv, Decimal(str(body.paid_amount)), body.note)
+    amt = Decimal(str(body.paid_amount))
+    if body.mode == "set":
+        await set_paid_amount(db, inv, amt, body.note, created_by=owner.id)
+    else:
+        # qo'shib boradi — ortiqcha bo'lsa qolganigacha cheklaymiz
+        remaining_amt = inv.amount - (inv.paid_amount or Decimal("0"))
+        if remaining_amt < 0:
+            remaining_amt = Decimal("0")
+        if amt > remaining_amt:
+            amt = remaining_amt
+        await add_payment(db, inv, amt, body.note, created_by=owner.id)
     market = await db.get(Market, inv.market_id)
     return _invoice_out(inv, market.name if market else None)
+
+
+@router.get("/invoices/{invoice_id}/payments")
+async def owner_invoice_payments(
+    _owner: OwnerUser,
+    invoice_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    """Invoice bo'yicha to'lovlar tarixi."""
+    from app.services.invoice_service import list_payments
+    from app.models.invoice import Invoice
+    inv = await db.get(Invoice, invoice_id)
+    if inv is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Schyot topilmadi")
+    payments = await list_payments(db, invoice_id)
+    return {
+        "invoice_id": invoice_id,
+        "payments": [
+            {
+                "id": p.id,
+                "amount": float(p.amount),
+                "note": p.note,
+                "created_at": p.created_at.isoformat(),
+            }
+            for p in payments
+        ],
+    }
 
 
 @router.patch("/invoices/{invoice_id}")

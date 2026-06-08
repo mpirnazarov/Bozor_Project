@@ -12,6 +12,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.invoice import Invoice
+from app.models.invoice_payment import InvoicePayment
 from app.models.market import Market
 
 
@@ -74,36 +75,107 @@ async def create_invoice(
     return inv
 
 
-async def set_paid(db: AsyncSession, inv: Invoice, is_paid: bool, note: str | None = None) -> Invoice:
-    """To'liq to'landi/to'lanmadi (eski tugma). To'langanda paid_amount = amount."""
-    inv.is_paid = is_paid
-    inv.paid_amount = inv.amount if is_paid else Decimal("0")
-    inv.paid_at = datetime.now(timezone.utc) if is_paid else None
-    if note is not None:
-        inv.paid_note = note
-    await db.commit()
-    await db.refresh(inv)
-    return inv
-
-
-async def set_paid_amount(db: AsyncSession, inv: Invoice, paid_amount: Decimal, note: str | None = None) -> Invoice:
-    """Qisman/to'liq to'lov summasini belgilaydi.
-
-    Faqat to'liq (paid_amount >= amount) bo'lsa is_paid = True (yashil) bo'ladi.
-    """
-    if paid_amount < 0:
-        paid_amount = Decimal("0")
-    if paid_amount > inv.amount:
-        paid_amount = inv.amount
-    inv.paid_amount = paid_amount
-    fully = paid_amount >= inv.amount and inv.amount > 0
+async def _recompute_paid(db: AsyncSession, inv: Invoice) -> None:
+    """invoice_payments yig'indisidan paid_amount va is_paid ni qayta hisoblaydi."""
+    total = await db.scalar(
+        select(func.coalesce(func.sum(InvoicePayment.amount), 0)).where(
+            InvoicePayment.invoice_id == inv.id
+        )
+    )
+    paid = Decimal(str(total or 0))
+    inv.paid_amount = paid
+    fully = inv.amount > 0 and paid >= inv.amount
     inv.is_paid = bool(fully)
-    inv.paid_at = datetime.now(timezone.utc) if fully else None
+    if fully and inv.paid_at is None:
+        inv.paid_at = datetime.now(timezone.utc)
+    if not fully:
+        inv.paid_at = None
+
+
+async def add_payment(
+    db: AsyncSession, inv: Invoice, amount: Decimal, note: str | None = None,
+    created_by: int | None = None,
+) -> Invoice:
+    """Yangi (qisman) to'lov qo'shadi — yig'ib boradi. Tarixga yoziladi."""
+    if amount <= 0:
+        return inv
+    pay = InvoicePayment(invoice_id=inv.id, amount=amount, note=note, created_by=created_by)
+    db.add(pay)
+    await db.flush()
+    await _recompute_paid(db, inv)
+    if note:
+        inv.paid_note = note
+    await db.commit()
+    await db.refresh(inv)
+    return inv
+
+
+async def set_paid(db: AsyncSession, inv: Invoice, is_paid: bool, note: str | None = None,
+                   created_by: int | None = None) -> Invoice:
+    """To'liq to'landi/to'lanmadi (tugma).
+
+    - is_paid=True: qolgan summani bitta to'lov sifatida qo'shadi (to'liq bo'ladi).
+    - is_paid=False: barcha to'lov yozuvlarini o'chiradi (boshiga qaytadi).
+    """
+    if is_paid:
+        remaining_amt = inv.amount - (inv.paid_amount or Decimal("0"))
+        if remaining_amt > 0:
+            pay = InvoicePayment(
+                invoice_id=inv.id, amount=remaining_amt,
+                note=note or "To'liq to'landi", created_by=created_by,
+            )
+            db.add(pay)
+            await db.flush()
+    else:
+        # Hamma to'lov yozuvlarini o'chiramiz
+        from sqlalchemy import delete
+        await db.execute(delete(InvoicePayment).where(InvoicePayment.invoice_id == inv.id))
+        await db.flush()
+        inv.paid_note = None
+    await _recompute_paid(db, inv)
     if note is not None:
         inv.paid_note = note
     await db.commit()
     await db.refresh(inv)
     return inv
+
+
+async def set_paid_amount(db: AsyncSession, inv: Invoice, target_total: Decimal,
+                          note: str | None = None, created_by: int | None = None) -> Invoice:
+    """Jami to'langan summani BERILGAN qiymatga keltiradi (delta qo'shadi/o'chiradi).
+
+    Hozirgi yig'indidan farqni yangi to'lov sifatida qo'shadi. Agar kamaytirilsa —
+    oxirgi yozuvlarni teskari yozuv bilan to'g'irlaydi.
+    """
+    if target_total < 0:
+        target_total = Decimal("0")
+    if target_total > inv.amount:
+        target_total = inv.amount
+    current = inv.paid_amount or Decimal("0")
+    delta = target_total - current
+    if delta != 0:
+        pay = InvoicePayment(
+            invoice_id=inv.id, amount=delta,
+            note=note or ("To'lov" if delta > 0 else "To'lov tuzatildi"),
+            created_by=created_by,
+        )
+        db.add(pay)
+        await db.flush()
+    await _recompute_paid(db, inv)
+    if note is not None:
+        inv.paid_note = note
+    await db.commit()
+    await db.refresh(inv)
+    return inv
+
+
+async def list_payments(db: AsyncSession, invoice_id: int) -> list[InvoicePayment]:
+    """Invoice bo'yicha to'lovlar tarixi (eng yangi birinchi)."""
+    rows = await db.execute(
+        select(InvoicePayment).where(InvoicePayment.invoice_id == invoice_id)
+        .order_by(InvoicePayment.created_at.desc())
+    )
+    return list(rows.scalars())
 
 
 async def update_invoice(db: AsyncSession, inv: Invoice, **fields) -> Invoice:
@@ -115,15 +187,9 @@ async def update_invoice(db: AsyncSession, inv: Invoice, **fields) -> Invoice:
     for key, val in fields.items():
         if key in allowed and val is not None:
             setattr(inv, key, val)
-    # Agar summa o'zgargan bo'lsa va paid_amount endi to'liq bo'lsa — paid holatini yangilaymiz
-    if inv.amount > 0 and (inv.paid_amount or 0) >= inv.amount:
-        inv.is_paid = True
-        if inv.paid_at is None:
-            inv.paid_at = datetime.now(timezone.utc)
-    elif inv.is_paid and (inv.paid_amount or 0) < inv.amount:
-        # summa oshirilgan, endi to'liq emas
-        inv.is_paid = False
-        inv.paid_at = None
+    await db.flush()
+    # Summa o'zgargan bo'lishi mumkin — to'lov yozuvlaridan qayta hisoblaymiz
+    await _recompute_paid(db, inv)
     await db.commit()
     await db.refresh(inv)
     return inv
