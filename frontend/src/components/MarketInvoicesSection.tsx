@@ -1,11 +1,12 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Receipt, CircleCheck, Clock, AlertTriangle, Paperclip, Calendar,
+  Clock, AlertTriangle, Paperclip, Calendar, X,
 } from "lucide-react";
 import { getMarketInvoices, marketInvoiceDocUrl } from "@/api/dashboard";
 
 const STATUS = {
-  paid:    { label: "To'langan",      color: "#16a34a", bg: "#16a34a14", icon: CircleCheck },
+  paid:    { label: "To'langan",      color: "#16a34a", bg: "#16a34a14", icon: Clock },
   pending: { label: "Kutilmoqda",     color: "#b45309", bg: "#eab30814", icon: Clock },
   overdue: { label: "Muddati o'tgan", color: "#dc2626", bg: "#dc262614", icon: AlertTriangle },
 } as const;
@@ -18,54 +19,53 @@ function fmtDate(s: string | null) {
   return new Date(s).toLocaleDateString("uz-UZ", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
+// Bosh sahifada FAQAT 3 kun ichida to'lash kerak bo'lgan (yoki muddati o'tgan)
+// to'lanmagan to'lovlar chiqadi. Foydalanuvchi X bilan yopishi mumkin.
 export function MarketInvoicesSection() {
+  const [closed, setClosed] = useState(false);
   const { data } = useQuery({
     queryKey: ["market-invoices"],
     queryFn: () => getMarketInvoices(),
     refetchInterval: 60_000,
+    retry: false,
   });
 
   const invoices = data?.invoices || [];
-  if (invoices.length === 0) return null;
 
-  const unpaid = invoices.filter((i) => i.status !== "paid");
-  const overdue = invoices.filter((i) => i.status === "overdue");
+  // 3 kun ichida deadline yoki allaqachon muddati o'tgan, va to'lanmagan
+  const urgent = invoices.filter((inv) => {
+    if (inv.is_paid) return false;
+    if (inv.status === "overdue") return true;
+    return inv.days_left != null && inv.days_left >= 0 && inv.days_left <= 3;
+  });
+
+  if (closed || urgent.length === 0) return null;
 
   return (
-    <section className="rounded-2xl border border-slate-200/70 bg-white/70 p-4 backdrop-blur-xl">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="flex items-center gap-2 font-display text-base font-extrabold text-ink">
-          <Receipt size={18} className="text-brand" /> To'lovlar
+    <section className="overflow-hidden rounded-2xl border border-amber-300/70 bg-amber-50/80 backdrop-blur-xl">
+      <div className="flex items-center justify-between gap-2 border-b border-amber-200/70 bg-amber-100/60 px-4 py-2.5">
+        <h2 className="flex items-center gap-2 text-sm font-extrabold text-amber-800">
+          <AlertTriangle size={16} /> Tez orada to'lov kerak ({urgent.length})
         </h2>
-        {unpaid.length > 0 && (
-          <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-700">
-            {unpaid.length} ta to'lanmagan
-          </span>
-        )}
+        <button onClick={() => setClosed(true)} title="Yopish"
+          className="grid h-7 w-7 place-items-center rounded-lg text-amber-700 transition-colors hover:bg-amber-200/70">
+          <X size={16} />
+        </button>
       </div>
 
-      {overdue.length > 0 && (
-        <div className="mb-3 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
-          <AlertTriangle size={16} className="shrink-0" />
-          {overdue.length} ta to'lov muddati o'tgan! Iltimos, tezroq to'lang.
-        </div>
-      )}
-
-      <div className="space-y-2">
-        {invoices.map((inv) => {
+      <div className="space-y-2 p-3">
+        {urgent.map((inv) => {
           const meta = STATUS[inv.status];
           const Icon = meta.icon;
           return (
-            <div key={inv.id} className="rounded-xl border p-3"
-              style={{ borderColor: `${meta.color}33`, background: meta.bg }}>
+            <div key={inv.id} className="rounded-xl border bg-white/70 p-3"
+              style={{ borderColor: meta.color + "33" }}>
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold"
-                      style={{ background: "#fff", color: meta.color }}>
-                      <Icon size={11} /> {meta.label}
-                    </span>
-                  </div>
+                  <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold"
+                    style={{ background: meta.bg, color: meta.color }}>
+                    <Icon size={11} /> {meta.label}
+                  </span>
                   <h3 className="mt-1 font-semibold text-ink">{inv.title}</h3>
                   {inv.description && <p className="mt-0.5 text-sm text-ink-soft">{inv.description}</p>}
                   <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-faint">
@@ -75,7 +75,7 @@ export function MarketInvoicesSection() {
                         <span className="font-bold text-red-600"> ({Math.abs(inv.days_left)} kun o'tdi)</span>
                       )}
                       {inv.status === "pending" && inv.days_left != null && inv.days_left >= 0 && (
-                        <span className="text-amber-600"> ({inv.days_left} kun qoldi)</span>
+                        <span className="font-semibold text-amber-700"> ({inv.days_left} kun qoldi)</span>
                       )}
                     </span>
                     {inv.has_doc && (
@@ -86,14 +86,14 @@ export function MarketInvoicesSection() {
                     )}
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="font-display text-lg font-extrabold text-ink">{fmtMoney(inv.amount, inv.currency)}</div>
-                  {inv.is_paid && inv.paid_at && <div className="text-[11px] text-green-600">{fmtDate(inv.paid_at)} da to'landi</div>}
-                </div>
+                <div className="font-display text-lg font-extrabold text-ink">{fmtMoney(inv.amount, inv.currency)}</div>
               </div>
             </div>
           );
         })}
+        <p className="px-1 pt-1 text-[11px] text-amber-700/80">
+          Barcha to'lovlar ro'yxati «To'lovlar» bo'limida (Admin panel).
+        </p>
       </div>
     </section>
   );

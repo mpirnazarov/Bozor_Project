@@ -1,104 +1,157 @@
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2, XCircle, FileText } from "lucide-react";
-import { getMarketSupportStatus } from "@/api/owner";
-import { apiClient } from "@/api/client";
+import {
+  Receipt, CircleCheck, Clock, AlertTriangle, Paperclip, Calendar, History, Wallet,
+} from "lucide-react";
+import { getMarketInvoices, marketInvoiceDocUrl } from "@/api/dashboard";
 import { fmtUZS } from "@/lib/utils";
 
-const MONTHS = [
-  "Yanvar", "Fevral", "Mart", "Aprel", "May", "Iyun",
-  "Iyul", "Avgust", "Sentabr", "Oktabr", "Noyabr", "Dekabr",
-];
+const STATUS = {
+  paid:    { label: "To'langan",      color: "#16a34a", bg: "#16a34a14", icon: CircleCheck },
+  pending: { label: "Kutilmoqda",     color: "#b45309", bg: "#eab30814", icon: Clock },
+  overdue: { label: "Muddati o'tgan", color: "#dc2626", bg: "#dc262614", icon: AlertTriangle },
+} as const;
 
-interface MyPaymentRow {
-  year: number;
-  month: number;
-  amount: number;
-  is_paid: boolean;
-  paid_at: string | null;
+function fmtDate(s: string | null) {
+  if (!s) return "—";
+  return new Date(s).toLocaleDateString("uz-UZ", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
-// Bozor admini o'z to'lov tarixini ko'radi (read-only)
-async function getMyPayments(): Promise<MyPaymentRow[]> {
-  const { data } = await apiClient.get<MyPaymentRow[]>("/settings/my-support-payments");
-  return Array.isArray(data) ? data : [];
-}
-
+// Bozor admini o'z to'lovlarini ko'radi (read-only)
 export function DocumentsView() {
-  const { data: status } = useQuery({ queryKey: ["support-status"], queryFn: getMarketSupportStatus, retry: false });
-  const { data: payments } = useQuery({ queryKey: ["my-payments"], queryFn: getMyPayments, retry: false });
+  const { data } = useQuery({
+    queryKey: ["market-invoices"],
+    queryFn: () => getMarketInvoices(),
+    refetchInterval: 60_000,
+    retry: false,
+  });
+
+  const invoices = data?.invoices || [];
+  const stats = data?.stats;
+  const toPay = invoices.filter((i) => !i.is_paid);
+  const paid = invoices.filter((i) => i.is_paid);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <p className="text-sm text-ink-soft">
-        Tizim texnik qo'llab-quvvatlash (tex-podderjka) to'lovlari tarixi.
+        Tizim egasi tomonidan qo'yilgan to'lovlar. To'lanishi kerak bo'lganlar va to'langan tarix.
       </p>
 
-      {/* Joriy holat */}
-      {status && (
-        <div className="card flex flex-wrap items-center gap-4 p-4">
-          <div className="grid h-11 w-11 place-items-center rounded-xl bg-brand/10 text-brand">
-            <FileText size={20} />
-          </div>
-          <div className="flex-1">
-            <div className="text-xs font-bold uppercase text-ink-faint">Joriy holat</div>
-            {status.free_period ? (
-              <div className="font-bold text-brand">Bepul davr ({status.free_until} gacha)</div>
-            ) : status.paid_this_month ? (
-              <div className="font-bold text-status-paid">Bu oy uchun to'langan</div>
-            ) : (
-              <div className="font-bold text-status-unpaid">Bu oy uchun to'lanmagan</div>
-            )}
-          </div>
-          <div className="text-right">
-            <div className="text-xs text-ink-faint">Oylik to'lov</div>
-            <div className="font-mono font-extrabold text-ink">{fmtUZS(status.monthly_fee)}</div>
-          </div>
+      {/* Statistika */}
+      {stats && (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <StatBox label="Jami summa" value={fmtUZS(stats.total_amount)} accent="#0066ff" icon={<Wallet size={16} />} count={stats.count} />
+          <StatBox label="To'langan" value={fmtUZS(stats.paid_amount)} accent="#16a34a" icon={<CircleCheck size={16} />} count={stats.counts.paid} />
+          <StatBox label="Kutilmoqda" value={fmtUZS(stats.pending_amount)} accent="#b45309" icon={<Clock size={16} />} count={stats.counts.pending} />
+          <StatBox label="Muddati o'tgan" value={fmtUZS(stats.overdue_amount)} accent="#dc2626" icon={<AlertTriangle size={16} />} count={stats.counts.overdue} />
         </div>
       )}
 
-      {/* To'lovlar jadvali */}
-      <div className="card overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-xs font-bold text-ink-faint">
-            <tr>
-              <th className="px-4 py-2.5">Davr</th>
-              <th className="px-4 py-2.5">Summa</th>
-              <th className="px-4 py-2.5">Holat</th>
-              <th className="px-4 py-2.5">To'langan sana</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {payments && payments.length > 0 ? (
-              payments.map((p) => (
-                <tr key={`${p.year}-${p.month}`} className="hover:bg-slate-50">
-                  <td className="px-4 py-3 font-semibold text-ink">{MONTHS[p.month - 1]} {p.year}</td>
-                  <td className="px-4 py-3 font-mono text-ink-soft">{fmtUZS(p.amount)}</td>
-                  <td className="px-4 py-3">
-                    {p.is_paid ? (
-                      <span className="inline-flex items-center gap-1 font-semibold text-status-paid">
-                        <CheckCircle2 size={15} /> To'langan
+      {/* To'lanishi kerak */}
+      <div>
+        <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-ink">
+          <Receipt size={16} className="text-brand" /> To'lanishi kerak ({toPay.length})
+        </h3>
+        {toPay.length === 0 ? (
+          <div className="card px-4 py-6 text-center text-sm text-ink-faint">
+            To'lanmagan to'lov yo'q — hammasi joyida.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {toPay.map((inv) => {
+              const meta = STATUS[inv.status === "paid" ? "pending" : inv.status];
+              const Icon = meta.icon;
+              return (
+                <div key={inv.id} className="rounded-xl border p-3" style={{ borderColor: meta.color + "33", background: meta.bg }}>
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[11px] font-bold" style={{ color: meta.color }}>
+                        <Icon size={11} /> {meta.label}
                       </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 font-semibold text-status-unpaid">
-                        <XCircle size={15} /> To'lanmagan
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs text-ink-faint">
-                    {p.paid_at ? new Date(p.paid_at).toLocaleDateString("uz-UZ") : "—"}
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-sm text-ink-faint">
-                  Hozircha to'lov yozuvlari yo'q
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+                      <h4 className="mt-1 font-semibold text-ink">{inv.title}</h4>
+                      {inv.description && <p className="mt-0.5 text-sm text-ink-soft">{inv.description}</p>}
+                      <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-faint">
+                        <span className="inline-flex items-center gap-1">
+                          <Calendar size={12} /> Muddat: {fmtDate(inv.due_date)}
+                          {inv.status === "overdue" && inv.days_left != null && (
+                            <span className="font-bold text-red-600"> ({Math.abs(inv.days_left)} kun o'tdi)</span>
+                          )}
+                          {inv.status === "pending" && inv.days_left != null && inv.days_left >= 0 && (
+                            <span className="text-amber-600"> ({inv.days_left} kun qoldi)</span>
+                          )}
+                        </span>
+                        {inv.has_doc && (
+                          <a href={marketInvoiceDocUrl(inv.id)} target="_blank" rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-brand hover:underline">
+                            <Paperclip size={12} /> {inv.doc_name || "Hujjat"}
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                    <div className="font-display text-lg font-extrabold text-ink">{fmtUZS(inv.amount)}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
+
+      {/* To'langan tarix */}
+      <div>
+        <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-ink">
+          <History size={16} className="text-ink-faint" /> To'langan tarix ({paid.length})
+        </h3>
+        {paid.length === 0 ? (
+          <div className="card px-4 py-6 text-center text-sm text-ink-faint">
+            Hali to'langan to'lov yo'q
+          </div>
+        ) : (
+          <div className="card overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-left text-xs font-bold text-ink-faint">
+                <tr>
+                  <th className="px-4 py-2.5">Nima uchun</th>
+                  <th className="px-4 py-2.5">Summa</th>
+                  <th className="px-4 py-2.5">To'langan sana</th>
+                  <th className="px-4 py-2.5">Hujjat</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {paid.map((inv) => (
+                  <tr key={inv.id} className="hover:bg-slate-50">
+                    <td className="px-4 py-3 font-semibold text-ink">{inv.title}</td>
+                    <td className="px-4 py-3 font-mono text-ink-soft">{fmtUZS(inv.amount)}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-ink-faint">{fmtDate(inv.paid_at)}</td>
+                    <td className="px-4 py-3">
+                      {inv.has_doc ? (
+                        <a href={marketInvoiceDocUrl(inv.id)} target="_blank" rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-brand hover:underline">
+                          <Paperclip size={13} /> Ko'rish
+                        </a>
+                      ) : <span className="text-ink-faint">—</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StatBox({ label, value, accent, icon, count }: {
+  label: string; value: string; accent: string; icon: React.ReactNode; count: number;
+}) {
+  return (
+    <div className="card p-3">
+      <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold" style={{ color: accent }}>
+        <span className="grid h-6 w-6 place-items-center rounded-lg" style={{ background: accent + "1a" }}>{icon}</span>
+        {label}
+      </div>
+      <div className="font-display text-base font-extrabold text-ink">{value}</div>
+      <div className="text-[11px] text-ink-faint">{count} ta</div>
     </div>
   );
 }

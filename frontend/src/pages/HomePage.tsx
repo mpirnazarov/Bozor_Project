@@ -6,6 +6,7 @@ import { useT } from "@/i18n/useT";
 import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 import { HeaderStats } from "@/components/Dashboard/HeaderStats";
 import { MarketInvoicesSection } from "@/components/MarketInvoicesSection";
+import { getMarketInvoices } from "@/api/dashboard";
 import { InnSearch } from "@/components/INN/InnSearch";
 import { MapView } from "@/components/Map/MapView";
 import { PavilionModal } from "@/components/Map/PavilionModal";
@@ -30,6 +31,15 @@ export function HomePage() {
     queryFn: getMarketSupportStatus,
     retry: false,
   });
+  // To'lanmagan to'lovlar soni — admin ikonkasidagi badge uchun
+  const { data: marketInvoices } = useQuery({
+    queryKey: ["market-invoices"],
+    queryFn: () => getMarketInvoices(),
+    refetchInterval: 60_000,
+    retry: false,
+    enabled: isMarketAdmin,
+  });
+  const unpaidCount = (marketInvoices?.stats?.counts.pending ?? 0) + (marketInvoices?.stats?.counts.overdue ?? 0);
   const t = useT();
 
   const [activePavilion, setActivePavilion] = useState<Pavilion | null>(null);
@@ -92,8 +102,13 @@ export function HomePage() {
             )}
             {/* Admin tugmasi FAQAT bozor admini uchun (super admin uchun emas) */}
             {isMarketAdmin && (
-              <Link to="/admin" className="btn-ghost px-2.5 py-2" title="Admin panel">
+              <Link to="/admin" className="relative btn-ghost px-2.5 py-2" title="Admin panel">
                 <Settings size={16} />
+                {unpaidCount > 0 && (
+                  <span className="absolute -right-1 -top-1 grid h-5 min-w-[1.25rem] place-items-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow-md ring-2 ring-white animate-pulse">
+                    {unpaidCount > 9 ? "9+" : unpaidCount}
+                  </span>
+                )}
               </Link>
             )}
             <button onClick={() => logout()} className="btn-ghost px-2.5 py-2" title="Chiqish">
