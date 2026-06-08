@@ -261,14 +261,24 @@ function PaymentHistoryList({ payments }: { payments: MarketPayment[] | undefine
     <div className="space-y-1.5">
       <div className="text-[11px] font-bold uppercase tracking-wider text-ink-faint">To'lovlar tarixi</div>
       {payments.map((p) => (
-        <div key={p.id} className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-sm">
-          <div className="min-w-0">
-            <span className={`font-semibold ${p.amount < 0 ? "text-amber-600" : "text-sky-600"}`}>
-              {p.amount < 0 ? "−" : "+"}{fmtUZS(Math.abs(p.amount))}
-            </span>
-            {p.note && <span className="ml-2 text-[11px] text-ink-faint">{p.note}</span>}
+        <div key={p.id} className="rounded-lg bg-white px-3 py-2 text-sm">
+          <div className="flex items-center justify-between">
+            <div className="min-w-0">
+              <span className={`font-semibold ${p.amount < 0 ? "text-amber-600" : "text-sky-600"}`}>
+                {p.amount < 0 ? "−" : "+"}{fmtUZS(Math.abs(p.amount))}
+              </span>
+              {p.edited_at && (
+                <span className="ml-2 inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold text-amber-700">
+                  O'zgartirilgan
+                </span>
+              )}
+              {p.note && <span className="ml-2 text-[11px] text-ink-faint">{p.note}</span>}
+            </div>
+            <div className="shrink-0 text-[11px] text-ink-faint">{fmtDT(p.created_at)}</div>
           </div>
-          <div className="shrink-0 text-[11px] text-ink-faint">{fmtDT(p.created_at)}</div>
+          {p.edited_at && (
+            <div className="mt-0.5 text-[10px] text-amber-600/80">O'zgartirildi: {fmtDT(p.edited_at)}</div>
+          )}
         </div>
       ))}
     </div>
