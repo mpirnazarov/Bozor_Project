@@ -148,12 +148,20 @@ class MarketCreateBody(BaseModel):
     name: str
     slug: str | None = None
     admin_username: str | None = None
+    contract_no: str | None = None
+    contract_data: str | None = None   # base64 (ixtiyoriy)
+    contract_name: str | None = None
+    contract_mime: str | None = None
 
 
 class MarketEditBody(BaseModel):
     name: str | None = None
     is_active: bool | None = None
     display_order: int | None = None
+    contract_no: str | None = None
+    contract_data: str | None = None
+    contract_name: str | None = None
+    contract_mime: str | None = None
 
 
 class PaymentBody(BaseModel):
@@ -214,7 +222,13 @@ async def owner_create_market(
     if exists:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"'{slug}' slug allaqachon mavjud")
 
-    market = Market(slug=slug, name=body.name.strip(), is_active=True)
+    market = Market(
+        slug=slug, name=body.name.strip(), is_active=True,
+        contract_no=body.contract_no,
+        contract_data=body.contract_data,
+        contract_name=body.contract_name,
+        contract_mime=body.contract_mime,
+    )
     db.add(market)
     await db.flush()  # market.id olish uchun
 
@@ -360,7 +374,9 @@ class InvoiceCreate(BaseModel):
     description: str | None = None
     currency: str = "UZS"
     due_date: date | None = None
-    doc_data: str | None = None   # base64 (ixtiyoriy)
+    payment_method: str | None = None   # "cash" | "contract"
+    contract_no: str | None = None      # dogovor raqami (agar contract bo'lsa)
+    doc_data: str | None = None   # base64 (ixtiyoriy — dogovor fayli)
     doc_name: str | None = None
     doc_mime: str | None = None
 
@@ -399,6 +415,9 @@ def _invoice_out(inv, market_name: str | None = None) -> dict:
         "paid_amount": float(inv.paid_amount or 0),
         "remaining": remaining(inv),
         "currency": inv.currency,
+        "kind": inv.kind,
+        "payment_method": inv.payment_method,
+        "contract_no": inv.contract_no,
         "due_date": inv.due_date.isoformat() if inv.due_date else None,
         "is_paid": inv.is_paid,
         "paid_at": inv.paid_at.isoformat() if inv.paid_at else None,
@@ -461,9 +480,12 @@ async def owner_create_invoice(
         description=body.description,
         currency=body.currency or "UZS",
         due_date=body.due_date,
-        doc_data=body.doc_data,
-        doc_name=body.doc_name,
-        doc_mime=body.doc_mime,
+        kind="extra",
+        payment_method=body.payment_method,
+        contract_no=body.contract_no if body.payment_method == "contract" else None,
+        doc_data=body.doc_data if body.payment_method == "contract" else None,
+        doc_name=body.doc_name if body.payment_method == "contract" else None,
+        doc_mime=body.doc_mime if body.payment_method == "contract" else None,
         created_by=owner.id,
     )
     return _invoice_out(inv, market.name)

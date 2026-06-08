@@ -22,6 +22,12 @@ class Invoice(Base):
     market_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("markets.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    # kind: "support" (avtomatik tex-podderjka) | "extra" (qo'shimcha, bir martalik)
+    kind: Mapped[str] = mapped_column(String(20), default="extra", nullable=False)
+    # payment_method: "cash" (naqd) | "contract" (dogovor) — extra invoicelar uchun
+    payment_method: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # Dogovor raqami (support: bozor shartnomasi; extra: agar dogovor tanlansa)
+    contract_no: Mapped[str | None] = mapped_column(String(100), nullable=True)
     # To'lov ma'lumotlari
     title: Mapped[str] = mapped_column(String(200), nullable=False)        # nima uchun (qisqa)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)   # batafsil izoh

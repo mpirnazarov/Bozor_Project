@@ -46,6 +46,19 @@ async def _loop() -> None:
                     print(f"✅ Avtomatik backup bajarildi ({now.isoformat()})")
         except Exception as e:  # noqa: BLE001
             print(f"⚠️ Avtomatik backup xatosi: {e}")
+
+        # Tex-podderjka invoicelarini avtomatik yaratish (kuniga bir marta tekshiriladi)
+        try:
+            now = datetime.now(timezone.utc)
+            if now.hour == settings.BACKUP_HOUR_UTC:
+                from app.services.invoice_service import generate_support_invoices
+                async with AsyncSessionLocal() as db:
+                    n = await generate_support_invoices(db)
+                if n:
+                    print(f"🧾 {n} ta tex-podderjka invoice yaratildi")
+        except Exception as e:  # noqa: BLE001
+            print(f"⚠️ Invoice generatsiya xatosi: {e}")
+
         # Har 30 daqiqada tekshiramiz (soat oynasini o'tkazib yubormaslik uchun)
         await asyncio.sleep(1800)
 

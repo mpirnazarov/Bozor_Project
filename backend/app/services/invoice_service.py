@@ -52,6 +52,9 @@ async def create_invoice(
     description: str | None = None,
     currency: str = "UZS",
     due_date: date | None = None,
+    kind: str = "extra",
+    payment_method: str | None = None,
+    contract_no: str | None = None,
     doc_data: str | None = None,
     doc_name: str | None = None,
     doc_mime: str | None = None,
@@ -64,6 +67,9 @@ async def create_invoice(
         amount=amount,
         currency=currency or "UZS",
         due_date=due_date,
+        kind=kind or "extra",
+        payment_method=payment_method,
+        contract_no=contract_no,
         doc_data=doc_data,
         doc_name=doc_name,
         doc_mime=doc_mime,
@@ -176,6 +182,74 @@ async def list_payments(db: AsyncSession, invoice_id: int) -> list[InvoicePaymen
         .order_by(InvoicePayment.created_at.desc())
     )
     return list(rows.scalars())
+
+
+# ===== Avtomatik tex-podderjka invoice (kind="support") =====
+
+async def ensure_support_invoice(
+    db: AsyncSession, market: Market, year: int, month: int,
+    amount: Decimal, due_day: int = 5,
+) -> Invoice | None:
+    """Bozor uchun shu oyga tex-podderjka invoice yaratadi (agar yo'q bo'lsa).
+
+    Bozorning dogovori va dogovor raqami biriktiriladi. Takror yaratmaydi.
+    """
+    from calendar import month_name
+    # Shu oy uchun support invoice bormi?
+    period_title = f"Tex-podderjka — {month:02d}.{year}"
+    existing = await db.scalar(
+        select(Invoice).where(
+            Invoice.market_id == market.id,
+            Invoice.kind == "support",
+            Invoice.title == period_title,
+        )
+    )
+    if existing is not None:
+        return None  # allaqachon bor
+
+    due = date(year, month, min(due_day, 28))
+    inv = Invoice(
+        market_id=market.id,
+        kind="support",
+        payment_method="contract",
+        contract_no=market.contract_no,
+        title=period_title,
+        description=f"{month:02d}.{year} oyi uchun texnik qo'llab-quvvatlash to'lovi",
+        amount=amount,
+        currency="UZS",
+        due_date=due,
+        # Bozor dogovori faylini biriktiramiz (agar bor bo'lsa)
+        doc_data=market.contract_data,
+        doc_name=market.contract_name,
+        doc_mime=market.contract_mime,
+    )
+    db.add(inv)
+    await db.commit()
+    await db.refresh(inv)
+    return inv
+
+
+async def generate_support_invoices(db: AsyncSession, today: date | None = None) -> int:
+    """Tekin davri tugagan barcha bozorlar uchun joriy oyga tex-podderjka invoice yaratadi.
+
+    Takrorlamaydi. Yaratilgan invoicelar sonini qaytaradi.
+    """
+    from app.services.support_service import is_in_free_period
+    from app.models.support_payment import SUPPORT_MONTHLY_FEE, SUPPORT_DUE_DAY
+
+    today = today or datetime.now(timezone.utc).date()
+    rows = await db.execute(select(Market).where(Market.is_active == True))  # noqa: E712
+    markets = list(rows.scalars())
+    created = 0
+    for m in markets:
+        if is_in_free_period(m, today):
+            continue  # hali tekin davrda
+        inv = await ensure_support_invoice(
+            db, m, today.year, today.month, SUPPORT_MONTHLY_FEE, SUPPORT_DUE_DAY,
+        )
+        if inv is not None:
+            created += 1
+    return created
 
 
 async def update_invoice(db: AsyncSession, inv: Invoice, **fields) -> Invoice:
