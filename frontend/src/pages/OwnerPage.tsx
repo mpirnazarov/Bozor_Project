@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import {
   ownerListMarkets, ownerCreateMarket, ownerDeleteMarket, ownerChangePassword,
-  ownerMarkPayment, ownerBlockMarket, getOwnerRailway,
+  ownerMarkPayment, ownerBlockMarket, getOwnerRailway, getInvoices, getBackups,
   type OwnerMarket, type NewMarketResult, type RailwayOverview,
 } from "@/api/owner";
 import { MetricCard, DeploymentRow, ServiceChips } from "@/components/Railway/RailwayWidgets";
@@ -31,6 +31,12 @@ export function OwnerPage() {
   const { data: markets, isLoading } = useQuery({ queryKey: ["owner-markets"], queryFn: ownerListMarkets });
   const { data: railway } = useQuery({
     queryKey: ["owner-railway"], queryFn: getOwnerRailway, refetchInterval: 60_000, retry: false,
+  });
+  const { data: invoiceData } = useQuery({
+    queryKey: ["owner-invoices"], queryFn: () => getInvoices(), refetchInterval: 60_000, retry: false,
+  });
+  const { data: backupData } = useQuery({
+    queryKey: ["owner-backups"], queryFn: getBackups, refetchInterval: 60_000, retry: false,
   });
 
   const [showCreate, setShowCreate] = useState(false);
@@ -91,6 +97,66 @@ export function OwnerPage() {
     [markets],
   );
 
+  // === Tizim umumiy holati (har qism uchun yashil/sariq/qizil + muammo matni) ===
+  const health = useMemo(() => {
+    // Bozorlar
+    let marketsLevel: "ok" | "warn" | "crit" = "ok";
+    let marketsMsg = "Hammasi joyida";
+    if (stats.reds > 0) { marketsLevel = "crit"; marketsMsg = `${stats.reds} ta bozor to'lovi kechikkan`; }
+    else if (stats.attention > 0) { marketsLevel = "warn"; marketsMsg = `${stats.attention} ta bozorga e'tibor kerak`; }
+    else if (stats.total > 0) { marketsMsg = `${stats.total} ta bozor — muammosiz`; }
+    else { marketsMsg = "Hali bozor yo'q"; }
+
+    // Server (Railway)
+    let serverLevel: "ok" | "warn" | "crit" | "off" = "off";
+    let serverMsg = "Sozlanmagan";
+    if (railway?.configured) {
+      const cpu = railway.usage_pct?.cpu ?? 0;
+      const ram = railway.usage_pct?.ram ?? 0;
+      const hi = Math.max(cpu, ram);
+      const hasErr = !!(railway.metrics_error || railway.service_error || railway.deployments_error);
+      if (hi >= 85) { serverLevel = "crit"; serverMsg = `Resurs yuqori: ${Math.round(hi)}%`; }
+      else if (hi >= 65 || hasErr) { serverLevel = "warn"; serverMsg = hasErr ? "Ba'zi ma'lumot yuklanmadi" : `Resurs: ${Math.round(hi)}%`; }
+      else { serverLevel = "ok"; serverMsg = `CPU ${Math.round(cpu)}% · RAM ${Math.round(ram)}%`; }
+    }
+
+    // Backup
+    let backupLevel: "ok" | "warn" | "crit" = "warn";
+    let backupMsg = "Hali backup yo'q";
+    const backups = backupData?.backups || [];
+    const lastOk = backups.find((b) => b.status === "success");
+    if (!backupData?.available) { backupLevel = "crit"; backupMsg = "pg_dump topilmadi"; }
+    else if (lastOk) {
+      const ageH = (Date.now() - new Date(lastOk.created_at).getTime()) / 3_600_000;
+      const offsite = backupData.s3_enabled;
+      if (ageH > 48) { backupLevel = "crit"; backupMsg = `Oxirgi backup ${Math.round(ageH / 24)} kun oldin`; }
+      else if (ageH > 26) { backupLevel = "warn"; backupMsg = "24 soatdan beri backup yo'q"; }
+      else { backupLevel = "ok"; backupMsg = offsite ? "Yangi · tashqi nusxa bor" : "Yangi (faqat lokal)"; }
+    }
+
+    // To'lovlar (invoices)
+    let invLevel: "ok" | "warn" | "crit" = "ok";
+    let invMsg = "To'lov yo'q";
+    const ist = invoiceData?.stats;
+    if (ist) {
+      if (ist.counts.overdue > 0) { invLevel = "crit"; invMsg = `${ist.counts.overdue} ta to'lov muddati o'tgan`; }
+      else if (ist.counts.pending > 0) { invLevel = "warn"; invMsg = `${ist.counts.pending} ta to'lov kutilmoqda`; }
+      else if (ist.count > 0) { invMsg = "Hamma to'lov amalga oshgan"; }
+    }
+
+    const areas = [
+      { key: "markets", label: "Bozorlar", level: marketsLevel, msg: marketsMsg },
+      { key: "server", label: "Server", level: serverLevel, msg: serverMsg },
+      { key: "backup", label: "Backup", level: backupLevel, msg: backupMsg },
+      { key: "invoices", label: "To'lovlar", level: invLevel, msg: invMsg },
+    ] as const;
+
+    const crit = areas.filter((a) => a.level === "crit").length;
+    const warn = areas.filter((a) => a.level === "warn").length;
+    const overall: "ok" | "warn" | "crit" = crit > 0 ? "crit" : warn > 0 ? "warn" : "ok";
+    return { areas, crit, warn, overall };
+  }, [stats, railway, backupData, invoiceData]);
+
   const greeting = now.getHours() < 12 ? "Xayrli tong" : now.getHours() < 18 ? "Xayrli kun" : "Xayrli kech";
   const ownerName = user?.full_name || user?.username || "Egasi";
 
@@ -150,6 +216,17 @@ export function OwnerPage() {
           </div>
         </header>
 
+        {/* ===== TIZIM UMUMIY HOLATI ===== */}
+        <div className="mb-7 animate-fade-up">
+          <SystemHealthBar health={health}
+            onGo={(key) => {
+              if (key === "server") navigate("/owner/railway");
+              else if (key === "invoices") navigate("/owner/invoices");
+              else if (key === "markets") document.getElementById("markets-section")?.scrollIntoView({ behavior: "smooth" });
+              else if (key === "backup") document.getElementById("backup-section")?.scrollIntoView({ behavior: "smooth" });
+            }} />
+        </div>
+
         {/* ===== KPI CARDS ===== */}
         <div className="mb-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <KpiCard delay={0} icon={<Store size={20} />} accent="#0066ff"
@@ -191,7 +268,7 @@ export function OwnerPage() {
         </div>
 
         {/* ===== BACKUP ===== */}
-        <div className="mb-7 animate-fade-up" style={{ animationDelay: "330ms" }}>
+        <div id="backup-section" className="mb-7 animate-fade-up" style={{ animationDelay: "330ms" }}>
           <BackupPanel />
         </div>
 
@@ -214,7 +291,7 @@ export function OwnerPage() {
         )}
 
         {/* ===== MARKETS GRID ===== */}
-        <div className="mb-4 flex items-center justify-between">
+        <div id="markets-section" className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
             <Activity size={14} /> Bozorlar ({stats.total})
           </div>
@@ -282,6 +359,83 @@ export function OwnerPage() {
           {pwdMut.isSuccess && <div className="mt-2 text-xs font-semibold text-[#4ade80]">✓ Parol o'zgartirildi</div>}
         </Modal>
       )}
+    </div>
+  );
+}
+
+/* ============ SYSTEM HEALTH OVERVIEW ============ */
+type HealthLevel = "ok" | "warn" | "crit" | "off";
+interface HealthArea { key: string; label: string; level: HealthLevel; msg: string }
+interface Health { areas: readonly HealthArea[]; crit: number; warn: number; overall: "ok" | "warn" | "crit" }
+
+const LEVEL_STYLE: Record<HealthLevel, { color: string; bg: string; ring: string; label: string }> = {
+  ok:   { color: "#4ade80", bg: "rgba(22,163,74,0.10)",  ring: "rgba(22,163,74,0.35)",  label: "Joyida" },
+  warn: { color: "#fbbf24", bg: "rgba(234,179,8,0.10)",  ring: "rgba(234,179,8,0.40)",  label: "E'tibor" },
+  crit: { color: "#f87171", bg: "rgba(220,38,38,0.12)",  ring: "rgba(220,38,38,0.45)",  label: "Muammo" },
+  off:  { color: "#94a3b8", bg: "rgba(148,163,184,0.08)", ring: "rgba(148,163,184,0.25)", label: "O'chiq" },
+};
+
+const AREA_ICON: Record<string, React.ReactNode> = {
+  markets: <Store size={16} />,
+  server: <Server size={16} />,
+  backup: <Activity size={16} />,
+  invoices: <Wallet size={16} />,
+};
+
+function SystemHealthBar({ health, onGo }: { health: Health; onGo: (key: string) => void }) {
+  const overall = LEVEL_STYLE[health.overall];
+  const headline =
+    health.overall === "crit" ? `${health.crit} ta qismda muammo bor — tezda ko'rib chiqing`
+    : health.overall === "warn" ? `${health.warn} ta qism e'tibor talab qiladi`
+    : "Hamma tizim muammosiz ishlayapti";
+
+  return (
+    <div className="overflow-hidden rounded-3xl border bg-white/[0.04] backdrop-blur-xl"
+      style={{ borderColor: overall.ring }}>
+      {/* Sarlavha qatori */}
+      <div className="flex items-center gap-3 border-b border-white/[0.06] px-5 py-3.5"
+        style={{ background: overall.bg }}>
+        <span className="relative grid h-9 w-9 shrink-0 place-items-center rounded-full"
+          style={{ background: overall.bg, boxShadow: `0 0 0 1px ${overall.ring}` }}>
+          {health.overall === "ok"
+            ? <CircleCheck size={18} style={{ color: overall.color }} />
+            : <AlertTriangle size={18} style={{ color: overall.color }} />}
+          {health.overall !== "ok" && (
+            <span className="absolute inset-0 animate-ping rounded-full opacity-40"
+              style={{ boxShadow: `0 0 0 2px ${overall.ring}` }} />
+          )}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: overall.color }}>
+            Tizim holati
+          </div>
+          <div className="truncate text-sm font-semibold text-white">{headline}</div>
+        </div>
+      </div>
+
+      {/* Qismlar — 4 ta status plitkasi */}
+      <div className="grid grid-cols-2 gap-px bg-white/[0.05] lg:grid-cols-4">
+        {health.areas.map((a) => {
+          const s = LEVEL_STYLE[a.level];
+          return (
+            <button key={a.key} onClick={() => onGo(a.key)}
+              className="group flex flex-col gap-1.5 bg-[#070d1c] px-4 py-3.5 text-left transition-colors hover:bg-white/[0.03]">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-xs font-bold text-slate-300">
+                  <span style={{ color: s.color }}>{AREA_ICON[a.key]}</span>
+                  {a.label}
+                </span>
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: s.color, boxShadow: `0 0 8px ${s.color}` }} />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="rounded-md px-1.5 py-0.5 text-[10px] font-bold"
+                  style={{ background: s.bg, color: s.color }}>{s.label}</span>
+              </div>
+              <div className="text-[11px] leading-snug text-slate-500 group-hover:text-slate-400">{a.msg}</div>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
