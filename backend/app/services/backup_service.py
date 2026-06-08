@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.backup_log import BackupLog
+from app.services import s3_service
 
 
 def _backup_dir() -> Path:
@@ -90,6 +91,14 @@ async def create_backup(db: AsyncSession, trigger: str = "manual", user_id: int 
         log.duration_ms = int((time.monotonic() - start) * 1000)
         await db.commit()
 
+        # Tashqi (S3/R2) ga yuklash — sozlangan bo'lsa
+        if s3_service.is_enabled():
+            ok_s3, key, s3_err = s3_service.upload_file(fpath, fname)
+            log.s3_uploaded = ok_s3
+            log.s3_key = key if ok_s3 else None
+            log.s3_error = None if ok_s3 else s3_err
+            await db.commit()
+
         # Eski backup'larni tozalash
         await _cleanup_old(db)
     except Exception as e:  # noqa: BLE001
@@ -122,6 +131,12 @@ async def _cleanup_old(db: AsyncSession) -> None:
                 fp.unlink()
         except Exception:  # noqa: BLE001
             pass
+        # Tashqi nusxani ham o'chiramiz
+        if old.s3_key:
+            try:
+                s3_service.delete_key(old.s3_key)
+            except Exception:  # noqa: BLE001
+                pass
         # Log qatorini ham o'chiramiz (fayl yo'q)
         await db.delete(old)
     await db.commit()
@@ -141,8 +156,16 @@ async def restore_backup(db: AsyncSession, backup_id: int) -> tuple[bool, str]:
     if log is None or log.status != "success":
         return False, "Backup topilmadi yoki muvaffaqiyatsiz"
     fp = backup_path(log.filename)
+    # Lokal fayl yo'q bo'lsa, tashqi (S3/R2) dan yuklab olishga urinamiz
+    if fp is None and log.s3_key and s3_service.is_enabled():
+        target = _backup_dir() / os.path.basename(log.filename)
+        ok_dl, dl_err = s3_service.download_to(log.s3_key, target)
+        if ok_dl:
+            fp = target
+        else:
+            return False, f"Lokal fayl yo'q, S3 dan yuklab bo'lmadi: {dl_err}"
     if fp is None:
-        return False, "Backup fayli diskda topilmadi"
+        return False, "Backup fayli topilmadi (lokal ham, tashqi ham yo'q)"
     if not is_available() or shutil.which("psql") is None:
         return False, "psql topilmadi (postgresql-client o'rnatilmagan)"
 

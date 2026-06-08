@@ -57,6 +57,15 @@ class Settings(BaseSettings):
     # Avtomatik kunlik backup vaqti (soat, 0-23, server vaqti UTC)
     BACKUP_HOUR_UTC: int = 19  # 19:00 UTC = 00:00 Toshkent (UTC+5)
 
+    # === Tashqi backup (Cloudflare R2 / AWS S3 / Backblaze B2 — S3-mos) ===
+    # Bo'sh bo'lsa tashqi yuklash o'chiq (faqat Volume'da saqlanadi).
+    S3_ENDPOINT_URL: str = ""       # R2: https://<accountid>.r2.cloudflarestorage.com
+    S3_ACCESS_KEY: str = ""
+    S3_SECRET_KEY: str = ""
+    S3_BUCKET: str = ""
+    S3_REGION: str = ""            # AWS: masalan "eu-north-1"; R2: "auto"
+    S3_PREFIX: str = "orikzor-backups"  # bucket ichidagi papka
+
     @computed_field  # type: ignore[misc]
     @property
     def allowed_origins_list(self) -> list[str]:

@@ -59,6 +59,8 @@ def _backup_out(log) -> dict:
         "size_mb": round(log.size_bytes / 1_048_576, 2) if log.size_bytes else 0,
         "duration_ms": log.duration_ms,
         "error": log.error,
+        "s3_uploaded": log.s3_uploaded,
+        "s3_error": log.s3_error,
         "created_at": log.created_at.isoformat(),
     }
 
@@ -69,9 +71,11 @@ async def owner_list_backups(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict:
     """Backup jurnalini qaytaradi."""
+    from app.services import s3_service
     logs = await list_backups(db)
     return {
         "available": is_available(),
+        "s3_enabled": s3_service.is_enabled(),
         "backups": [_backup_out(b) for b in logs],
     }
 
