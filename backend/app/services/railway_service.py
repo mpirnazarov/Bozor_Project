@@ -363,7 +363,7 @@ _USAGE_VARIANTS = [
     # 1) estimatedUsage — measurements + date range (eng keng tarqalgan)
     {
         "query": """
-query Usage($projectId: String!, $startDate: String!, $endDate: String!, $measurements: [MetricMeasurement!]!) {
+query Usage($projectId: String!, $startDate: DateTime!, $endDate: DateTime!, $measurements: [MetricMeasurement!]!) {
   estimatedUsage(projectId: $projectId, startDate: $startDate, endDate: $endDate, measurements: $measurements) {
     measurement estimatedValue
   }
@@ -373,7 +373,7 @@ query Usage($projectId: String!, $startDate: String!, $endDate: String!, $measur
     # 2) estimatedUsage — measurementsiz
     {
         "query": """
-query Usage($projectId: String!, $startDate: String!, $endDate: String!) {
+query Usage($projectId: String!, $startDate: DateTime!, $endDate: DateTime!) {
   estimatedUsage(projectId: $projectId, startDate: $startDate, endDate: $endDate) {
     measurement estimatedValue
   }
@@ -383,7 +383,7 @@ query Usage($projectId: String!, $startDate: String!, $endDate: String!) {
     # 3) usage — measurements bilan (Railway buni majburiy talab qiladi)
     {
         "query": """
-query Usage($projectId: String!, $startDate: String!, $endDate: String!, $measurements: [MetricMeasurement!]!) {
+query Usage($projectId: String!, $startDate: DateTime!, $endDate: DateTime!, $measurements: [MetricMeasurement!]!) {
   usage(projectId: $projectId, startDate: $startDate, endDate: $endDate, measurements: $measurements) {
     measurement value
   }
