@@ -14,12 +14,16 @@ export async function listShops(params: {
 
 export async function getShop(
   shopId: string,
-  year = 2026,
-  month = 5,
+  year?: number,
+  month?: number,
 ): Promise<ShopDetail> {
+  // year/month berilmasa — backend joriy oyni o'zi oladi.
+  const params: Record<string, number> = {};
+  if (year != null) params.year = year;
+  if (month != null) params.month = month;
   const { data } = await apiClient.get<ShopDetail>(
     `/shops/${encodeURIComponent(shopId)}`,
-    { params: { year, month } },
+    { params },
   );
   return data;
 }

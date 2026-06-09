@@ -16,11 +16,14 @@ export async function getPavilions(mapLayerId?: number): Promise<Pavilion[]> {
 
 export async function getPavilionShops(
   id: number,
-  year = 2026,
-  month = 5,
+  year?: number,
+  month?: number,
 ): Promise<PavilionShops> {
-  const { data } = await apiClient.get<PavilionShops>(`/pavilions/${id}/shops`, {
-    params: { year, month },
-  });
+  // year/month berilmasa — backend joriy oyni o'zi oladi (date.today()).
+  // Shu tarzda yangi oyga o'tilganda avtomatik to'g'ri oy ko'rinadi.
+  const params: Record<string, number> = {};
+  if (year != null) params.year = year;
+  if (month != null) params.month = month;
+  const { data } = await apiClient.get<PavilionShops>(`/pavilions/${id}/shops`, { params });
   return data;
 }
