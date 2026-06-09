@@ -63,14 +63,14 @@ async def get_dashboard_live(
         due_by_cat[cat] = Decimal(due)
         paid_by_cat[cat] = Decimal(paid)
 
-    # DIQQAT: bu tizimda due_amount = QOLGAN QARZ (to'lanmagan qism),
-    # paid_amount = to'langan. Shuning uchun:
-    #   Qarz  = sum(due_amount)
-    #   To'langan = sum(paid_amount)
-    #   Jami  = To'langan + Qarz
+    # DIQQAT: due_amount = "to'lashi kerak bo'lgan summa" (Дебет/qarz),
+    # paid_amount = kredit/ortiqcha balans (oylik to'lov EMAS, balki saldo).
+    # Shuning uchun JAMI = to'lanishi kerak bo'lgan summa = sum(due_amount).
+    # (Ilgari paid + due qilingani XATO edi — kredit balansni qo'shib,
+    #  summани ikki baravar/ko'p marta shishirardi.)
     total_debt = sum(due_by_cat.values(), Decimal(0))
     total_paid = sum(paid_by_cat.values(), Decimal(0))
-    total_sum = total_paid + total_debt
+    total_sum = total_debt
 
     # Live rejimda breakdown faqat rent/electricity/water mavjud — arava,
     # xojatxona, parking, boshqa DB'da alohida saqlanmaydi, shuning uchun 0.

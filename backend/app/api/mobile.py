@@ -128,8 +128,8 @@ async def mobile_counterparty(
             year, month = int(latest[0]), int(latest[1])
 
     # 3. Billing (monthly_balances) — kategoriya bo'yicha
-    # DIQQAT: due_amount = QOLGAN QARZ, paid_amount = to'langan.
-    #   => paid = paid_amount, debt = due_amount, due = paid + debt
+    # DIQQAT: due_amount = to'lanishi kerak bo'lgan summa (Дебет/qarz),
+    #   paid_amount = kredit balans. => due = debt (qarz), paid+debt EMAS.
     bal_stmt = (
         select(
             MonthlyBalance.category,
@@ -153,7 +153,7 @@ async def mobile_counterparty(
     for category, debt_sum, paid_sum in (await db.execute(bal_stmt)).all():
         debt = _f(debt_sum)
         paid = _f(paid_sum)
-        info = {"due": paid + debt, "paid": paid, "debt": debt}
+        info = {"due": debt, "paid": paid, "debt": debt}
         if category == BillingCategory.RENT.value:
             rent = info
         elif category == BillingCategory.ELECTRICITY.value:
