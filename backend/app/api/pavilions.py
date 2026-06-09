@@ -180,12 +180,22 @@ async def pavilion_debt_debug(
             "share_market": float(sh_m), "share_all": float(sh_a),
         })
 
+    # MUHIM: /shops endpoint AYNAN shu funksiyani chaqiradi. Solishtiramiz.
+    from app.services.billing_service import compute_batch_status
+    live = await compute_batch_status(db, shop_ids, year, month)
+    live_total_debt = float(sum((b.total_debt for b in live.values()), Decimal(0)))
+    live_total_due = float(sum((b.total_due for b in live.values()), Decimal(0)))
+    live_total_paid = float(sum((b.total_paid for b in live.values()), Decimal(0)))
+
     return {
         "pavilion": pav.display_name, "market_id": pav.market_id,
         "market_ids_from_shops": market_ids,
         "year": year, "month": month, "shop_count": len(shops),
         "TOTAL_share_market_filter": float(total_share_market),
         "TOTAL_share_all_markets": float(total_share_all),
+        "LIVE_compute_batch_debt": live_total_debt,
+        "LIVE_compute_batch_due": live_total_due,
+        "LIVE_compute_batch_paid": live_total_paid,
         "shops": rows,
     }
 
