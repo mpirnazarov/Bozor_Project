@@ -87,8 +87,8 @@ export interface ImportResult {
 
 export async function importExcel(
   file: File,
-  year = 2026,
-  month = 5,
+  year = new Date().getFullYear(),
+  month = new Date().getMonth() + 1,
 ): Promise<ImportResult> {
   const form = new FormData();
   form.append("file", file);

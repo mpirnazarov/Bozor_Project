@@ -1,4 +1,5 @@
 """Shops endpoint — /api/shops."""
+from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -53,10 +54,14 @@ async def get_shop(
     _user: CurrentUser,
     market: CurrentMarket,
     db: Annotated[AsyncSession, Depends(get_db)],
-    year: int = Query(2026),
-    month: int = Query(5, ge=1, le=12),
+    year: int | None = Query(None),
+    month: int | None = Query(None, ge=1, le=12),
 ) -> ShopDetailOut:
     """Magazin detali — kontragent + joriy oy billing."""
+    # Davr berilmasa — joriy oy (date.today()). Yangi oyga o'tilganda avtomatik.
+    today = date.today()
+    year = year or today.year
+    month = month or today.month
     result = await db.execute(
         select(Shop).where(Shop.shop_id == shop_id, Shop.market_id == market.id)
     )

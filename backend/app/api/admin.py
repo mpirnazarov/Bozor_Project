@@ -1,6 +1,6 @@
 """Admin endpointlari — /api/admin/* (hammasi require_admin)."""
 import base64
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Annotated
 
 from pydantic import BaseModel
@@ -226,10 +226,13 @@ async def import_excel(
     admin: AdminUser,
     db: Annotated[AsyncSession, Depends(get_db)],
     file: UploadFile = File(...),
-    year: int = Query(2026),
-    month: int = Query(5, ge=1, le=12),
+    year: int | None = Query(None),
+    month: int | None = Query(None, ge=1, le=12),
 ) -> ImportResult:
     """Excel'dan monthly_balances import (admin)."""
+    _today = date.today()
+    year = year or _today.year
+    month = month or _today.month
     if not file.filename or not file.filename.lower().endswith((".xlsx", ".xlsm")):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Faqat .xlsx fayl")
     content = await file.read()

@@ -1,4 +1,5 @@
 """Dashboard endpoint — /api/dashboard."""
+from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
@@ -20,8 +21,8 @@ async def get_dashboard(
     _user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
     live: bool = Query(False, description="True bo'lsa monthly_balances'dan hisoblaydi"),
-    year: int = Query(2026),
-    month: int = Query(5, ge=1, le=12),
+    year: int | None = Query(None),
+    month: int | None = Query(None, ge=1, le=12),
 ) -> DashboardOut:
     """
     Dashboard summalari.
@@ -29,6 +30,9 @@ async def get_dashboard(
     - default: settings.dashboard_stats'dan (admin tahrirlagan qiymatlar)
     - ?live=true: monthly_balances'dan jonli hisoblanadi
     """
+    today = date.today()
+    year = year or today.year
+    month = month or today.month
     if live:
         return await get_dashboard_live(db, year, month)
     return await get_dashboard_from_settings(db)
