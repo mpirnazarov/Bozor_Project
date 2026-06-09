@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { LogOut, Settings, Store, ArrowLeft, Info, AlertTriangle } from "lucide-react";
+import { LogOut, Settings, ArrowLeft, Info, AlertTriangle } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { useT } from "@/i18n/useT";
 import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
+import { ClikcBazaarLogo } from "@/components/ui/ClikcBazaarLogo";
 import { HeaderStats } from "@/components/Dashboard/HeaderStats";
 import { MarketInvoicesSection } from "@/components/MarketInvoicesSection";
 import { getMarketInvoices } from "@/api/dashboard";
@@ -63,20 +64,22 @@ export function HomePage() {
               type="button"
               onClick={() => setShowLogo((v) => !v)}
               className="grid h-11 w-11 place-items-center rounded-xl bg-brand-grad shadow-glow transition-transform active:scale-95"
-              title={showLogo ? t("app.title") : "Info"}
+              title={showLogo ? "Info" : t("app.title")}
               aria-label="logo-info-toggle"
             >
-              {showLogo ? (
-                <Store className="text-white" size={22} strokeWidth={2.2} />
-              ) : (
-                <Info className="text-white" size={22} strokeWidth={2.2} />
-              )}
+              <Info className="text-white" size={22} strokeWidth={2.2} />
             </button>
             <div>
-              <h1 className="font-display text-base font-extrabold leading-tight text-ink">
-                {t("app.title")}
-              </h1>
-              <p className="text-xs text-ink-faint">{t("app.subtitle")}</p>
+              {showLogo ? (
+                <ClikcBazaarLogo height={30} />
+              ) : (
+                <>
+                  <h1 className="font-display text-base font-extrabold leading-tight text-ink">
+                    {t("app.title")}
+                  </h1>
+                  <p className="text-xs text-ink-faint">{t("app.subtitle")}</p>
+                </>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2.5">
@@ -142,7 +145,8 @@ export function HomePage() {
         pavilionName={activePavilion?.display_name ?? ""}
         onClose={() => setActivePavilion(null)}
         onSelectShop={(id) => {
-          setActivePavilion(null);
+          // Pavilion modalni YOPMAYMIZ — magazin modali uning ustida ochiladi.
+          // Magazin modali yopilganda pavilion modali ochiq qoladi.
           setActiveShop(id);
         }}
       />

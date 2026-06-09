@@ -8,15 +8,17 @@ interface ModalProps {
   title?: string;
   children: ReactNode;
   maxWidth?: string;
+  /** Qatlam (z-index) — bir modal ustida boshqasini ochish uchun. Masalan "z-[60]". */
+  zClass?: string;
 }
 
-export function Modal({ open, onClose, title, children, maxWidth = "max-w-lg" }: ModalProps) {
+export function Modal({ open, onClose, title, children, maxWidth = "max-w-lg", zClass = "z-50" }: ModalProps) {
   return (
     <Dialog.Root open={open} onOpenChange={(o) => !o && onClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-ink/40 p-4 backdrop-blur-md data-[state=open]:animate-fade-in">
+        <Dialog.Overlay className={`fixed inset-0 ${zClass} grid place-items-center overflow-y-auto bg-ink/40 p-4 backdrop-blur-md data-[state=open]:animate-fade-in`}>
           <Dialog.Content
-            className={`relative z-50 w-full ${maxWidth}
+            className={`relative ${zClass} w-full ${maxWidth}
               rounded-3xl border border-white/60 bg-white/95 p-6 shadow-float backdrop-blur-xl
               focus:outline-none max-h-[90vh] overflow-y-auto data-[state=open]:animate-scale-in`}
           >

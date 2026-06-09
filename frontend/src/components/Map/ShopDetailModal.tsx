@@ -25,7 +25,7 @@ export function ShopDetailModal({ shopId, onClose }: Props) {
   });
 
   return (
-    <Modal open={!!shopId} onClose={onClose} title={shopId ?? ""} maxWidth="max-w-lg">
+    <Modal open={!!shopId} onClose={onClose} title={shopId ?? ""} maxWidth="max-w-lg" zClass="z-[60]">
       {isLoading && <Spinner label="Yuklanmoqda..." />}
       {data && (() => {
         // Umumiy status/qarz FAQAT arenda bo'yicha (elektr/suv alohida ko'rsatiladi)
