@@ -124,7 +124,7 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
   }, [data]);
 
   return (
-    <Modal open={!!pavilionId} onClose={onClose} title={pavilionName} maxWidth="max-w-3xl">
+    <Modal open={!!pavilionId} onClose={onClose} title={`${pavilionName} ·v2`} maxWidth="max-w-3xl">
       {isLoading && <Spinner label="Magazinlar yuklanmoqda..." />}
 
       {data && (
