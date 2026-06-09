@@ -55,21 +55,19 @@ async def _balances_by_inn(
 def _build_status(
     shop_id: str, inn: str | None, balances: list[MonthlyBalance]
 ) -> BillingStatusOut:
-    # DIQQAT: due_amount = to'lanishi kerak bo'lgan summa (Дебет/qarz),
-    #   paid_amount = kredit balans (oylik to'lov EMAS).
-    #   Qarz / Jami (due/total) = due_amount
-    #   Kredit balans (paid)    = paid_amount
-    # DIQQAT: due_amount = "to'lashi kerak bo'lgan summa" (Дебет/qarz),
-    #   paid_amount = kredit balans. JAMI = due_amount (qarz), paid+due EMAS.
+    # DIQQAT: har (INN, kategoriya) saldosi:
+    #   due_amount (Дебет) = QARZ, paid_amount (Кредит) = TO'LANGAN.
+    #   Jami (due/total) = to'langan + qarz
     cats: list[CategoryBalance] = []
     total_paid = Decimal(0)
     total_debt = Decimal(0)
     for b in balances:
         debt = b.due_amount if b.due_amount > 0 else Decimal(0)
+        line_total = b.paid_amount + debt  # shu xizmat bo'yicha jami (to'langan + qarz)
         cats.append(
             CategoryBalance(
                 category=b.category,
-                due=debt,            # "due" = to'lanishi kerak bo'lgan summa (qarz)
+                due=line_total,      # "due" = jami hisoblangan (to'langan + qarz)
                 paid=b.paid_amount,
                 debt=debt,
             )
@@ -79,7 +77,7 @@ def _build_status(
 
     has_data = len(balances) > 0
     status = _status_from_amounts(total_debt, total_paid, has_data)
-    total_sum = total_debt    # Jami = to'lanishi kerak bo'lgan summa
+    total_sum = total_paid + total_debt    # Jami = to'langan + qarz
     return BillingStatusOut(
         shop_id=shop_id,
         inn=inn,
