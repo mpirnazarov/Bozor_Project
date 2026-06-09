@@ -121,8 +121,6 @@ async def main() -> None:
             debt_full = inn_debt.get(s.inn, Decimal(0)) if s.inn else Decimal(0)
             n = max(inn_count.get(s.inn, 1), 1) if s.inn else 1
             share = debt_full / n
-            if rent > 0 and share > rent:
-                share = rent
             t_rent += rent
             t_share += share
             if s.inn and s.inn not in seen_inn:

@@ -81,10 +81,9 @@ def _build_status(
             Decimal(0),
         )
     qarz = debt_share if debt_share and debt_share > 0 else Decimal(0)
-    # Qarz jamidan oshmasin (statik summa cheklovi)
-    if jami > 0 and qarz > jami:
-        qarz = jami
 
+    # TO'LANGAN = JAMI − QARZDORLIK. Qarz jamidan katta bo'lsa to'langan 0.
+    # (Qarz monthly_rent bilan cheklanMAYDI — bu billingdagi haqiqiy qarz ulushi.)
     tolangan = jami - qarz
     if tolangan < 0:
         tolangan = Decimal(0)
