@@ -94,19 +94,22 @@ async def main() -> None:
             )).all()
             inn_debt = {inn: Decimal(str(d)) for inn, d in rows}
 
-        # 4) Har INN ning butun bozordagi aktiv magazinlar soni (taqsimot uchun)
+        # 4) Har INN ning shu BOZORDAGI (market) aktiv magazinlar soni
         inn_count: dict[str, int] = {}
         if inns:
-            crows = (await db.execute(
+            cq = (
                 select(Shop.inn, func.count(Shop.shop_id))
                 .where(Shop.inn.in_(inns), Shop.is_active.is_(True))
                 .group_by(Shop.inn)
-            )).all()
+            )
+            if pav.market_id is not None:
+                cq = cq.where(Shop.market_id == pav.market_id)
+            crows = (await db.execute(cq)).all()
             inn_count = {inn: int(c) for inn, c in crows}
 
         # 5) Jadval
         blok = pav.display_name
-        hdr = f"{'Blok':<8}{'Magazin ID':<22}{'INN':<14}{'To‘lashi kerak':>18}{'INN qarzi':>18}{'Magazin ulushi':>18}"
+        hdr = f"{'Blok':<8}{'Magazin ID':<20}{'INN':<13}{'To‘lashi':>14}{'INN qarzi':>14}{'Bozor magaz.':>13}{'Ulush':>14}"
         print("\n" + hdr)
         print("-" * len(hdr))
 
@@ -126,10 +129,10 @@ async def main() -> None:
             if s.inn and s.inn not in seen_inn:
                 seen_inn.add(s.inn)
                 t_inn_debt_unique += debt_full
-            print(f"{blok:<8}{s.shop_id:<22}{inn:<14}{rent:>18,.0f}{debt_full:>18,.0f}{share:>18,.0f}")
+            print(f"{blok:<8}{s.shop_id:<20}{inn:<13}{rent:>14,.0f}{debt_full:>14,.0f}{n:>13}{share:>14,.0f}")
 
         print("-" * len(hdr))
-        print(f"{'JAMI':<8}{len(shops):<22}{'':<14}{t_rent:>18,.0f}{t_inn_debt_unique:>18,.0f}{t_share:>18,.0f}")
+        print(f"{'JAMI':<8}{str(len(shops)):<20}{'':<13}{t_rent:>14,.0f}{t_inn_debt_unique:>14,.0f}{'':>13}{t_share:>14,.0f}")
         print(f"\nBlok: {blok}  |  Magazinlar: {len(shops)}  |  Davr: {month:02d}.{year}")
         print(f"To‘lashi kerak (JAMI monthly_rent) = {t_rent:,.0f} so‘m")
         print(f"INN qarzi (noyob INN bo‘yicha)      = {t_inn_debt_unique:,.0f} so‘m")

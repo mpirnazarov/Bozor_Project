@@ -147,15 +147,25 @@ async def compute_batch_status(
         )
 
     # Har INN bu so'rovdagi nechta magazinga tegishli — qarzni teng taqsimlash uchun.
-    # DIQQAT: INN'ning BARCHA aktiv magazinlari bo'yicha taqsimlaymiz (faqat shu
-    # pavilion emas) — qarz adolatli bo'lishi uchun.
+    # DIQQAT: INN'ning shu BOZORDAGI (market) BARCHA aktiv magazinlari bo'yicha
+    # taqsimlaymiz. Boshqa bozor/demo magazinlari hisobga olinmaydi, aks holda
+    # qarz keraksiz ko'p bo'lakka bo'linib, ulush juda kichrayib ketadi.
     inn_shop_count: dict[str, int] = {}
     if inns:
-        cnt_rows = await db.execute(
+        # Shu so'rovdagi magazinlar qaysi market(lar)ga tegishli?
+        market_ids = list({
+            mid for (mid,) in (await db.execute(
+                select(Shop.market_id).where(Shop.shop_id.in_(shop_ids)).distinct()
+            )).all() if mid is not None
+        })
+        cnt_q = (
             select(Shop.inn, func.count(Shop.shop_id))
             .where(Shop.inn.in_(list(set(inns))), Shop.is_active.is_(True))
             .group_by(Shop.inn)
         )
+        if market_ids:
+            cnt_q = cnt_q.where(Shop.market_id.in_(market_ids))
+        cnt_rows = await db.execute(cnt_q)
         inn_shop_count = {inn: int(c) for inn, c in cnt_rows.all()}
 
     out: dict[str, BillingStatusOut] = {}
