@@ -74,6 +74,50 @@ async def get_pavilion(
 
 
 
+@router.get("/debug/rent-by-prefix")
+async def debug_rent_by_prefix(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    prefix: str = Query(..., description="Masalan: 01-4-1"),
+    key: str = Query(""),
+) -> dict:
+    """DIAGNOSTIKA: prefiks bo'yicha magazinlar + monthly_rent yig'indisi.
+
+    Google Sheets bilan solishtirish uchun. ?prefix=01-4-1&key=orik-debug-2026
+    """
+    from decimal import Decimal
+    from app.models import Shop
+    if key != "orik-debug-2026":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "key noto'g'ri")
+
+    # Barcha (active va inactive) — solishtirish uchun
+    all_rows = list((await db.execute(
+        select(Shop).where(Shop.shop_id.like(f"{prefix}-%")).order_by(Shop.shop_id)
+    )).scalars())
+
+    active = [s for s in all_rows if s.is_active]
+    inactive = [s for s in all_rows if not s.is_active]
+    null_rent = [s for s in all_rows if not s.monthly_rent or float(s.monthly_rent) == 0]
+
+    total_all = float(sum((Decimal(str(s.monthly_rent or 0)) for s in all_rows), Decimal(0)))
+    total_active = float(sum((Decimal(str(s.monthly_rent or 0)) for s in active), Decimal(0)))
+
+    return {
+        "prefix": prefix,
+        "count_all": len(all_rows),
+        "count_active": len(active),
+        "count_inactive": len(inactive),
+        "count_zero_rent": len(null_rent),
+        "TOTAL_rent_all": total_all,
+        "TOTAL_rent_active_only": total_active,
+        "inactive_shops": [{"shop_id": s.shop_id, "rent": float(s.monthly_rent or 0)} for s in inactive],
+        "zero_rent_shops": [s.shop_id for s in null_rent],
+        "all_shops": [
+            {"shop_id": s.shop_id, "rent": float(s.monthly_rent or 0), "active": s.is_active, "inn": s.inn}
+            for s in all_rows
+        ],
+    }
+
+
 @router.get("/{pavilion_id}/shops")
 async def get_pavilion_shops(
     pavilion_id: int,

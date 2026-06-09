@@ -51,6 +51,29 @@ async def search_inn(
     ]
 
 
+@router.get("/debug/inn-debt")
+async def debug_inn_debt(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    inn: str = Query(...),
+    key: str = Query(""),
+) -> dict:
+    """DIAGNOSTIKA: INN ning har oy/kategoriya qarzi. ?inn=...&key=orik-debug-2026"""
+    from app.models import MonthlyBalance
+    if key != "orik-debug-2026":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "key noto'g'ri")
+    rows = list((await db.execute(
+        select(MonthlyBalance).where(MonthlyBalance.inn == inn)
+        .order_by(MonthlyBalance.year, MonthlyBalance.month, MonthlyBalance.category)
+    )).scalars())
+    out = []
+    for b in rows:
+        out.append({
+            "year": b.year, "month": b.month, "category": b.category,
+            "due_amount": float(b.due_amount or 0), "paid_amount": float(b.paid_amount or 0),
+        })
+    return {"inn": inn, "rows": len(out), "balances": out}
+
+
 @router.get("/{inn}", response_model=InnDetailOut)
 async def get_inn(
     inn: str,
