@@ -73,19 +73,37 @@ async def get_pavilion(
     return detail
 
 
+@router.get("/debug-list")
+async def pavilions_debug_list(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    key: str = Query(""),
+) -> list[dict]:
+    """DIAGNOSTIKA: barcha pavilionlar ro'yxati (id + nom). ?key=orik-debug-2026"""
+    if key != "orik-debug-2026":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "key noto'g'ri")
+    rows = (await db.execute(select(Pavilion).order_by(Pavilion.display_order))).scalars()
+    out = []
+    for p in rows:
+        prefix = p.meta.get("shop_prefix") if isinstance(p.meta, dict) else None
+        out.append({"id": p.id, "name": p.display_name, "market_id": p.market_id, "shop_prefix": prefix})
+    return out
+
+
 @router.get("/{pavilion_id}/debt-debug")
 async def pavilion_debt_debug(
     pavilion_id: int,
-    _user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
+    key: str = Query("", description="Diagnostika kaliti"),
     year: int | None = Query(None),
     month: int | None = Query(None, ge=1, le=12),
 ) -> dict:
     """DIAGNOSTIKA: pavilion qarzdorligini bosqichma-bosqich ko'rsatadi.
 
-    Programma va skript farqini topish uchun. Har magazin: inn, monthly_rent,
-    INN qarzi, INN ning shu market'dagi magazin soni, ulush.
+    Brauzerda to'g'ridan-to'g'ri ochish uchun ?key=orik-debug-2026 bilan ishlaydi.
+    Programma va skript farqini topish uchun.
     """
+    if key != "orik-debug-2026":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "key noto'g'ri (?key=orik-debug-2026)")
     from decimal import Decimal
     from app.models import MonthlyBalance, Shop
     today = date.today()
