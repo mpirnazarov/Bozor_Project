@@ -73,6 +73,105 @@ async def get_pavilion(
     return detail
 
 
+@router.get("/{pavilion_id}/debt-debug")
+async def pavilion_debt_debug(
+    pavilion_id: int,
+    _user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    year: int | None = Query(None),
+    month: int | None = Query(None, ge=1, le=12),
+) -> dict:
+    """DIAGNOSTIKA: pavilion qarzdorligini bosqichma-bosqich ko'rsatadi.
+
+    Programma va skript farqini topish uchun. Har magazin: inn, monthly_rent,
+    INN qarzi, INN ning shu market'dagi magazin soni, ulush.
+    """
+    from decimal import Decimal
+    from app.models import MonthlyBalance, Shop
+    today = date.today()
+    year = year or today.year
+    month = month or today.month
+    pav = await db.get(Pavilion, pavilion_id)
+    if pav is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Pavilion topilmadi")
+
+    prefix = None
+    if isinstance(pav.meta, dict):
+        prefix = (pav.meta.get("shop_prefix") or "").strip() or None
+    if prefix:
+        shops = list((await db.execute(
+            select(Shop).where(
+                Shop.market_id == pav.market_id,
+                Shop.shop_id.like(f"{prefix}-%"),
+                Shop.is_active.is_(True),
+            ).order_by(Shop.shop_id)
+        )).scalars())
+    else:
+        shops = list((await db.execute(
+            select(Shop).where(Shop.pavilion_id == pavilion_id, Shop.is_active.is_(True))
+        )).scalars())
+
+    shop_ids = [s.shop_id for s in shops]
+    inns = list({s.inn for s in shops if s.inn})
+
+    # INN qarzi (Дебет)
+    inn_debt: dict[str, Decimal] = {}
+    if inns:
+        drows = (await db.execute(
+            select(MonthlyBalance.inn, func.coalesce(func.sum(MonthlyBalance.due_amount), 0))
+            .where(MonthlyBalance.inn.in_(inns), MonthlyBalance.year == year,
+                   MonthlyBalance.month == month, MonthlyBalance.due_amount > 0)
+            .group_by(MonthlyBalance.inn)
+        )).all()
+        inn_debt = {inn: Decimal(str(d)) for inn, d in drows}
+
+    # market_ids — compute_batch_status'dagi aynan o'sha mantiq
+    market_ids = list({
+        mid for (mid,) in (await db.execute(
+            select(Shop.market_id).where(Shop.shop_id.in_(shop_ids)).distinct()
+        )).all() if mid is not None
+    })
+    cnt_q = (
+        select(Shop.inn, func.count(Shop.shop_id))
+        .where(Shop.inn.in_(inns), Shop.is_active.is_(True))
+        .group_by(Shop.inn)
+    )
+    cnt_all = {inn: int(c) for inn, c in (await db.execute(cnt_q)).all()}
+    cnt_market = {}
+    if market_ids:
+        cnt_market = {inn: int(c) for inn, c in (await db.execute(
+            cnt_q.where(Shop.market_id.in_(market_ids))
+        )).all()}
+
+    rows = []
+    total_share_market = Decimal(0)
+    total_share_all = Decimal(0)
+    for s in shops:
+        debt = inn_debt.get(s.inn, Decimal(0)) if s.inn else Decimal(0)
+        n_m = max(cnt_market.get(s.inn, 1), 1) if s.inn else 1
+        n_a = max(cnt_all.get(s.inn, 1), 1) if s.inn else 1
+        sh_m = debt / n_m
+        sh_a = debt / n_a
+        total_share_market += sh_m
+        total_share_all += sh_a
+        rows.append({
+            "shop_id": s.shop_id, "inn": s.inn, "market_id": s.market_id,
+            "monthly_rent": float(s.monthly_rent or 0),
+            "inn_debt": float(debt),
+            "cnt_market": cnt_market.get(s.inn), "cnt_all_markets": cnt_all.get(s.inn),
+            "share_market": float(sh_m), "share_all": float(sh_a),
+        })
+
+    return {
+        "pavilion": pav.display_name, "market_id": pav.market_id,
+        "market_ids_from_shops": market_ids,
+        "year": year, "month": month, "shop_count": len(shops),
+        "TOTAL_share_market_filter": float(total_share_market),
+        "TOTAL_share_all_markets": float(total_share_all),
+        "shops": rows,
+    }
+
+
 @router.get("/{pavilion_id}/shops")
 async def get_pavilion_shops(
     pavilion_id: int,
