@@ -3,7 +3,7 @@ from typing import Annotated
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -14,6 +14,29 @@ from app.schemas.pavilion import PavilionDetailOut, PavilionOut
 from app.services.billing_service import compute_batch_status
 
 router = APIRouter()
+
+
+def _prefix_shop_filter(prefix: str):
+    """Prefiks bo'yicha magazin tanlash sharti (Q li / Q siz ajratish bilan).
+
+    - Prefiks "Q" bilan tugasa (masalan "01-3-1-Q") -> FAQAT Q li magazinlar:
+        shop_id LIKE "01-3-1-Q%"
+    - Aks holda (masalan "01-3-1") -> FAQAT Q SIZ magazinlar:
+        shop_id LIKE "01-3-1-%"  VA  shop_id NOT LIKE "01-3-1-Q%"
+
+    Shunday qilib bitta blokda Q li va Q siz magazinlar alohida ko'rinadi.
+    "q" (kichik) ham qabul qilinadi. Bazadagi Q katta harf deb hisoblanadi.
+    """
+    p = prefix.strip().rstrip("-")
+    # Oxiri Q/q bilan tugasa -> Q li turkum
+    if p[-1:].upper() == "Q":
+        base = p[:-1].rstrip("-")  # masalan "01-3-1"
+        return Shop.shop_id.like(f"{base}-Q%")
+    # Q siz: prefiks ostidagilar, lekin Q lilar bundan mustasno
+    return and_(
+        Shop.shop_id.like(f"{p}-%"),
+        ~Shop.shop_id.like(f"{p}-Q%"),
+    )
 
 
 @router.get("", response_model=list[PavilionOut])
@@ -61,7 +84,7 @@ async def get_pavilion(
         count = await db.scalar(
             select(func.count()).select_from(Shop).where(
                 Shop.market_id == pav.market_id,
-                Shop.shop_id.like(f"{prefix}-%"),
+                _prefix_shop_filter(prefix),
             )
         )
     else:
@@ -147,7 +170,7 @@ async def get_pavilion_shops(
             select(Shop)
             .where(
                 Shop.market_id == pav.market_id,
-                Shop.shop_id.like(f"{prefix}-%"),
+                _prefix_shop_filter(prefix),
                 Shop.is_active.is_(True),
             )
             .order_by(Shop.shop_id)
