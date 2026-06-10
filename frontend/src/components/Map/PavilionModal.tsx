@@ -39,11 +39,27 @@ function statusForService(b: BillingStatus | undefined, service: ServiceKey): {
 } {
   if (!b) return { status: "no_data", due: 0, paid: 0, debt: 0 };
 
-  // "Barcha" (default) — status va qarz FAQAT arenda bo'yicha aniqlanadi.
-  // Elektr/suv qarzi faqat o'sha filtr tanlanganda hisobga olinadi.
-  const effective = service === "all" ? "rent" : service;
+  // "Barcha" (default) — status BARCHA xizmatlar (arenda + suv + elektr)
+  // bo'yicha aniqlanadi. Biror xizmatdan qarz bo'lsa magazin QIZIL bo'ladi.
+  if (service === "all") {
+    let due = 0, paid = 0, debt = 0;
+    for (const c of b.categories) {
+      const cd = Number(c.due);
+      const cp = Number(c.paid);
+      due += cd;
+      paid += cp;
+      debt += Math.max(0, cd - cp);
+    }
+    let status: ShopStatus;
+    if (due <= EPS && paid <= EPS) status = "no_data";
+    else if (debt <= EPS) status = "paid";
+    else if (paid > EPS) status = "partial";
+    else status = "unpaid";
+    return { status, due, paid, debt };
+  }
 
-  const cat: CategoryBalance | undefined = b.categories.find((c) => c.category === effective);
+  // Aniq bir xizmat tanlangan — faqat o'sha kategoriya bo'yicha
+  const cat: CategoryBalance | undefined = b.categories.find((c) => c.category === service);
   if (!cat) return { status: "no_data", due: 0, paid: 0, debt: 0 };
   const due = Number(cat.due);
   const paid = Number(cat.paid);
