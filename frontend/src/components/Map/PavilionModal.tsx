@@ -38,6 +38,25 @@ const EPS = 1;
 // Orqaga qaytarish uchun shu qiymatni `false` qiling — partial yana SARIQ bo'ladi.
 const TREAT_PARTIAL_AS_UNPAID = true;
 
+// ===== PREZENTATSIYA (DEMO) REJIMI =====
+// VAQTINCHA: prezentatsiya uchun har blok ochilganda Qarzdorlik/To'langan
+// summalari umumiy proporsiyaga yaqin RANDOM qiymatga o'zgartiriladi.
+// Orqaga qaytarish uchun DEMO_MODE = false qiling — real summalar qaytadi.
+const DEMO_MODE = true;
+// Umumiy qarzdorlik / umumiy jami = 6,761,618,398 / 11,689,498,000
+const DEMO_DEBT_RATIO = 6761618398 / 11689498000; // ≈ 0.5784
+// Random tebranish: proporsiyaning ±12% atrofida
+const DEMO_JITTER = 0.12;
+
+/** Blok jami summasidan demo qarzdorlik/to'langan hisoblaydi (proporsiyaga yaqin random). */
+function demoSplit(totalDue: number, seed: number): { debt: number; paid: number } {
+  // seed asosida barqaror "random" (har ochilganda bir xil bo'lishi uchun)
+  const rnd = Math.abs(Math.sin(seed) * 10000) % 1; // 0..1
+  const ratio = DEMO_DEBT_RATIO * (1 + (rnd - 0.5) * 2 * DEMO_JITTER);
+  const debt = Math.max(0, Math.min(totalDue, totalDue * ratio));
+  return { debt, paid: totalDue - debt };
+}
+
 /** partial -> unpaid (agar bayroq yoqilgan bo'lsa). Boshqa statuslar o'zgarmaydi. */
 function applyPartialOverride(status: ShopStatus): ShopStatus {
   if (TREAT_PARTIAL_AS_UNPAID && status === "partial") return "unpaid";
@@ -122,8 +141,14 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
       acc.paid += Number(b.total_paid);
       acc.debt += Number(b.total_debt);
     }
+    // PREZENTATSIYA REJIMI: qarz/to'langanni proporsiyaga yaqin random qilamiz.
+    // Jami (due) o'zgarmaydi — faqat uning ichida debt/paid taqsimoti.
+    if (DEMO_MODE && acc.due > 0) {
+      const { debt, paid } = demoSplit(acc.due, (pavilionId ?? 1) * 7.13);
+      return { due: acc.due, debt, paid };
+    }
     return acc;
-  }, [data]);
+  }, [data, pavilionId]);
 
   // Har holat bo'yicha magazin soni (filtr yonida ko'rsatish uchun)
   const counts = useMemo(() => {
