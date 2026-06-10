@@ -34,6 +34,16 @@ const STATUS_FILTERS: { key: StatusFilter; tkey: string; color?: string }[] = [
 
 const EPS = 1;
 
+// VAQTINCHA: qisman to'langan (partial) magazinlarni ham QIZIL (unpaid) ko'rsatish.
+// Orqaga qaytarish uchun shu qiymatni `false` qiling — partial yana SARIQ bo'ladi.
+const TREAT_PARTIAL_AS_UNPAID = true;
+
+/** partial -> unpaid (agar bayroq yoqilgan bo'lsa). Boshqa statuslar o'zgarmaydi. */
+function applyPartialOverride(status: ShopStatus): ShopStatus {
+  if (TREAT_PARTIAL_AS_UNPAID && status === "partial") return "unpaid";
+  return status;
+}
+
 function statusForService(b: BillingStatus | undefined, service: ServiceKey): {
   status: ShopStatus; due: number; paid: number; debt: number;
 } {
@@ -55,7 +65,7 @@ function statusForService(b: BillingStatus | undefined, service: ServiceKey): {
     else if (debt <= EPS) status = "paid";
     else if (paid > EPS) status = "partial";
     else status = "unpaid";
-    return { status, due, paid, debt };
+    return { status: applyPartialOverride(status), due, paid, debt };
   }
 
   // Aniq bir xizmat tanlangan — faqat o'sha kategoriya bo'yicha
@@ -69,7 +79,7 @@ function statusForService(b: BillingStatus | undefined, service: ServiceKey): {
   else if (debt <= EPS) status = "paid";
   else if (paid > EPS) status = "partial";
   else status = "unpaid";
-  return { status, due, paid, debt };
+  return { status: applyPartialOverride(status), due, paid, debt };
 }
 
 export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop }: Props) {
