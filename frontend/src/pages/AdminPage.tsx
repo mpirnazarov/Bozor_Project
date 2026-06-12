@@ -12,10 +12,12 @@ import { ShopsManager } from "@/components/Admin/ShopsManager";
 import { BillingImport } from "@/components/Admin/BillingImport";
 import { AuditLogView } from "@/components/Admin/AuditLogView";
 import { DocumentsView } from "@/components/Admin/DocumentsView";
+import { BillingSummary } from "@/components/Admin/BillingSummary";
 import { getMarketInvoices } from "@/api/dashboard";
 
 const TABS = [
   { value: "dashboard", tkey: "admin.tab.dashboard" },
+  { value: "summary", tkey: "admin.tab.summary" },
   { value: "map", tkey: "admin.tab.map" },
   { value: "shops", tkey: "admin.tab.shops" },
   { value: "import", tkey: "admin.tab.import" },
@@ -80,6 +82,9 @@ export function AdminPage() {
         <div className="animate-fade-up">
           <Tabs.Content value="dashboard">
             <DashboardEditor />
+          </Tabs.Content>
+          <Tabs.Content value="summary">
+            <BillingSummary />
           </Tabs.Content>
           <Tabs.Content value="map">
             <MapEditor />

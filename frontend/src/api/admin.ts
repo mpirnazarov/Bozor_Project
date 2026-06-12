@@ -182,3 +182,45 @@ export async function setHideUnmatched(hidden: boolean): Promise<boolean> {
   const { data } = await apiClient.put<{ hidden: boolean }>("/admin/hide-unmatched", { hidden });
   return data.hidden;
 }
+
+// === Billing summary (oy/yil bo'yicha bloklar/layoutlar hisoboti) ===
+export interface BillingSummaryBlock {
+  pavilion_id: number;
+  name: string;
+  layer_id: number | null;
+  layer_name: string | null;
+  prefix: string;
+  shop_count: number;
+  total_due: number;
+  total_paid: number;
+  total_debt: number;
+}
+export interface BillingSummaryLayer {
+  layer_id: number | null;
+  name: string;
+  block_count: number;
+  shop_count: number;
+  total_due: number;
+  total_paid: number;
+  total_debt: number;
+}
+export interface BillingSummary {
+  year: number;
+  month: number;
+  total: {
+    total_due: number;
+    total_paid: number;
+    total_debt: number;
+    shop_count: number;
+    block_count: number;
+  };
+  layers: BillingSummaryLayer[];
+  blocks: BillingSummaryBlock[];
+}
+
+export async function getBillingSummary(year: number, month: number): Promise<BillingSummary> {
+  const { data } = await apiClient.get<BillingSummary>("/admin/billing-summary", {
+    params: { year, month },
+  });
+  return data;
+}

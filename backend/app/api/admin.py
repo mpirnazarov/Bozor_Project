@@ -17,6 +17,7 @@ from app.models import (
     THEME_SETTINGS_KEY,
     HIDE_UNMATCHED_KEY,
     AuditLog,
+    MapLayer,
     Pavilion,
     Setting,
     Shop,
@@ -554,3 +555,121 @@ async def get_audit_log(
             )
         )
     return out
+
+
+# ===== BILLING SUMMARY (oy/yil bo'yicha bloklar/layoutlar hisoboti) =====
+
+@router.get("/billing-summary")
+async def billing_summary(
+    admin: AdminUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    market: CurrentMarket,
+    year: int | None = Query(None),
+    month: int | None = Query(None, ge=1, le=12),
+) -> dict:
+    """Tanlangan oy/yil uchun butun bozor, har layout (qavat) va har blok
+    bo'yicha Jami / To'langan / Qarzdorlik summalarini qaytaradi.
+
+    - JAMI = magazinlar monthly_rent yig'indisi
+    - QARZDORLIK = INN qarzi (billing) magazinlarga taqsimlangan
+    - TO'LANGAN = JAMI − QARZDORLIK
+    """
+    from decimal import Decimal
+    from app.api.pavilions import _prefix_shop_filter
+    from app.services.billing_service import compute_batch_status
+
+    today = date.today()
+    year = year or today.year
+    month = month or today.month
+
+    # Layoutlar (qavatlar)
+    layers = list((await db.execute(
+        select(MapLayer).where(MapLayer.market_id == market.id).order_by(MapLayer.id)
+    )).scalars())
+    layer_name = {l.id: l.name for l in layers}
+
+    # Bloklar (pavilionlar)
+    pavilions = list((await db.execute(
+        select(Pavilion).where(Pavilion.market_id == market.id, Pavilion.is_active.is_(True))
+        .order_by(Pavilion.display_order, Pavilion.id)
+    )).scalars())
+
+    blocks_out: list[dict] = []
+    layer_agg: dict[int | None, dict] = {}
+    grand = {"due": Decimal(0), "paid": Decimal(0), "debt": Decimal(0), "shop_count": 0}
+
+    for pav in pavilions:
+        prefix = None
+        if isinstance(pav.meta, dict):
+            prefix = (pav.meta.get("shop_prefix") or "").strip() or None
+        if not prefix:
+            continue  # prefiksi yo'q blok — magazinlari aniqlanmaydi
+
+        shops = list((await db.execute(
+            select(Shop.shop_id).where(
+                Shop.market_id == market.id,
+                _prefix_shop_filter(prefix),
+                Shop.is_active.is_(True),
+            )
+        )).scalars())
+        if not shops:
+            continue
+
+        billing = await compute_batch_status(db, shops, year, month)
+        due = sum((b.total_due for b in billing.values()), Decimal(0))
+        paid = sum((b.total_paid for b in billing.values()), Decimal(0))
+        debt = sum((b.total_debt for b in billing.values()), Decimal(0))
+
+        blocks_out.append({
+            "pavilion_id": pav.id,
+            "name": pav.display_name,
+            "layer_id": pav.map_layer_id,
+            "layer_name": layer_name.get(pav.map_layer_id),
+            "prefix": prefix,
+            "shop_count": len(shops),
+            "total_due": float(due),
+            "total_paid": float(paid),
+            "total_debt": float(debt),
+        })
+
+        lk = pav.map_layer_id
+        if lk not in layer_agg:
+            layer_agg[lk] = {"due": Decimal(0), "paid": Decimal(0), "debt": Decimal(0),
+                             "shop_count": 0, "block_count": 0}
+        layer_agg[lk]["due"] += due
+        layer_agg[lk]["paid"] += paid
+        layer_agg[lk]["debt"] += debt
+        layer_agg[lk]["shop_count"] += len(shops)
+        layer_agg[lk]["block_count"] += 1
+
+        grand["due"] += due
+        grand["paid"] += paid
+        grand["debt"] += debt
+        grand["shop_count"] += len(shops)
+
+    layers_out = []
+    for lk, a in layer_agg.items():
+        layers_out.append({
+            "layer_id": lk,
+            "name": layer_name.get(lk) or "Asosiy xarita",
+            "block_count": a["block_count"],
+            "shop_count": a["shop_count"],
+            "total_due": float(a["due"]),
+            "total_paid": float(a["paid"]),
+            "total_debt": float(a["debt"]),
+        })
+    layers_out.sort(key=lambda x: (x["layer_id"] is None, x["layer_id"] or 0))
+
+    return {
+        "year": year,
+        "month": month,
+        "total": {
+            "total_due": float(grand["due"]),
+            "total_paid": float(grand["paid"]),
+            "total_debt": float(grand["debt"]),
+            "shop_count": grand["shop_count"],
+            "block_count": len(blocks_out),
+        },
+        "layers": layers_out,
+        "blocks": blocks_out,
+    }
