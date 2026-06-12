@@ -102,42 +102,6 @@ export function BillingSummary() {
               </div>
             </div>
           )}
-
-          {/* Bloklar bo'yicha */}
-          <div>
-            <h3 className="mb-2 text-sm font-bold uppercase tracking-wide text-ink-faint">
-              {t("summary.byBlock") || "Bloklar bo'yicha"}
-            </h3>
-            <div className="overflow-x-auto rounded-2xl border border-white/60 bg-white/70 shadow-soft">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-ink/10 text-left text-ink-faint">
-                    <th className="p-3 font-semibold">{t("summary.block") || "Blok"}</th>
-                    <th className="p-3 font-semibold">{t("summary.layer") || "Qavat"}</th>
-                    <th className="p-3 text-right font-semibold">Mag.</th>
-                    <th className="p-3 text-right font-semibold">{t("common.total") || "Jami"}</th>
-                    <th className="p-3 text-right font-semibold">{t("common.paid") || "To'langan"}</th>
-                    <th className="p-3 text-right font-semibold">{t("common.debt") || "Qarz"}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.blocks.map((b) => (
-                    <tr key={b.pavilion_id} className="border-b border-ink/5 last:border-0 hover:bg-ink/[0.02]">
-                      <td className="p-3 font-semibold text-ink">{b.name}</td>
-                      <td className="p-3 text-ink-soft">{b.layer_name ?? "—"}</td>
-                      <td className="tabnum p-3 text-right text-ink-soft">{b.shop_count}</td>
-                      <td className="tabnum p-3 text-right font-semibold text-ink">{fmtUZS(b.total_due)}</td>
-                      <td className="tabnum p-3 text-right text-status-paid">{fmtUZS(b.total_paid)}</td>
-                      <td className="tabnum p-3 text-right text-status-unpaid">{fmtUZS(b.total_debt)}</td>
-                    </tr>
-                  ))}
-                  {data.blocks.length === 0 && (
-                    <tr><td colSpan={6} className="p-6 text-center text-ink-soft">Ma'lumot topilmadi</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
         </>
       )}
     </div>
