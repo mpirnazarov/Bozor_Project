@@ -47,7 +47,18 @@ export function BillingSummary() {
       {isLoading && <div className="py-10 text-center text-ink-soft">Yuklanmoqda...</div>}
       {isError && <div className="py-10 text-center text-status-unpaid">Xatolik yuz berdi</div>}
 
-      {data && (
+      {data && !data.has_data && (
+        <div className="rounded-2xl border border-white/60 bg-white/70 py-12 text-center shadow-soft">
+          <div className="text-base font-bold text-ink">
+            {MONTHS[month - 1]} {year} — {t("summary.noData") || "ma'lumot yo'q"}
+          </div>
+          <div className="mt-1 text-sm text-ink-soft">
+            {t("summary.noDataHint") || "Bu oy uchun billing ma'lumoti yuklanmagan"}
+          </div>
+        </div>
+      )}
+
+      {data && data.has_data && (
         <>
           {/* Umumiy summalar */}
           <div className="mb-6 grid grid-cols-3 gap-3">

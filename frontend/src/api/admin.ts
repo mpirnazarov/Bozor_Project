@@ -207,6 +207,7 @@ export interface BillingSummaryLayer {
 export interface BillingSummary {
   year: number;
   month: number;
+  has_data: boolean;
   total: {
     total_due: number;
     total_paid: number;

@@ -577,10 +577,30 @@ async def billing_summary(
     from decimal import Decimal
     from app.api.pavilions import _prefix_shop_filter
     from app.services.billing_service import compute_batch_status
+    from app.models import MonthlyBalance
 
     today = date.today()
     year = year or today.year
     month = month or today.month
+
+    # Tanlangan oy/yil uchun billing ma'lumoti bormi? Bo'lmasa — "ma'lumot yo'q".
+    has_data = await db.scalar(
+        select(func.count()).select_from(MonthlyBalance).where(
+            MonthlyBalance.year == year, MonthlyBalance.month == month
+        )
+    )
+    if not has_data:
+        return {
+            "year": year,
+            "month": month,
+            "has_data": False,
+            "total": {
+                "total_due": 0.0, "total_paid": 0.0, "total_debt": 0.0,
+                "shop_count": 0, "block_count": 0,
+            },
+            "layers": [],
+            "blocks": [],
+        }
 
     # Layoutlar (qavatlar)
     layers = list((await db.execute(
@@ -663,6 +683,7 @@ async def billing_summary(
     return {
         "year": year,
         "month": month,
+        "has_data": True,
         "total": {
             "total_due": float(grand["due"]),
             "total_paid": float(grand["paid"]),
