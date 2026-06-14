@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Plus, Trash2, Save, X, MousePointer2, Maximize2, Minimize2,
+  Plus, Trash2, Save, X, MousePointer2, Maximize2, Minimize2, Pencil,
   ZoomIn, ZoomOut, EyeOff, Layers, Upload, ImagePlus,
 } from "lucide-react";
 import { getPavilions } from "@/api/pavilions";
 import { createPavilion, updatePavilion, deletePavilion } from "@/api/admin";
 import {
-  getMapLayers, createMapLayer, uploadMapImage, deleteMapLayer, mapImageUrl,
+  getMapLayers, createMapLayer, updateMapLayer, uploadMapImage, deleteMapLayer, mapImageUrl,
 } from "@/api/maps";
 import { useT } from "@/i18n/useT";
 
@@ -317,6 +317,20 @@ export function MapEditor() {
     }
   }
 
+  async function handleRenameLayer() {
+    if (activeLayerId == null || !activeLayer) return;
+    const name = prompt("Xarita nomini o'zgartirish:", activeLayer.name);
+    if (name == null) return; // bekor qilindi
+    if (!name.trim()) { setMsg("Nom bo'sh bo'lishi mumkin emas"); return; }
+    try {
+      await updateMapLayer(activeLayerId, { name: name.trim() });
+      await qc.invalidateQueries({ queryKey: ["map-layers"] });
+      setMsg("✓ Xarita nomi o'zgartirildi");
+    } catch {
+      setMsg("Nomni o'zgartirishda xatolik");
+    }
+  }
+
   async function handleUploadImage(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
@@ -378,6 +392,9 @@ export function MapEditor() {
             <>
               <button className="btn-ghost px-3 py-1.5 text-xs" onClick={() => fileInputRef.current?.click()}>
                 <Upload size={14} /> {activeLayer.has_image ? "Rasm/PDF almashtirish" : "Rasm yoki PDF yuklash"}
+              </button>
+              <button className="btn-ghost px-3 py-1.5 text-xs" onClick={handleRenameLayer} title="Nomini o'zgartirish">
+                <Pencil size={14} /> Nomi
               </button>
               <button className="btn-ghost px-3 py-1.5 text-xs text-status-unpaid" onClick={handleDeleteLayer}>
                 <Trash2 size={14} />
