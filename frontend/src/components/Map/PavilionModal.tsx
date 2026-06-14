@@ -36,13 +36,13 @@ const EPS = 1;
 
 // VAQTINCHA: qisman to'langan (partial) magazinlarni ham QIZIL (unpaid) ko'rsatish.
 // Orqaga qaytarish uchun shu qiymatni `false` qiling — partial yana SARIQ bo'ladi.
-const TREAT_PARTIAL_AS_UNPAID = true;
+const TREAT_PARTIAL_AS_UNPAID = false;
 
 // ===== PREZENTATSIYA (DEMO) REJIMI =====
 // VAQTINCHA: prezentatsiya uchun har blok ochilganda Qarzdorlik/To'langan
 // summalari umumiy proporsiyaga yaqin RANDOM qiymatga o'zgartiriladi.
 // Orqaga qaytarish uchun DEMO_MODE = false qiling — real summalar qaytadi.
-const DEMO_MODE = true;
+const DEMO_MODE = false;
 // Umumiy qarzdorlik / umumiy jami = 6,761,618,398 / 11,689,498,000
 const DEMO_DEBT_RATIO = 6761618398 / 11689498000; // ≈ 0.5784
 // Random tebranish: proporsiyaning ±12% atrofida
@@ -89,12 +89,17 @@ function statusForService(b: BillingStatus | undefined, service: ServiceKey): {
 
   // Aniq bir xizmat tanlangan — faqat o'sha kategoriya bo'yicha
   const cat: CategoryBalance | undefined = b.categories.find((c) => c.category === service);
-  if (!cat) return { status: "no_data", due: 0, paid: 0, debt: 0 };
+  if (!cat) {
+    // Magazinning umumiy billing'i bor, lekin bu xizmat (masalan suv) satri yo'q.
+    // "Ma'lumot yo'q" emas — bu xizmatdan qarzi yo'q deb hisoblaymiz (yashil),
+    // shunda magazin ro'yxatda QOLADI va filtrlaganda tushib qolmaydi.
+    return { status: "paid", due: 0, paid: 0, debt: 0 };
+  }
   const due = Number(cat.due);
   const paid = Number(cat.paid);
   const debt = Math.max(0, due - paid);
   let status: ShopStatus;
-  if (due <= EPS && paid <= EPS) status = "no_data";
+  if (due <= EPS && paid <= EPS) status = "paid";
   else if (debt <= EPS) status = "paid";
   else if (paid > EPS) status = "partial";
   else status = "unpaid";
@@ -157,21 +162,11 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
     return c;
   }, [computed]);
 
-  // Har xizmat bo'yicha ma'lumoti bor magazinlar soni
+  // Har xizmat ostida ham BARCHA magazinlar soni ko'rsatiladi (191 = 191).
+  // Filtr tanlanganda magazin tushib qolmaydi — billing satri bo'lmasa ham ko'rinadi.
   const serviceCounts = useMemo(() => {
-    const c: Record<string, number> = { all: data?.shops.length ?? 0, rent: 0, electricity: 0, water: 0 };
-    if (data) {
-      for (const s of data.shops) {
-        const b = data.billing[s.shop_id];
-        if (!b) continue;
-        for (const cat of b.categories) {
-          if (Number(cat.due) > 0 || Number(cat.paid) > 0) {
-            c[cat.category] = (c[cat.category] ?? 0) + 1;
-          }
-        }
-      }
-    }
-    return c;
+    const n = data?.shops.length ?? 0;
+    return { all: n, rent: n, electricity: n, water: n } as Record<string, number>;
   }, [data]);
 
   return (
