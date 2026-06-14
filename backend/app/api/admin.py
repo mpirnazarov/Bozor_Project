@@ -694,3 +694,75 @@ async def billing_summary(
         "layers": layers_out,
         "blocks": blocks_out,
     }
+
+
+# ===== MAGAZIN EGALARI/RO'YXATINI EXCEL'DAN YANGILASH (rollback bilan) =====
+
+class ShopOwnerImportOut(BaseModel):
+    ok: bool = True
+    rows_read: int = 0
+    updated: int = 0
+    inserted: int = 0
+    counterparties_updated: int = 0
+    counterparties_created: int = 0
+    errors: list[str] = []
+    snapshot_id: int | None = None
+
+
+@router.post("/import/shop-owners", response_model=ShopOwnerImportOut)
+async def import_shop_owners(
+    admin: AdminUser,
+    market: CurrentMarket,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    file: UploadFile = File(...),
+) -> ShopOwnerImportOut:
+    """Magazin egalari/ro'yxatini Excel'dan yangilaydi.
+
+    Ustunlar: Magazin ID, QR #, Kontragent, Summa.
+    Import oldidan snapshot olinadi — 24 soat ichida ortga qaytarish mumkin.
+    """
+    from app.services.shop_owner_import_service import import_shop_owners_excel
+
+    if not file.filename or not file.filename.lower().endswith((".xlsx", ".xlsm")):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Faqat .xlsx fayl")
+    content = await file.read()
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Fayl juda katta (10 MB chegarasi)")
+
+    result = await import_shop_owners_excel(db, content, market.id)
+
+    if result.rows_read == 0:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Hech qanday magazin topilmadi. Ustunlar: Magazin ID, QR, Kontragent, Summa",
+        )
+
+    audit = await write_audit(
+        db, admin.id, "import_shop_owners", "shops", file.filename,
+        {"updated": result.updated, "inserted": result.inserted,
+         "cp_updated": result.counterparties_updated,
+         "cp_created": result.counterparties_created},
+    )
+    snap = await save_snapshot(
+        db,
+        action="import_shop_owners",
+        table_name="shops",
+        before_rows=result.snapshot_rows,
+        user_id=admin.id,
+        market_id=market.id,
+        summary=f"Egalar import: {file.filename} — "
+                f"{result.updated} yangilandi, {result.inserted} qo'shildi",
+        audit_id=audit.id,
+    )
+    await db.commit()
+
+    return ShopOwnerImportOut(
+        ok=True,
+        rows_read=result.rows_read,
+        updated=result.updated,
+        inserted=result.inserted,
+        counterparties_updated=result.counterparties_updated,
+        counterparties_created=result.counterparties_created,
+        errors=result.errors[:100],
+        snapshot_id=snap.id,
+    )

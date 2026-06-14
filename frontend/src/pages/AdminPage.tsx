@@ -10,6 +10,7 @@ import { DashboardEditor } from "@/components/Admin/DashboardEditor";
 import { MapEditor } from "@/components/Admin/MapEditor";
 import { ShopsManager } from "@/components/Admin/ShopsManager";
 import { BillingImport } from "@/components/Admin/BillingImport";
+import { ShopOwnerImport } from "@/components/Admin/ShopOwnerImport";
 import { AuditLogView } from "@/components/Admin/AuditLogView";
 import { DocumentsView } from "@/components/Admin/DocumentsView";
 import { BillingSummary } from "@/components/Admin/BillingSummary";
@@ -93,7 +94,10 @@ export function AdminPage() {
             <ShopsManager />
           </Tabs.Content>
           <Tabs.Content value="import">
-            <BillingImport />
+            <div className="space-y-5">
+              <BillingImport />
+              <ShopOwnerImport />
+            </div>
           </Tabs.Content>
           <Tabs.Content value="documents">
             <DocumentsView />

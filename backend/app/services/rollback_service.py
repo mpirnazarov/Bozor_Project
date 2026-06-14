@@ -11,7 +11,7 @@ from sqlalchemy import and_, delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import MonthlyBalance
+from app.models import MonthlyBalance, Shop
 from app.models.change_snapshot import ChangeSnapshot
 
 REVERT_WINDOW_HOURS = 24
@@ -19,8 +19,14 @@ REVERT_WINDOW_HOURS = 24
 # Qaysi jadvallarni qaytarish mumkin va ularning kalit/maydonlari
 _TABLE_MODELS = {
     "monthly_balances": MonthlyBalance,
+    "shops": Shop,
 }
-_NUMERIC_FIELDS = {"due_amount", "paid_amount"}
+_NUMERIC_FIELDS = {"due_amount", "paid_amount", "monthly_rent"}
+# Har jadval uchun upsert konflikt kaliti
+_CONFLICT_KEYS = {
+    "monthly_balances": ["inn", "year", "month", "category"],
+    "shops": ["shop_id", "market_id"],
+}
 
 
 async def save_snapshot(
@@ -97,8 +103,9 @@ async def revert_snapshot(db: AsyncSession, snapshot_id: int) -> tuple[bool, str
                 values[fld] = Decimal(val) if fld in _NUMERIC_FIELDS else val
             stmt = pg_insert(model.__table__).values(values)
             update_cols = {k: stmt.excluded[k] for k in before}
+            conflict_key = _CONFLICT_KEYS.get(snap.table_name, list(key.keys()))
             stmt = stmt.on_conflict_do_update(
-                index_elements=["inn", "year", "month", "category"],
+                index_elements=conflict_key,
                 set_=update_cols,
             )
             await db.execute(stmt)

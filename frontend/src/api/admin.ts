@@ -225,3 +225,25 @@ export async function getBillingSummary(year: number, month: number): Promise<Bi
   });
   return data;
 }
+
+// === Magazin egalari/ro'yxatini Excel'dan yangilash (rollback bilan) ===
+export interface ShopOwnerImportResult {
+  ok: boolean;
+  rows_read: number;
+  updated: number;
+  inserted: number;
+  counterparties_updated: number;
+  counterparties_created: number;
+  errors: string[];
+  snapshot_id: number | null;
+}
+
+export async function importShopOwners(file: File): Promise<ShopOwnerImportResult> {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await apiClient.post<ShopOwnerImportResult>(
+    "/admin/import/shop-owners", form,
+    { headers: { "Content-Type": "multipart/form-data" } },
+  );
+  return data;
+}
