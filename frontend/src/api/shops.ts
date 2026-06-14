@@ -17,13 +17,11 @@ export async function getShop(
   year?: number,
   month?: number,
 ): Promise<ShopDetail> {
-  // year/month berilmasa — backend joriy oyni o'zi oladi.
-  const params: Record<string, number> = {};
+  // shop_id query parametr orqali yuboriladi — "/" yoki maxsus belgilar
+  // (masalan "01-1-1-026А/012") path'ni buzmasligi uchun.
+  const params: Record<string, string | number> = { shop_id: shopId };
   if (year != null) params.year = year;
   if (month != null) params.month = month;
-  const { data } = await apiClient.get<ShopDetail>(
-    `/shops/${encodeURIComponent(shopId)}`,
-    { params },
-  );
+  const { data } = await apiClient.get<ShopDetail>(`/shops/by-id`, { params });
   return data;
 }

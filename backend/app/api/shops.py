@@ -48,17 +48,10 @@ async def list_shops(
     return PaginatedShops(items=items, page=page, per_page=per_page, total=total or 0)
 
 
-@router.get("/{shop_id}", response_model=ShopDetailOut)
-async def get_shop(
-    shop_id: str,
-    _user: CurrentUser,
-    market: CurrentMarket,
-    db: Annotated[AsyncSession, Depends(get_db)],
-    year: int | None = Query(None),
-    month: int | None = Query(None, ge=1, le=12),
+async def _build_shop_detail(
+    shop_id: str, market, db: AsyncSession, year: int | None, month: int | None
 ) -> ShopDetailOut:
-    """Magazin detali — kontragent + joriy oy billing."""
-    # Davr berilmasa — joriy oy (date.today()). Yangi oyga o'tilganda avtomatik.
+    """Magazin detali — kontragent + billing (umumiy yordamchi)."""
     today = date.today()
     year = year or today.year
     month = month or today.month
@@ -82,9 +75,38 @@ async def get_shop(
             )
 
     billing = await compute_shop_status(db, shop_id, shop.inn, year, month)
-
     return ShopDetailOut(
         shop=ShopOut.model_validate(shop),
         counterparty=cp,
         billing=billing,
     )
+
+
+@router.get("/by-id", response_model=ShopDetailOut)
+async def get_shop_by_query(
+    _user: CurrentUser,
+    market: CurrentMarket,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    shop_id: str = Query(..., description="Magazin ID (slash/maxsus belgilar uchun)"),
+    year: int | None = Query(None),
+    month: int | None = Query(None, ge=1, le=12),
+) -> ShopDetailOut:
+    """Magazin detali — shop_id query parametr orqali.
+
+    shop_id ichida `/` yoki maxsus belgilar bo'lganda path emas, query
+    ishlatiladi (masalan "01-1-1-026А/012").
+    """
+    return await _build_shop_detail(shop_id, market, db, year, month)
+
+
+@router.get("/{shop_id}", response_model=ShopDetailOut)
+async def get_shop(
+    shop_id: str,
+    _user: CurrentUser,
+    market: CurrentMarket,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    year: int | None = Query(None),
+    month: int | None = Query(None, ge=1, le=12),
+) -> ShopDetailOut:
+    """Magazin detali — kontragent + joriy oy billing."""
+    return await _build_shop_detail(shop_id, market, db, year, month)
