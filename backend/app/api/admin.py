@@ -706,6 +706,9 @@ class ShopOwnerImportOut(BaseModel):
     counterparties_updated: int = 0
     counterparties_created: int = 0
     errors: list[str] = []
+    skipped: list[dict] = []
+    skipped_count: int = 0
+    detected_columns: dict = {}
     snapshot_id: int | None = None
 
 
@@ -729,12 +732,21 @@ async def import_shop_owners(
     if len(content) > MAX_UPLOAD_BYTES:
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Fayl juda katta (10 MB chegarasi)")
 
-    result = await import_shop_owners_excel(db, content, market.id)
+    try:
+        result = await import_shop_owners_excel(db, content, market.id)
+    except Exception as exc:  # noqa: BLE001
+        await db.rollback()
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"Faylni o'qishda xatolik: {type(exc).__name__}: {exc}. "
+            f"Ustunlar to'g'ri ekanini tekshiring: Magazin ID, QR, Kontragent, Summa.",
+        ) from exc
 
     if result.rows_read == 0:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "Hech qanday magazin topilmadi. Ustunlar: Magazin ID, QR, Kontragent, Summa",
+            "Hech qanday magazin topilmadi. Birinchi qatorda ustun nomlari bo'lishi kerak: "
+            "Magazin ID (yoki «Магазин №»), QR, Kontragent (yoki «Ижарачи»), Summa (yoki «Сумма»).",
         )
 
     audit = await write_audit(
@@ -764,5 +776,8 @@ async def import_shop_owners(
         counterparties_updated=result.counterparties_updated,
         counterparties_created=result.counterparties_created,
         errors=result.errors[:100],
+        skipped=result.skipped[:200],
+        skipped_count=len(result.skipped),
+        detected_columns=result.detected_columns,
         snapshot_id=snap.id,
     )

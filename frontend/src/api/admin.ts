@@ -235,6 +235,9 @@ export interface ShopOwnerImportResult {
   counterparties_updated: number;
   counterparties_created: number;
   errors: string[];
+  skipped: { row: number; shop_id: string; reason: string }[];
+  skipped_count: number;
+  detected_columns: Record<string, number>;
   snapshot_id: number | null;
 }
 

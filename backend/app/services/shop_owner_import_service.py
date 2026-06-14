@@ -25,10 +25,10 @@ from app.models import Counterparty, Shop
 
 # Ustun nomlari (kichik harf, bo'sh joy/belgilarsiz solishtiriladi)
 _COL_ALIASES = {
-    "shop_id": ["magazinid", "shopid", "magazin", "магазин", "id", "kod", "код", "do'konid", "dokonid", "магазинid", "магазин№", "магазинn"],
-    "qr": ["qr", "qr#", "qrraqami", "qrnomer", "qrномер", "qr№"],
-    "name": ["kontragent", "контрагент", "ijarachi", "egasi", "firma", "наименование", "nomi", "name"],
-    "rent": ["summa", "сумма", "rent", "ijara", "arenda", "аренда", "monthlyrent", "tolov", "to'lov", "сумматолов"],
+    "shop_id": ["magazinid", "shopid", "magazin", "магазин", "магазин№", "магазинn", "id", "kod", "код", "do'konid", "dokonid", "магазинid"],
+    "qr": ["qr", "qr#", "qr№", "qrraqami", "qrnomer", "qrномер", "qrn"],
+    "name": ["kontragent", "контрагент", "ijarachi", "ижарачи", "egasi", "эгаси", "firma", "фирма", "наименование", "nomi", "номи", "name", "ф.и.о", "fio"],
+    "rent": ["summa", "сумма", "rent", "ijara", "ижара", "arenda", "аренда", "monthlyrent", "tolov", "to'lov", "тўлов"],
     "inn": ["inn", "инн", "stir", "стир"],
 }
 
@@ -103,6 +103,7 @@ class ShopImportResult:
     counterparties_created: int = 0
     skipped: list = field(default_factory=list)
     errors: list = field(default_factory=list)
+    detected_columns: dict = field(default_factory=dict)
     snapshot_rows: list = field(default_factory=list)  # rollback uchun
 
 
@@ -133,6 +134,14 @@ async def import_shop_owners_excel(
     if "shop_id" not in col:
         col["shop_id"] = 0  # birinchi ustun shop_id deb taxmin
 
+    # Diagnostika: qaysi ustunlar topilgani (foydalanuvchiga ko'rsatish uchun)
+    field_labels = {"shop_id": "Magazin ID", "qr": "QR", "name": "Kontragent", "rent": "Summa", "inn": "INN"}
+    res.detected_columns = {field_labels.get(k, k): v for k, v in col.items()}
+    if "name" not in col:
+        res.errors.append("⚠️ «Kontragent» (Ижарачи) ustuni topilmadi — egalar yangilanmaydi")
+    if "rent" not in col:
+        res.errors.append("⚠️ «Summa» (Сумма) ustuni topilmadi — summalar yangilanmaydi")
+
     data_rows = rows[header_idx + 1:]
 
     # Mavjud kontragentlar (nomni yangilash uchun)
@@ -161,20 +170,28 @@ async def import_shop_owners_excel(
         inn = _clean_inn(get("inn"))
         rent = _parse_decimal(get("rent"))
 
-        # Magazinni topish
+        key = (shop_id, market_id)
+
+        # Shu importda bu shop_id allaqachon qayta ishlangan bo'lsa — takror,
+        # o'tkazib yuboramiz (unique violationni oldini olish + ogohlantirish).
+        if key in seen_keys:
+            res.skipped.append({
+                "row": idx, "shop_id": shop_id,
+                "reason": "Faylda takrorlangan Magazin ID — birinchisi olindi",
+            })
+            continue
+
+        # Magazinni topish (yangi qo'shilganlar uchun flush qilib turamiz)
         existing = (await db.execute(
             select(Shop).where(Shop.shop_id == shop_id, Shop.market_id == market_id)
         )).scalar_one_or_none()
 
-        key = (shop_id, market_id)
         if existing:
-            # Snapshot (faqat birinchi marta)
-            if key not in seen_keys:
-                snapshot_rows.append({
-                    "key": {"shop_id": shop_id, "market_id": market_id},
-                    "before": _shop_to_before(existing),
-                })
-                seen_keys.add(key)
+            snapshot_rows.append({
+                "key": {"shop_id": shop_id, "market_id": market_id},
+                "before": _shop_to_before(existing),
+            })
+            seen_keys.add(key)
 
             if name is not None:
                 existing.shop_type = name
@@ -183,17 +200,15 @@ async def import_shop_owners_excel(
             if rent and rent > 0:
                 existing.monthly_rent = rent
             if qr:
-                # QR raqamini notes ichida saqlaymiz (qr: ... ko'rinishida)
                 existing.notes = f"QR: {qr}"
             existing.source_sheet = source
             res.updated += 1
         else:
-            if key not in seen_keys:
-                snapshot_rows.append({
-                    "key": {"shop_id": shop_id, "market_id": market_id},
-                    "before": None,  # yangi yaratildi -> revert: o'chiriladi
-                })
-                seen_keys.add(key)
+            snapshot_rows.append({
+                "key": {"shop_id": shop_id, "market_id": market_id},
+                "before": None,  # yangi yaratildi -> revert: o'chiriladi
+            })
+            seen_keys.add(key)
             db.add(Shop(
                 shop_id=shop_id,
                 market_id=market_id,
@@ -205,13 +220,16 @@ async def import_shop_owners_excel(
                 is_active=True,
             ))
             res.inserted += 1
+            # Yangi magazin keyingi takrorlarda select bilan topilishi uchun flush
+            await db.flush()
 
         # Kontragent (egasi) nomini yangilash/yaratish
         if inn:
             cp = cp_map.get(inn)
             if cp is None:
-                db.add(Counterparty(inn=inn, name=name or f"INN {inn}"))
-                cp_map[inn] = Counterparty(inn=inn, name=name or f"INN {inn}")
+                new_cp = Counterparty(inn=inn, name=name or f"INN {inn}")
+                db.add(new_cp)
+                cp_map[inn] = new_cp  # saqlangan obyektni qo'yamiz
                 res.counterparties_created += 1
             elif name and cp.name != name:
                 cp.name = name
