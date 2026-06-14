@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { getPavilionShops } from "@/api/pavilions";
 import { getHideUnmatched } from "@/api/admin";
+import { getDashboard } from "@/api/dashboard";
 import { STATUS_COLORS, fmtUZS } from "@/lib/utils";
 import { Modal, Spinner } from "@/components/ui/Modal";
 import { useT } from "@/i18n/useT";
@@ -56,6 +57,13 @@ function demoSplit(totalDue: number, seed: number): { debt: number; paid: number
   const debt = Math.max(0, Math.min(totalDue, totalDue * ratio));
   return { debt, paid: totalDue - debt };
 }
+
+// ===== DASHBOARD PROPORSIYASI (vaqtinchalik, qo'lda kiritilgan summalar bilan moslash) =====
+// Ma'muriyat dashboardda umumiy To'langan/Qarz summalarini qo'lda o'zgartiradi.
+// Yoqilgan bo'lsa, har blok modalida ham o'sha umumiy foiz (paid/total)
+// qo'llanadi: blok To'langan = blok Jami × foiz, Qarz = Jami − To'langan.
+// Keyinroq avtomatik hisobga o'tkazish uchun shu qiymatni `false` qiling.
+const USE_DASHBOARD_PROPORTION = true;
 
 /** partial -> unpaid (agar bayroq yoqilgan bo'lsa). Boshqa statuslar o'zgarmaydi. */
 function applyPartialOverride(status: ShopStatus): ShopStatus {
@@ -122,6 +130,13 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
     queryFn: getHideUnmatched,
   });
 
+  // Dashboard umumiy summalari (qo'lda kiritilgan) — proporsiya uchun
+  const { data: dashboard } = useQuery({
+    queryKey: ["dashboard"],
+    queryFn: () => getDashboard(false),
+    enabled: USE_DASHBOARD_PROPORTION,
+  });
+
   const computed = useMemo(() => {
     if (!data) return [];
     const list = data.shops.map((s) => {
@@ -152,8 +167,15 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
       const { debt, paid } = demoSplit(acc.due, (pavilionId ?? 1) * 7.13);
       return { due: acc.due, debt, paid };
     }
+    // DASHBOARD PROPORSIYASI: umumiy (qo'lda kiritilgan) To'langan/Jami foizini
+    // har blokka qo'llaymiz. Blok Jami o'zgarmaydi, To'langan/Qarz moslashadi.
+    if (USE_DASHBOARD_PROPORTION && dashboard && dashboard.total > 0 && acc.due > 0) {
+      const paidRatio = Math.min(1, Math.max(0, dashboard.paid / dashboard.total));
+      const paid = acc.due * paidRatio;
+      return { due: acc.due, paid, debt: acc.due - paid };
+    }
     return acc;
-  }, [data, pavilionId]);
+  }, [data, pavilionId, dashboard]);
 
   // Har holat bo'yicha magazin soni (filtr yonida ko'rsatish uchun)
   const counts = useMemo(() => {
