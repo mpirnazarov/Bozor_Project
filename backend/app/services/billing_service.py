@@ -17,7 +17,7 @@ from app.models.rent_billing import RentBilling
 # - SHOP: bitta magazin modali (ShopDetailModal) — YOQILGAN
 # - BATCH: blok/pavilion modali — hozircha o'chiq (dashboard proporsiyasi ustun)
 USE_RENT_BILLING_SHOP = True
-USE_RENT_BILLING_BATCH = False
+USE_RENT_BILLING_BATCH = True
 from app.schemas.billing import (
     BillingStatusOut,
     CategoryBalance,
