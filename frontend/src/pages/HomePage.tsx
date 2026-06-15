@@ -71,7 +71,7 @@ export function HomePage() {
             </button>
             <div>
               {showLogo ? (
-                <ClikcBazaarLogo height={30} />
+                <ClikcBazaarLogo height={44} />
               ) : (
                 <>
                   <h1 className="font-display text-base font-extrabold leading-tight text-ink">
