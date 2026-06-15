@@ -11,6 +11,7 @@ import { MapEditor } from "@/components/Admin/MapEditor";
 import { ShopsManager } from "@/components/Admin/ShopsManager";
 import { BillingImport } from "@/components/Admin/BillingImport";
 import { ShopOwnerImport } from "@/components/Admin/ShopOwnerImport";
+import { RentBillingImport } from "@/components/Admin/RentBillingImport";
 import { AuditLogView } from "@/components/Admin/AuditLogView";
 import { DocumentsView } from "@/components/Admin/DocumentsView";
 import { BillingSummary } from "@/components/Admin/BillingSummary";
@@ -97,6 +98,7 @@ export function AdminPage() {
             <div className="space-y-5">
               <BillingImport />
               <ShopOwnerImport />
+              <RentBillingImport />
             </div>
           </Tabs.Content>
           <Tabs.Content value="documents">

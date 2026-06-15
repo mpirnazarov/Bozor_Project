@@ -11,6 +11,13 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import MonthlyBalance, Shop
+from app.models.rent_billing import RentBilling
+
+# rent_billing (sana bo'yicha import) qarzini ko'rsatish bayroqlari:
+# - SHOP: bitta magazin modali (ShopDetailModal) — YOQILGAN
+# - BATCH: blok/pavilion modali — hozircha o'chiq (dashboard proporsiyasi ustun)
+USE_RENT_BILLING_SHOP = True
+USE_RENT_BILLING_BATCH = False
 from app.schemas.billing import (
     BillingStatusOut,
     CategoryBalance,
@@ -50,6 +57,51 @@ async def _balances_by_inn(
     for bal in result.scalars():
         grouped[bal.inn].append(bal)
     return grouped
+
+
+async def _latest_rent_billing(
+    db: AsyncSession, shop_ids: list[str], market_ids: list[int] | None = None
+) -> dict[str, RentBilling]:
+    """Har magazin uchun ENG OXIRGI sanadagi rent_billing yozuvi.
+
+    Magazin/blok modalida qarz endi shu jadvaldan (eng so'nggi import sanasi)
+    olinadi. Yozuvi bo'lmagan magazinlar uchun bo'sh (eski mantiqqa qaytadi).
+    """
+    if not shop_ids:
+        return {}
+    q = select(RentBilling).where(RentBilling.shop_id.in_(shop_ids))
+    if market_ids:
+        q = q.where(RentBilling.market_id.in_(market_ids))
+    # Sana bo'yicha o'sish tartibida — keyin lug'atda oxirgisi qoladi
+    q = q.order_by(RentBilling.bill_date.asc())
+    latest: dict[str, RentBilling] = {}
+    for rb in (await db.execute(q)).scalars():
+        latest[rb.shop_id] = rb  # oxirgi (eng katta sana) qoladi
+    return latest
+
+
+def _status_from_rent(rb: RentBilling, shop_id: str, inn: str | None) -> BillingStatusOut:
+    """rent_billing yozuvidan to'g'ridan-to'g'ri status (arenda)."""
+    jami = Decimal(str(rb.monthly_amount or 0))
+    qarz = Decimal(str(rb.debt or 0))
+    if qarz < 0:
+        qarz = Decimal(0)
+    tolangan = Decimal(str(rb.paid or 0))
+    # To'langan berilmagan bo'lsa: jami − qarz
+    if tolangan <= 0 and jami > 0:
+        tolangan = max(Decimal(0), jami - qarz)
+    has_data = jami > 0 or qarz > 0 or tolangan > 0
+    status = _status_from_amounts(qarz, tolangan, has_data)
+    cats = [CategoryBalance(category="rent", due=jami, paid=tolangan, debt=qarz)]
+    return BillingStatusOut(
+        shop_id=shop_id,
+        inn=inn,
+        status=status,
+        total_due=jami,
+        total_paid=tolangan,
+        total_debt=qarz,
+        categories=cats,
+    )
 
 
 def _build_status(
@@ -169,8 +221,14 @@ async def compute_batch_status(
         inn_shop_count = {inn: int(c) for inn, c in cnt_rows.all()}
 
     out: dict[str, BillingStatusOut] = {}
+    # rent_billing (eng oxirgi sana) bo'lsa — qarz shundan olinadi (blok uchun bayroq)
+    rent_latest = await _latest_rent_billing(db, shop_ids) if USE_RENT_BILLING_BATCH else {}
     for sid in shop_ids:
         inn = shop_inn.get(sid)
+        rb = rent_latest.get(sid)
+        if rb is not None:
+            out[sid] = _status_from_rent(rb, sid, inn)
+            continue
         balances = by_inn.get(inn, []) if inn else []
         rent = shop_rent.get(sid, Decimal(0))
         # Qarz ulushi: INN qarzini shu INN magazinlari soniga bo'lamiz
@@ -186,6 +244,13 @@ async def compute_shop_status(
     db: AsyncSession, shop_id: str, inn: str | None, year: int, month: int
 ) -> BillingStatusOut:
     """Bitta magazin uchun billing statusi."""
+    # rent_billing (eng oxirgi sana) bo'lsa — qarz shundan olinadi (magazin modali)
+    if USE_RENT_BILLING_SHOP:
+        rent_latest = await _latest_rent_billing(db, [shop_id])
+        rb = rent_latest.get(shop_id)
+        if rb is not None:
+            return _status_from_rent(rb, shop_id, inn)
+
     balances: list[MonthlyBalance] = []
     debt_share = Decimal(0)
     if inn:

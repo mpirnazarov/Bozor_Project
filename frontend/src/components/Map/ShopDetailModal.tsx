@@ -29,6 +29,23 @@ export function ShopDetailModal({ shopId, onClose }: Props) {
       {isLoading && <Spinner label="Yuklanmoqda..." />}
       {data && (
         <div className="space-y-4">
+          {/* Qarz holati — faqat QARZ BOR bo'lganda (sariq/qizil). rent_billing bo'yicha */}
+          {data.billing && Number(data.billing.total_debt) > 0 && (
+            <div
+              className="rounded-lg px-4 py-2.5 text-sm font-bold text-white"
+              style={{
+                background: data.billing.status === "partial"
+                  ? STATUS_COLORS.partial
+                  : STATUS_COLORS.unpaid,
+              }}
+            >
+              {data.billing.status === "partial" ? "Qisman to'langan" : "Qarzi bor"}
+              <span className="float-right font-mono">
+                {t("shop.debtLabel")}: {fmtUZS(Number(data.billing.total_debt))}
+              </span>
+            </div>
+          )}
+
           <div className="card p-3 text-sm">
             <Row label={t("shop.shopId")} value={data.shop.shop_id} mono />
             <Row label={t("shop.pavilion")} value={data.shop.pavilion_code ?? "—"} />

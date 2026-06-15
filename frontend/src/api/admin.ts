@@ -250,3 +250,28 @@ export async function importShopOwners(file: File): Promise<ShopOwnerImportResul
   );
   return data;
 }
+
+// === Sana bo'yicha arenda billing import ===
+export interface RentBillingImportResult {
+  ok: boolean;
+  rows_read: number;
+  upserted: number;
+  with_debt: number;
+  no_debt: number;
+  bill_date: string;
+  errors: string[];
+  skipped: { row: number; shop_id: string; reason: string }[];
+  skipped_count: number;
+  detected_columns: Record<string, number>;
+  snapshot_id: number | null;
+}
+
+export async function importRentBilling(file: File, billDate: string): Promise<RentBillingImportResult> {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await apiClient.post<RentBillingImportResult>(
+    "/admin/import/rent-billing", form,
+    { params: { bill_date: billDate }, headers: { "Content-Type": "multipart/form-data" } },
+  );
+  return data;
+}

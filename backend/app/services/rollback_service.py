@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import MonthlyBalance, Shop
 from app.models.change_snapshot import ChangeSnapshot
+from app.models.rent_billing import RentBilling
 
 REVERT_WINDOW_HOURS = 24
 
@@ -20,12 +21,14 @@ REVERT_WINDOW_HOURS = 24
 _TABLE_MODELS = {
     "monthly_balances": MonthlyBalance,
     "shops": Shop,
+    "rent_billing": RentBilling,
 }
-_NUMERIC_FIELDS = {"due_amount", "paid_amount", "monthly_rent"}
+_NUMERIC_FIELDS = {"due_amount", "paid_amount", "monthly_rent", "monthly_amount", "debt", "paid"}
 # Har jadval uchun upsert konflikt kaliti
 _CONFLICT_KEYS = {
     "monthly_balances": ["inn", "year", "month", "category"],
     "shops": ["shop_id", "market_id"],
+    "rent_billing": ["market_id", "shop_id", "bill_date"],
 }
 
 
