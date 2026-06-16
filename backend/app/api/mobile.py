@@ -161,6 +161,41 @@ async def mobile_counterparty(
         elif category == BillingCategory.WATER.value:
             water = info
 
+    # 3b. Arenda — agar rent_billing'da (sana bo'yicha import) ma'lumot bo'lsa,
+    # arendani SHUNDAN olamiz (web modal bilan bir xil). Elektr/suv monthly_balances'dan.
+    # rent_billing magazin ID bo'yicha — shu INN magazinlarining eng oxirgi sanadagi
+    # yozuvlarini yig'amiz.
+    from app.models import RentBilling
+    from datetime import date as _date_cls
+    import calendar as _cal
+    shop_ids_for_rb = [s.shop_id for s in shops_db]
+    if shop_ids_for_rb:
+        # Tanlangan oy oralig'i (rent_billing sana bo'yicha — shu oy ichidagilar)
+        _mstart = _date_cls(year, month, 1)
+        _mend = _date_cls(year, month, _cal.monthrange(year, month)[1])
+        rb_q = (
+            select(RentBilling)
+            .where(
+                RentBilling.shop_id.in_(shop_ids_for_rb),
+                RentBilling.bill_date >= _mstart,
+                RentBilling.bill_date <= _mend,
+            )
+            .order_by(RentBilling.bill_date.asc())
+        )
+        if use_market_filter:
+            rb_q = rb_q.where(RentBilling.market_id == market_id)
+        rb_latest: dict[str, RentBilling] = {}
+        for rb in (await db.execute(rb_q)).scalars():
+            rb_latest[rb.shop_id] = rb  # shu oy ichidagi oxirgi sana qoladi
+        if rb_latest:
+            rb_due = sum((_f(r.monthly_amount) for r in rb_latest.values()), 0.0)
+            rb_debt = sum((max(0.0, _f(r.debt)) for r in rb_latest.values()), 0.0)
+            rb_paid = sum((_f(r.paid) for r in rb_latest.values()), 0.0)
+            # To'langan berilmagan bo'lsa: jami − qarz
+            if rb_paid <= 0 and rb_due > 0:
+                rb_paid = max(0.0, rb_due - rb_debt)
+            rent = {"due": rb_due, "paid": rb_paid, "debt": rb_debt}
+
     # 4. Har magazin uchun arenda holati (rent kategoriyasidagi balansdan).
     # Eski API shop_rent_payments dan olardi; bizda alohida jadval yo'q,
     # shuning uchun magazin darajasida monthly_rent va umumiy rent holatini beramiz.

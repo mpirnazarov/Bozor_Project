@@ -60,18 +60,27 @@ async def _balances_by_inn(
 
 
 async def _latest_rent_billing(
-    db: AsyncSession, shop_ids: list[str], market_ids: list[int] | None = None
+    db: AsyncSession, shop_ids: list[str], market_ids: list[int] | None = None,
+    year: int | None = None, month: int | None = None,
 ) -> dict[str, RentBilling]:
     """Har magazin uchun ENG OXIRGI sanadagi rent_billing yozuvi.
 
     Magazin/blok modalida qarz endi shu jadvaldan (eng so'nggi import sanasi)
-    olinadi. Yozuvi bo'lmagan magazinlar uchun bo'sh (eski mantiqqa qaytadi).
+    olinadi. year/month berilsa — faqat shu oy ichidagi sanalar olinadi
+    (May/Iyun aralashmasligi uchun). Yozuvi bo'lmagan magazinlar bo'sh qaytadi.
     """
     if not shop_ids:
         return {}
     q = select(RentBilling).where(RentBilling.shop_id.in_(shop_ids))
     if market_ids:
         q = q.where(RentBilling.market_id.in_(market_ids))
+    if year is not None and month is not None:
+        import calendar as _cal
+        from datetime import date as _d
+        q = q.where(
+            RentBilling.bill_date >= _d(year, month, 1),
+            RentBilling.bill_date <= _d(year, month, _cal.monthrange(year, month)[1]),
+        )
     # Sana bo'yicha o'sish tartibida — keyin lug'atda oxirgisi qoladi
     q = q.order_by(RentBilling.bill_date.asc())
     latest: dict[str, RentBilling] = {}
@@ -245,7 +254,7 @@ async def compute_batch_status(
 
     out: dict[str, BillingStatusOut] = {}
     # rent_billing (eng oxirgi sana) bo'lsa — qarz shundan olinadi (blok uchun bayroq)
-    rent_latest = await _latest_rent_billing(db, shop_ids) if USE_RENT_BILLING_BATCH else {}
+    rent_latest = await _latest_rent_billing(db, shop_ids, year=year, month=month) if USE_RENT_BILLING_BATCH else {}
     for sid in shop_ids:
         inn = shop_inn.get(sid)
         rb = rent_latest.get(sid)
@@ -286,7 +295,7 @@ async def compute_shop_status(
 
     # rent_billing (eng oxirgi sana) bo'lsa — arenda shundan, elektr/suv eskidan
     if USE_RENT_BILLING_SHOP:
-        rent_latest = await _latest_rent_billing(db, [shop_id])
+        rent_latest = await _latest_rent_billing(db, [shop_id], year=year, month=month)
         rb = rent_latest.get(shop_id)
         if rb is not None:
             return _status_from_rent(rb, shop_id, inn, other_balances=balances)
