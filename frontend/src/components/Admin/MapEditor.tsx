@@ -66,6 +66,7 @@ export function MapEditor() {
   const [labelText, setLabelText] = useState("");
   const [shopPrefix, setShopPrefix] = useState("");
   const [showLabel, setShowLabel] = useState(true);
+  const [labelRotation, setLabelRotation] = useState(0);
   const [isHidden, setIsHidden] = useState(false);
   const [hiddenListOpen, setHiddenListOpen] = useState(false);
   const [fillColor, setFillColor] = useState("#d4a373");
@@ -90,6 +91,7 @@ export function MapEditor() {
     setLabelText(p.display_text ?? "");
     setShopPrefix((p.meta?.shop_prefix as string | undefined) ?? "");
     setShowLabel(p.meta?.show_label !== false);
+    setLabelRotation(p.label_rotation ?? 0);
     setIsHidden(p.meta?.is_hidden === true);
     setLabelPos(
       p.label_x != null && p.label_y != null ? { x: p.label_x, y: p.label_y } : null,
@@ -198,7 +200,7 @@ export function MapEditor() {
     setName("");
     setLabelText("");
     setShopPrefix("");
-    setShowLabel(true);
+    setShowLabel(true);    setLabelRotation(0);
     setIsHidden(false);
     setLabelPos(null);
     setFillColor("#d4a373");
@@ -214,7 +216,7 @@ export function MapEditor() {
     setName("");
     setLabelText("");
     setShopPrefix("");
-    setShowLabel(false);
+    setShowLabel(false);    setLabelRotation(0);
     setIsHidden(true);
     setLabelPos(null);
     setMode("draw");
@@ -261,6 +263,7 @@ export function MapEditor() {
       stroke_color: isHidden ? "#ffffff" : strokeColor,
       label_x: labelPoint.x,
       label_y: labelPoint.y,
+      label_rotation: labelRotation,
       is_active: true,
       map_layer_id: activeLayerId ?? undefined,
       meta: {
@@ -600,6 +603,7 @@ export function MapEditor() {
                     stroke="#0066ff" strokeWidth={2} strokeDasharray="3 2" vectorEffect="non-scaling-stroke" />
                   <text x={lp.x} y={lp.y} fontSize={20} fontWeight="700" fill="#0066ff"
                     textAnchor="middle" dominantBaseline="middle"
+                    transform={labelRotation ? `rotate(${labelRotation} ${lp.x} ${lp.y})` : undefined}
                     style={{ pointerEvents: "none", userSelect: "none" }}>
                     {labelText || name || "•"}
                   </text>
@@ -634,6 +638,16 @@ export function MapEditor() {
                 <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-ink-soft">
                   <input type="checkbox" className="h-4 w-4 accent-brand" checked={showLabel} onChange={(e) => setShowLabel(e.target.checked)} />
                   {t("editor.showLabel")}
+                </label>
+                {/* Belgini 90° burish */}
+                <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-ink-soft">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-brand"
+                    checked={labelRotation === 90}
+                    onChange={(e) => setLabelRotation(e.target.checked ? 90 : 0)}
+                  />
+                  {t("editor.rotateLabel")}
                 </label>
                 <div className="flex items-center gap-2 text-xs">
                   <span className="text-ink-soft">{t("editor.fill")}</span>

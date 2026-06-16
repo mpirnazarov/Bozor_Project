@@ -9,9 +9,8 @@ import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 import { DashboardEditor } from "@/components/Admin/DashboardEditor";
 import { MapEditor } from "@/components/Admin/MapEditor";
 import { ShopsManager } from "@/components/Admin/ShopsManager";
-import { BillingImport } from "@/components/Admin/BillingImport";
 import { ShopOwnerImport } from "@/components/Admin/ShopOwnerImport";
-import { RentBillingImport } from "@/components/Admin/RentBillingImport";
+import { PaymentImport } from "@/components/Admin/PaymentImport";
 import { AuditLogView } from "@/components/Admin/AuditLogView";
 import { DocumentsView } from "@/components/Admin/DocumentsView";
 import { BillingSummary } from "@/components/Admin/BillingSummary";
@@ -96,9 +95,8 @@ export function AdminPage() {
           </Tabs.Content>
           <Tabs.Content value="import">
             <div className="space-y-5">
-              <BillingImport />
+              <PaymentImport />
               <ShopOwnerImport />
-              <RentBillingImport />
             </div>
           </Tabs.Content>
           <Tabs.Content value="documents">

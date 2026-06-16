@@ -888,3 +888,111 @@ async def import_rent_billing(
         detected_columns=result.detected_columns,
         snapshot_id=snap.id,
     )
+
+
+# ===== USUL 2: INN BO'YICHA TO'LOV IMPORT (oy davomida, rollback bilan) =====
+
+class InnPaymentImportOut(BaseModel):
+    ok: bool = True
+    rows_read: int = 0
+    payments_total: float = 0
+    inns_matched: int = 0
+    inns_unmatched: int = 0
+    shops_updated: int = 0
+    bill_date: str = ""
+    errors: list[str] = []
+    skipped: list[dict] = []
+    skipped_count: int = 0
+    detected_columns: dict = {}
+    snapshot_id: int | None = None
+
+
+@router.post("/import/inn-payments", response_model=InnPaymentImportOut)
+async def import_inn_payments(
+    admin: AdminUser,
+    market: CurrentMarket,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    file: UploadFile = File(...),
+    bill_date: str = Query(..., description="Sana (YYYY-MM-DD)"),
+) -> InnPaymentImportOut:
+    """INN bo'yicha to'lovlarni import qiladi (Usul 2).
+
+    To'lovlar INN bo'yicha yig'iladi va o'sha INN magazinlariga taqsimlanadi —
+    har magazin qarzidan ayiriladi. Natija tanlangan sanaga rent_billing ga yoziladi.
+    """
+    from datetime import date as _date
+    from app.services.inn_payment_import_service import (
+        import_inn_payments_excel, StructureError,
+    )
+    from app.models import RentBilling
+    from sqlalchemy import select as _select
+
+    if not file.filename or not file.filename.lower().endswith((".xlsx", ".xlsm")):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Faqat .xlsx fayl")
+    try:
+        bd = _date.fromisoformat(bill_date)
+    except ValueError:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Sana formati noto'g'ri (YYYY-MM-DD)")
+
+    content = await file.read()
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Fayl juda katta (10 MB)")
+
+    # Snapshot: shu sanadagi mavjud yozuvlar (rollback uchun)
+    existing = list((await db.execute(
+        _select(RentBilling).where(
+            RentBilling.market_id == market.id, RentBilling.bill_date == bd
+        )
+    )).scalars())
+    snapshot_rows = [{
+        "key": {"shop_id": r.shop_id, "market_id": r.market_id, "bill_date": bd.isoformat()},
+        "before": {
+            "shop_id": r.shop_id, "market_id": r.market_id, "bill_date": bd.isoformat(),
+            "inn": r.inn, "counterparty_name": r.counterparty_name, "contract_no": r.contract_no,
+            "monthly_amount": str(r.monthly_amount), "debt": str(r.debt), "paid": str(r.paid),
+        },
+    } for r in existing]
+
+    try:
+        result = await import_inn_payments_excel(db, content, bd, market.id)
+    except StructureError as exc:
+        await db.rollback()
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        await db.rollback()
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"Import xatosi: {type(exc).__name__}: {exc}",
+        ) from exc
+
+    audit = await write_audit(
+        db, admin.id, "import_inn_payments", "rent_billing", f"{file.filename} ({bill_date})",
+        {"shops": result.shops_updated, "inns": result.inns_matched, "date": bill_date},
+    )
+    snap = await save_snapshot(
+        db,
+        action="import_inn_payments",
+        table_name="rent_billing",
+        before_rows=snapshot_rows,
+        user_id=admin.id,
+        market_id=market.id,
+        summary=f"INN to'lov import: {bill_date} — {result.shops_updated} magazin, "
+                f"{result.inns_matched} INN",
+        audit_id=audit.id,
+    )
+    await db.commit()
+
+    return InnPaymentImportOut(
+        ok=True,
+        rows_read=result.rows_read,
+        payments_total=float(result.payments_total),
+        inns_matched=result.inns_matched,
+        inns_unmatched=result.inns_unmatched,
+        shops_updated=result.shops_updated,
+        bill_date=result.bill_date,
+        errors=result.errors[:100],
+        skipped=result.skipped[:200],
+        skipped_count=len(result.skipped),
+        detected_columns=result.detected_columns,
+        snapshot_id=snap.id,
+    )
