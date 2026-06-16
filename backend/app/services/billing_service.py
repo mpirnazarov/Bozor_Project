@@ -80,8 +80,16 @@ async def _latest_rent_billing(
     return latest
 
 
-def _status_from_rent(rb: RentBilling, shop_id: str, inn: str | None) -> BillingStatusOut:
-    """rent_billing yozuvidan to'g'ridan-to'g'ri status (arenda)."""
+def _status_from_rent(
+    rb: RentBilling, shop_id: str, inn: str | None,
+    other_balances: list[MonthlyBalance] | None = None,
+) -> BillingStatusOut:
+    """rent_billing yozuvidan status (arenda) + eski elektr/suv kategoriyalari.
+
+    Arenda — rent_billing'dan (eng oxirgi sana). Elektr va suv esa eski
+    monthly_balances'dan olinadi (foydalanuvchi faqat arendani import qilgan,
+    elektr/suv oldingisidan ko'rsatilishi kerak).
+    """
     jami = Decimal(str(rb.monthly_amount or 0))
     qarz = Decimal(str(rb.debt or 0))
     if qarz < 0:
@@ -90,9 +98,24 @@ def _status_from_rent(rb: RentBilling, shop_id: str, inn: str | None) -> Billing
     # To'langan berilmagan bo'lsa: jami − qarz
     if tolangan <= 0 and jami > 0:
         tolangan = max(Decimal(0), jami - qarz)
-    has_data = jami > 0 or qarz > 0 or tolangan > 0
-    status = _status_from_amounts(qarz, tolangan, has_data)
+
     cats = [CategoryBalance(category="rent", due=jami, paid=tolangan, debt=qarz)]
+
+    # Eski elektr/suv kategoriyalarini qo'shamiz (rent'dan tashqari)
+    for b in (other_balances or []):
+        if b.category == "rent":
+            continue  # arenda rent_billing'dan olindi
+        cat_debt = b.due_amount if b.due_amount > 0 else Decimal(0)
+        cats.append(CategoryBalance(
+            category=b.category,
+            due=b.paid_amount + cat_debt,
+            paid=b.paid_amount,
+            debt=cat_debt,
+        ))
+
+    has_data = jami > 0 or qarz > 0 or tolangan > 0 or bool(other_balances)
+    # Umumiy status FAQAT arenda bo'yicha (modal banneri arenda qarzini ko'rsatadi)
+    status = _status_from_amounts(qarz, tolangan, jami > 0 or qarz > 0 or tolangan > 0)
     return BillingStatusOut(
         shop_id=shop_id,
         inn=inn,
@@ -227,7 +250,8 @@ async def compute_batch_status(
         inn = shop_inn.get(sid)
         rb = rent_latest.get(sid)
         if rb is not None:
-            out[sid] = _status_from_rent(rb, sid, inn)
+            other = by_inn.get(inn, []) if inn else []
+            out[sid] = _status_from_rent(rb, sid, inn, other_balances=other)
             continue
         balances = by_inn.get(inn, []) if inn else []
         rent = shop_rent.get(sid, Decimal(0))
@@ -244,13 +268,7 @@ async def compute_shop_status(
     db: AsyncSession, shop_id: str, inn: str | None, year: int, month: int
 ) -> BillingStatusOut:
     """Bitta magazin uchun billing statusi."""
-    # rent_billing (eng oxirgi sana) bo'lsa — qarz shundan olinadi (magazin modali)
-    if USE_RENT_BILLING_SHOP:
-        rent_latest = await _latest_rent_billing(db, [shop_id])
-        rb = rent_latest.get(shop_id)
-        if rb is not None:
-            return _status_from_rent(rb, shop_id, inn)
-
+    # Eski balanslar (elektr/suv uchun ham kerak)
     balances: list[MonthlyBalance] = []
     debt_share = Decimal(0)
     if inn:
@@ -265,6 +283,13 @@ async def compute_shop_status(
             select(func.count(Shop.shop_id)).where(Shop.inn == inn, Shop.is_active.is_(True))
         )
         debt_share = inn_debt / max(int(cnt or 1), 1)
+
+    # rent_billing (eng oxirgi sana) bo'lsa — arenda shundan, elektr/suv eskidan
+    if USE_RENT_BILLING_SHOP:
+        rent_latest = await _latest_rent_billing(db, [shop_id])
+        rb = rent_latest.get(shop_id)
+        if rb is not None:
+            return _status_from_rent(rb, shop_id, inn, other_balances=balances)
 
     # Magazinning belgilangan summasi
     rent = await db.scalar(select(Shop.monthly_rent).where(Shop.shop_id == shop_id))
