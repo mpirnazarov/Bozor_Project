@@ -301,3 +301,31 @@ export async function importInnPayments(file: File, billDate: string): Promise<I
   );
   return data;
 }
+
+// === Elektr to'lovlari import ===
+export interface ElectricityImportResult {
+  ok: boolean;
+  rows_read: number;
+  inns: number;
+  with_debt: number;
+  with_prepaid: number;
+  total_debt: number;
+  total_prepaid: number;
+  year: number;
+  month: number;
+  errors: string[];
+  skipped: { row: number; shop_id: string; reason: string }[];
+  skipped_count: number;
+  detected_columns: Record<string, number>;
+  snapshot_id: number | null;
+}
+
+export async function importElectricity(file: File, year: number, month: number): Promise<ElectricityImportResult> {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await apiClient.post<ElectricityImportResult>(
+    "/admin/import/electricity", form,
+    { params: { year, month }, headers: { "Content-Type": "multipart/form-data" } },
+  );
+  return data;
+}

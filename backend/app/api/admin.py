@@ -996,3 +996,141 @@ async def import_inn_payments(
         detected_columns=result.detected_columns,
         snapshot_id=snap.id,
     )
+
+
+# ===== ELEKTR TO'LOVLARI IMPORT (monthly_balances, electricity) =====
+
+class ElectricityImportOut(BaseModel):
+    ok: bool = True
+    rows_read: int = 0
+    inns: int = 0
+    with_debt: int = 0
+    with_prepaid: int = 0
+    total_debt: float = 0
+    total_prepaid: float = 0
+    year: int = 0
+    month: int = 0
+    errors: list[str] = []
+    skipped: list[dict] = []
+    skipped_count: int = 0
+    detected_columns: dict = {}
+    snapshot_id: int | None = None
+
+
+@router.post("/import/electricity", response_model=ElectricityImportOut)
+async def import_electricity(
+    admin: AdminUser,
+    market: CurrentMarket,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    file: UploadFile = File(...),
+    year: int = Query(...),
+    month: int = Query(..., ge=1, le=12),
+) -> ElectricityImportOut:
+    """Elektr to'lovlarini import qiladi (К оплате=qarz, Предоплата=oldindan).
+
+    INN bo'yicha yig'ib monthly_balances ga (electricity) yoziladi. Tanlangan
+    yil/oy uchun. Snapshot olinadi — 24 soat ichida ortga qaytarish mumkin.
+    """
+    from app.services.electricity_import_service import (
+        import_electricity_excel, StructureError,
+    )
+    from sqlalchemy import select as _select
+
+    if not file.filename or not file.filename.lower().endswith((".xlsx", ".xlsm")):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Faqat .xlsx fayl")
+    content = await file.read()
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Fayl juda katta (10 MB)")
+
+    # Avval strukturani tekshiramiz (DB'ga tegmasdan) — agg ni olamiz
+    try:
+        result = await import_electricity_excel(db, content, year, month, market.id)
+    except StructureError as exc:
+        await db.rollback()
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        await db.rollback()
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"Import xatosi: {type(exc).__name__}: {exc}",
+        ) from exc
+
+    # Snapshot: shu (year, month, electricity) dagi tegiladigan INN larning eski holati
+    touched_inns = list(result.agg.keys())
+    snapshot_rows: list[dict] = []
+    if touched_inns:
+        existing = list((await db.execute(
+            _select(MonthlyBalance).where(
+                MonthlyBalance.year == year,
+                MonthlyBalance.month == month,
+                MonthlyBalance.category == "electricity",
+                MonthlyBalance.inn.in_(touched_inns),
+            )
+        )).scalars())
+        existing_map = {b.inn: b for b in existing}
+        for inn in touched_inns:
+            prev = existing_map.get(inn)
+            key = {"inn": inn, "year": year, "month": month, "category": "electricity"}
+            snapshot_rows.append({
+                "key": key,
+                "before": None if prev is None else {
+                    "inn": inn, "year": year, "month": month, "category": "electricity",
+                    "market_id": prev.market_id,
+                    "due_amount": str(prev.due_amount),
+                    "paid_amount": str(prev.paid_amount),
+                },
+            })
+
+    audit = await write_audit(
+        db, admin.id, "import_electricity", "monthly_balances", f"{file.filename} ({year}-{month})",
+        {"inns": result.inns, "with_debt": result.with_debt, "year": year, "month": month},
+    )
+    snap = await save_snapshot(
+        db,
+        action="import_electricity",
+        table_name="monthly_balances",
+        before_rows=snapshot_rows,
+        user_id=admin.id,
+        market_id=market.id,
+        summary=f"Elektr import: {year}-{month:02d} — {result.inns} INN, "
+                f"{result.with_debt} qarzli",
+        audit_id=audit.id,
+    )
+
+    # Snapshot olingach — monthly_balances ga upsert (electricity)
+    from sqlalchemy.dialects.postgresql import insert as _pg_insert
+    records = [{
+        "inn": inn, "market_id": market.id, "year": year, "month": month,
+        "category": "electricity", "due_amount": v["due"], "paid_amount": v["paid"],
+    } for inn, v in result.agg.items()]
+    for i in range(0, len(records), 1000):
+        chunk = records[i:i + 1000]
+        stmt = _pg_insert(MonthlyBalance.__table__).values(chunk)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["inn", "year", "month", "category"],
+            set_={
+                "due_amount": stmt.excluded.due_amount,
+                "paid_amount": stmt.excluded.paid_amount,
+                "market_id": stmt.excluded.market_id,
+            },
+        )
+        await db.execute(stmt)
+
+    await db.commit()
+
+    return ElectricityImportOut(
+        ok=True,
+        rows_read=result.rows_read,
+        inns=result.inns,
+        with_debt=result.with_debt,
+        with_prepaid=result.with_prepaid,
+        total_debt=float(result.total_debt),
+        total_prepaid=float(result.total_prepaid),
+        year=result.year,
+        month=result.month,
+        errors=result.errors[:100],
+        skipped=result.skipped[:200],
+        skipped_count=len(result.skipped),
+        detected_columns=result.detected_columns,
+        snapshot_id=snap.id,
+    )
