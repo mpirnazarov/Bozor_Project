@@ -18,6 +18,7 @@ from app.models import (
     HIDE_UNMATCHED_KEY,
     AuditLog,
     MapLayer,
+    MonthlyBalance,
     Pavilion,
     Setting,
     Shop,
@@ -1081,42 +1082,49 @@ async def import_electricity(
                 },
             })
 
-    audit = await write_audit(
-        db, admin.id, "import_electricity", "monthly_balances", f"{file.filename} ({year}-{month})",
-        {"inns": result.inns, "with_debt": result.with_debt, "year": year, "month": month},
-    )
-    snap = await save_snapshot(
-        db,
-        action="import_electricity",
-        table_name="monthly_balances",
-        before_rows=snapshot_rows,
-        user_id=admin.id,
-        market_id=market.id,
-        summary=f"Elektr import: {year}-{month:02d} — {result.inns} INN, "
-                f"{result.with_debt} qarzli",
-        audit_id=audit.id,
-    )
-
-    # Snapshot olingach — monthly_balances ga upsert (electricity)
-    from sqlalchemy.dialects.postgresql import insert as _pg_insert
-    records = [{
-        "inn": inn, "market_id": market.id, "year": year, "month": month,
-        "category": "electricity", "due_amount": v["due"], "paid_amount": v["paid"],
-    } for inn, v in result.agg.items()]
-    for i in range(0, len(records), 1000):
-        chunk = records[i:i + 1000]
-        stmt = _pg_insert(MonthlyBalance.__table__).values(chunk)
-        stmt = stmt.on_conflict_do_update(
-            index_elements=["inn", "year", "month", "category"],
-            set_={
-                "due_amount": stmt.excluded.due_amount,
-                "paid_amount": stmt.excluded.paid_amount,
-                "market_id": stmt.excluded.market_id,
-            },
+    try:
+        audit = await write_audit(
+            db, admin.id, "import_electricity", "monthly_balances", f"{file.filename} ({year}-{month})",
+            {"inns": result.inns, "with_debt": result.with_debt, "year": year, "month": month},
         )
-        await db.execute(stmt)
+        snap = await save_snapshot(
+            db,
+            action="import_electricity",
+            table_name="monthly_balances",
+            before_rows=snapshot_rows,
+            user_id=admin.id,
+            market_id=market.id,
+            summary=f"Elektr import: {year}-{month:02d} — {result.inns} INN, "
+                    f"{result.with_debt} qarzli",
+            audit_id=audit.id,
+        )
 
-    await db.commit()
+        # Snapshot olingach — monthly_balances ga upsert (electricity)
+        from sqlalchemy.dialects.postgresql import insert as _pg_insert
+        records = [{
+            "inn": inn, "market_id": market.id, "year": year, "month": month,
+            "category": "electricity", "due_amount": v["due"], "paid_amount": v["paid"],
+        } for inn, v in result.agg.items()]
+        for i in range(0, len(records), 1000):
+            chunk = records[i:i + 1000]
+            stmt = _pg_insert(MonthlyBalance.__table__).values(chunk)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["inn", "year", "month", "category"],
+                set_={
+                    "due_amount": stmt.excluded.due_amount,
+                    "paid_amount": stmt.excluded.paid_amount,
+                    "market_id": stmt.excluded.market_id,
+                },
+            )
+            await db.execute(stmt)
+
+        await db.commit()
+    except Exception as exc:  # noqa: BLE001
+        await db.rollback()
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"Bazaga saqlashda xatolik: {type(exc).__name__}: {exc}",
+        ) from exc
 
     return ElectricityImportOut(
         ok=True,
