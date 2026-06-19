@@ -91,6 +91,7 @@ class RentImportResult:
     upserted: int = 0
     with_debt: int = 0
     no_debt: int = 0
+    inn_updates: int = 0
     skipped: list = field(default_factory=list)
     errors: list = field(default_factory=list)
     detected_columns: dict = field(default_factory=dict)
@@ -208,6 +209,21 @@ async def import_rent_billing_excel(
             },
         )
         await db.execute(stmt)
+
+    # Shop.inn ni fayldagi (yangi) INN bilan yangilaymiz — modal/mobile to'g'ri
+    # INN ko'rsatishi uchun (rent_billing'ga yozish Shop.inn ni o'zgartirmaydi).
+    from app.models import Shop
+    from sqlalchemy import update as _update
+    inn_updates = 0
+    for rec in records:
+        if rec["inn"]:
+            await db.execute(
+                _update(Shop)
+                .where(Shop.shop_id == rec["shop_id"], Shop.market_id == market_id)
+                .values(inn=rec["inn"])
+            )
+            inn_updates += 1
+    res.inn_updates = inn_updates
 
     res.upserted = len(records)
     return res
