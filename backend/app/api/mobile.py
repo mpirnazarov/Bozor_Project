@@ -291,3 +291,79 @@ async def mobile_periods(
 
     rows = (await db.execute(q)).all()
     return [{"year": int(y), "month": int(mo)} for y, mo in rows]
+
+
+@router.get("/debug/inn-summary")
+async def debug_inn_summary(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    inn: str = Query(...),
+    year: int = Query(...),
+    month: int = Query(...),
+    key: str = Query(...),
+):
+    """INN bo'yicha jami summa diagnostikasi. ?inn=...&year=2026&month=6&key=orik-debug-2026"""
+    if key != "orik-debug-2026":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "key")
+    from app.models import RentBilling
+    from datetime import date as _d
+    import calendar as _cal
+
+    # Magazinlar
+    shops = list((await db.execute(
+        select(Shop).where(Shop.inn == inn)
+    )).scalars())
+    shop_info = [{
+        "shop_id": s.shop_id, "market_id": s.market_id,
+        "monthly_rent": float(s.monthly_rent or 0), "active": s.is_active,
+    } for s in shops]
+
+    # monthly_balances (elektr/suv/rent)
+    mb = list((await db.execute(
+        select(MonthlyBalance).where(
+            MonthlyBalance.inn == inn, MonthlyBalance.year == year, MonthlyBalance.month == month,
+        )
+    )).scalars())
+    mb_info = [{
+        "category": b.category, "due_amount": float(b.due_amount),
+        "paid_amount": float(b.paid_amount), "market_id": b.market_id,
+    } for b in mb]
+
+    # rent_billing (shu oy)
+    shop_ids = [s.shop_id for s in shops]
+    rb_info = []
+    if shop_ids:
+        mstart = _d(year, month, 1)
+        mend = _d(year, month, _cal.monthrange(year, month)[1])
+        rb = list((await db.execute(
+            select(RentBilling).where(
+                RentBilling.shop_id.in_(shop_ids),
+                RentBilling.bill_date >= mstart, RentBilling.bill_date <= mend,
+            ).order_by(RentBilling.bill_date.asc())
+        )).scalars())
+        # eng oxirgi sana har shop_id uchun
+        latest = {}
+        for r in rb:
+            latest[r.shop_id] = r
+        rb_info = [{
+            "shop_id": r.shop_id, "bill_date": r.bill_date.isoformat(),
+            "monthly_amount": float(r.monthly_amount), "debt": float(r.debt), "paid": float(r.paid),
+            "market_id": r.market_id,
+        } for r in latest.values()]
+
+    rb_due = sum(x["monthly_amount"] for x in rb_info)
+    mb_rent_due = sum(x["due_amount"] + x["paid_amount"] for x in mb_info if x["category"] == "rent")
+    shop_rent_sum = sum(x["monthly_rent"] for x in shop_info if x["active"])
+
+    return {
+        "inn": inn, "year": year, "month": month,
+        "shops": shop_info,
+        "shop_count": len(shops),
+        "monthly_balances": mb_info,
+        "rent_billing_this_month": rb_info,
+        "SUMMARY": {
+            "shop_monthly_rent_sum": shop_rent_sum,
+            "rent_billing_monthly_amount_sum": rb_due,
+            "monthly_balances_rent_due+paid": mb_rent_due,
+            "note": "mobile rent.due = rent_billing_sum (agar rent_billing bo'lsa), aks holda monthly_balances rent",
+        },
+    }
