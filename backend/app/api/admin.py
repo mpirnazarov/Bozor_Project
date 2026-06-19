@@ -618,6 +618,7 @@ async def billing_summary(
     blocks_out: list[dict] = []
     layer_agg: dict[int | None, dict] = {}
     grand = {"due": Decimal(0), "paid": Decimal(0), "debt": Decimal(0), "shop_count": 0}
+    seen_shops: set[str] = set()  # bir magazin bir nechta blokda takror sanalmasin
 
     for pav in pavilions:
         prefix = None
@@ -626,15 +627,18 @@ async def billing_summary(
         if not prefix:
             continue  # prefiksi yo'q blok — magazinlari aniqlanmaydi
 
-        shops = list((await db.execute(
+        shops_all = list((await db.execute(
             select(Shop.shop_id).where(
                 Shop.market_id == market.id,
                 _prefix_shop_filter(prefix),
                 Shop.is_active.is_(True),
             )
         )).scalars())
+        # Boshqa blokda allaqachon sanalganlarni chiqarib tashlaymiz (dublikatsiz Jami)
+        shops = [s for s in shops_all if s not in seen_shops]
         if not shops:
             continue
+        seen_shops.update(shops)
 
         billing = await compute_batch_status(db, shops, year, month)
         due = sum((b.total_due for b in billing.values()), Decimal(0))
