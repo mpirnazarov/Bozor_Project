@@ -3,7 +3,7 @@ from typing import Annotated
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -16,18 +16,11 @@ from app.services.billing_service import compute_batch_status
 router = APIRouter()
 
 
-def _prefix_shop_filter(prefix: str):
-    """Prefiks bo'yicha magazin tanlash sharti (Q li / Q siz ajratish bilan).
-
-    - Prefiks "Q" bilan tugasa (masalan "01-3-1-Q") -> FAQAT Q li magazinlar:
-        shop_id LIKE "01-3-1-Q%"
-    - Aks holda (masalan "01-3-1") -> FAQAT Q SIZ magazinlar:
-        shop_id LIKE "01-3-1-%"  VA  shop_id NOT LIKE "01-3-1-Q%"
-
-    Shunday qilib bitta blokda Q li va Q siz magazinlar alohida ko'rinadi.
-    "q" (kichik) ham qabul qilinadi. Bazadagi Q katta harf deb hisoblanadi.
-    """
+def _single_prefix_filter(prefix: str):
+    """Bitta prefiks uchun shart (Q li / Q siz ajratish bilan)."""
     p = prefix.strip().rstrip("-")
+    if not p:
+        return None
     # Oxiri Q/q bilan tugasa -> Q li turkum
     if p[-1:].upper() == "Q":
         base = p[:-1].rstrip("-")  # masalan "01-3-1"
@@ -37,6 +30,28 @@ def _prefix_shop_filter(prefix: str):
         Shop.shop_id.like(f"{p}-%"),
         ~Shop.shop_id.like(f"{p}-Q%"),
     )
+
+
+def _prefix_shop_filter(prefix: str):
+    """Prefiks bo'yicha magazin tanlash sharti.
+
+    Bir nechta prefiks slash (/) yoki vergul (,) bilan berilishi mumkin —
+    masalan "05-5-2/05-6-2" yoki "05-5-2, 05-6-2". Bunda har bir prefiksga
+    mos magazinlar (OR bilan) tanlanadi. Bu bitta blokga bir nechta region
+    magazinlarini biriktirish imkonini beradi.
+
+    - Prefiks "Q" bilan tugasa (masalan "01-3-1-Q") -> FAQAT Q li magazinlar.
+    - Aks holda (masalan "01-3-1") -> FAQAT Q SIZ magazinlar.
+    """
+    # Slash yoki vergul bilan ajratamiz
+    parts = [x for chunk in prefix.split("/") for x in chunk.split(",")]
+    conds = [c for c in (_single_prefix_filter(p) for p in parts) if c is not None]
+    if not conds:
+        # Bo'sh — hech narsa topmaydigan shart
+        return Shop.shop_id.like("\x00")
+    if len(conds) == 1:
+        return conds[0]
+    return or_(*conds)
 
 
 @router.get("", response_model=list[PavilionOut])
@@ -190,3 +205,4 @@ async def get_pavilion_shops(
         "shops": [ShopOut.model_validate(s) for s in shops],
         "billing": billing,
     }
+
