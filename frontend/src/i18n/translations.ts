@@ -13,7 +13,7 @@ type Dict = Record<string, string>;
 
 const uz: Dict = {
   // Umumiy
-  "app.title": "O'rikzor Savdo Kompleksi",
+  "app.title": "Savdo Kompleksi",  // dinamik: HomePage bozor nomini ustiga qo'yadi
   "app.subtitle": "Bozor boshqaruv tizimi",
   "common.loading": "Yuklanmoqda...",
   "common.error": "Xatolik yuz berdi",
@@ -210,7 +210,7 @@ const uz: Dict = {
 };
 
 const ru: Dict = {
-  "app.title": "Торговый комплекс Урикзор",
+  "app.title": "Торговый комплекс",
   "app.subtitle": "Система управления рынком",
   "common.loading": "Загрузка...",
   "common.error": "Произошла ошибка",
@@ -396,7 +396,7 @@ const ru: Dict = {
 };
 
 const en: Dict = {
-  "app.title": "Orikzor Trade Complex",
+  "app.title": "Trade Complex",
   "app.subtitle": "Market management system",
   "common.loading": "Loading...",
   "common.error": "An error occurred",

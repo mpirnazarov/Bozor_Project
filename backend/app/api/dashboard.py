@@ -10,6 +10,7 @@ from app.deps import CurrentUser, get_current_market
 from app.schemas.dashboard import DashboardOut
 from app.services.dashboard_service import (
     get_dashboard_from_settings,
+    get_dashboard_from_market,
     get_dashboard_live,
 )
 
@@ -20,6 +21,7 @@ router = APIRouter()
 async def get_dashboard(
     _user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
+    market=Depends(get_current_market),
     live: bool = Query(False, description="True bo'lsa monthly_balances'dan hisoblaydi"),
     year: int | None = Query(None),
     month: int | None = Query(None, ge=1, le=12),
@@ -27,15 +29,20 @@ async def get_dashboard(
     """
     Dashboard summalari.
 
-    - default: settings.dashboard_stats'dan (admin tahrirlagan qiymatlar)
-    - ?live=true: monthly_balances'dan jonli hisoblanadi
+    - O'rikzor bozori: global settings.dashboard_stats'dan (admin tahrirlagan)
+    - Boshqa bozorlar: market.dashboard_stats'dan (har bozor o'z statsiga ega)
+    - ?live=true: monthly_balances'dan jonli hisoblanadi (market-specific)
     """
     today = date.today()
     year = year or today.year
     month = month or today.month
     if live:
-        return await get_dashboard_live(db, year, month)
-    return await get_dashboard_from_settings(db)
+        return await get_dashboard_live(db, year, month, market_id=market.id)
+    # O'rikzor bozori uchun eski global settings'dan o'qish (mavjud behavior)
+    if market.slug == "orikzor":
+        return await get_dashboard_from_settings(db)
+    # Yangi bozorlar uchun — market.dashboard_stats'dan
+    return await get_dashboard_from_market(market)
 
 
 @router.get("/invoices")

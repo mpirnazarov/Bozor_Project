@@ -21,6 +21,7 @@ class UserOut(BaseModel):
     role: str
     market_id: int | None = None
     market_slug: str | None = None  # login javobida to'ldiriladi (auto-routing uchun)
+    market_name: str | None = None  # bozor nomi — frontend sarlavha uchun
     full_name: str | None = None
     email: str | None = None
     is_active: bool

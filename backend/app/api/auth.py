@@ -63,7 +63,7 @@ async def login(
 
 
 async def _user_out_with_market(db: AsyncSession, user) -> UserOut:
-    """UserOut yaratadi va market_slug ni to'ldiradi (auto-routing uchun)."""
+    """UserOut yaratadi va market_slug + market_name ni to'ldiradi (auto-routing uchun)."""
     out = UserOut.model_validate(user)
     if user.market_id is not None:
         from app.models.market import Market
@@ -71,6 +71,7 @@ async def _user_out_with_market(db: AsyncSession, user) -> UserOut:
         m = await db.get(Market, user.market_id)
         if m is not None:
             out.market_slug = m.slug
+            out.market_name = m.name  # frontend sarlavha uchun
     return out
 
 

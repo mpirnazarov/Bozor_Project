@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import DASHBOARD_SETTINGS_KEY, BillingCategory, MonthlyBalance, Setting
 from app.schemas.dashboard import DashboardOut, Period, ServicesBreakdown
 
-# settings yo'q bo'lsa ishlatiladigan zaxira qiymatlar
+# settings yo'q bo'lsa ishlatiladigan zaxira qiymatlar (FAQAT orikzor uchun)
 _FALLBACK = {
     "total": 11689498000,
     "paid": 10820572206,
@@ -19,6 +19,19 @@ _FALLBACK = {
         "boshqa": 1166353000,
     },
     "period": {"year": 2026, "month": 5},
+}
+
+# Yangi bozorlar uchun — 0 dan boshlanadi
+_ZERO_STATS: dict = {
+    "total": 0,
+    "paid": 0,
+    "services": {
+        "rent": 0,
+        "arava": 0,
+        "xojatxona": 0,
+        "parking": 0,
+        "boshqa": 0,
+    },
 }
 
 
@@ -42,12 +55,45 @@ async def get_dashboard_from_settings(db: AsyncSession) -> DashboardOut:
     )
 
 
+def get_dashboard_from_market(market) -> DashboardOut:
+    """Market.dashboard_stats'dan o'qiydi — yangi bozorlar uchun (0 dan boshlaydi).
+
+    market.dashboard_stats bo'sh yoki yo'q bo'lsa — noldan boshlaydi.
+    """
+    from datetime import date as _date
+    data = market.dashboard_stats or {}
+    # Bo'sh stats — 0 dan boshlash
+    if not data:
+        data = _ZERO_STATS
+
+    total = int(data.get("total", 0))
+    paid = int(data.get("paid", 0))
+    services = data.get("services", {})
+    today = _date.today()
+    period = data.get("period", {"year": today.year, "month": today.month})
+
+    return DashboardOut(
+        total=total,
+        paid=paid,
+        debt=max(0, total - paid),
+        services=ServicesBreakdown(
+            rent=int(services.get("rent", 0)),
+            arava=int(services.get("arava", 0)),
+            xojatxona=int(services.get("xojatxona", 0)),
+            parking=int(services.get("parking", 0)),
+            boshqa=int(services.get("boshqa", 0)),
+        ),
+        period=Period(**period),
+        source="settings",
+    )
+
+
 async def get_dashboard_live(
-    db: AsyncSession, year: int, month: int
+    db: AsyncSession, year: int, month: int, market_id: int | None = None
 ) -> DashboardOut:
     """monthly_balances'dan jonli hisoblaydi (real ma'lumot tugmasi uchun)."""
     # Kategoriya bo'yicha due/paid yig'indisi
-    result = await db.execute(
+    q = (
         select(
             MonthlyBalance.category,
             func.coalesce(func.sum(MonthlyBalance.due_amount), 0),
@@ -56,6 +102,9 @@ async def get_dashboard_live(
         .where(MonthlyBalance.year == year, MonthlyBalance.month == month)
         .group_by(MonthlyBalance.category)
     )
+    if market_id is not None:
+        q = q.where(MonthlyBalance.market_id == market_id)
+    result = await db.execute(q)
 
     due_by_cat: dict[str, Decimal] = {}
     paid_by_cat: dict[str, Decimal] = {}

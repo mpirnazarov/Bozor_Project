@@ -1,11 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRef, useState, useCallback, useEffect } from "react";
-import { Plus, Minus, Maximize2, ChevronLeft, ChevronRight, Layers } from "lucide-react";
+import { Plus, Minus, Maximize2, ChevronLeft, ChevronRight, Layers, MapPin } from "lucide-react";
 import { getPavilions } from "@/api/pavilions";
 import { getMapLayers, mapImageUrl } from "@/api/maps";
 import { Spinner } from "@/components/ui/Modal";
 import type { Pavilion } from "@/types/api";
 import { useT } from "@/i18n/useT";
+import { useAuthStore } from "@/store/authStore";
 
 const VIEW_W = 1568;
 const VIEW_H = 1109;
@@ -25,6 +26,8 @@ interface ViewBox {
 
 export function MapView({ onSelectPavilion }: Props) {
   const t = useT();
+  const user = useAuthStore((s) => s.user);
+  const isMarketAdmin = ["admin", "market_admin"].includes(user?.role ?? "");
 
   // Bozorning xaritalari (qavatlar). Bo'lmasa — eski yagona /map.jpg rejimi.
   const { data: layers } = useQuery({ queryKey: ["map-layers"], queryFn: () => getMapLayers() });
@@ -146,10 +149,27 @@ export function MapView({ onSelectPavilion }: Props) {
   // Faqat HECH narsa bo'lmaganda (xarita ham, region ham yo'q) xabar ko'rsatamiz.
   const noPavilions = !Array.isArray(pavilions) || pavilions.length === 0;
   if (noPavilions && !hasLayer && !isLoading) {
+    // Yangi bozor admini uchun — xaritani yuklash yo'riqnomasi
+    if (isMarketAdmin) {
+      return (
+        <div className="card p-10 text-center">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand/10">
+            <MapPin size={32} className="text-brand" />
+          </div>
+          <h3 className="font-display text-lg font-bold text-ink">Xarita hali yuklanmagan</h3>
+          <p className="mt-2 text-sm text-ink-faint">
+            Bozor xaritasini qo'shish uchun Admin panelga o'ting
+          </p>
+          <p className="mt-1 text-xs text-ink-faint">
+            Admin → Xarita bo'limida xarita rasmini yuklang va regionlarni belgilang
+          </p>
+        </div>
+      );
+    }
+    // Oddiy foydalanuvchi uchun
     return (
       <div className="card p-6 text-center text-sm text-slate-400">
-        Pavilionlar topilmadi. Ma'lumotlar bazasi seed qilinmagan yoki API
-        ulanmagan bo'lishi mumkin.
+        Xarita hali tayyorlanmoqda. Iltimos, keyinroq kiring.
       </div>
     );
   }

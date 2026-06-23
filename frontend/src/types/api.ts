@@ -14,6 +14,7 @@ export interface User {
   role: UserRole;
   market_id: number | null;
   market_slug: string | null;
+  market_name: string | null;  // bozor nomi — sarlavhada ko'rsatish uchun
   full_name: string | null;
   email: string | null;
   is_active: boolean;

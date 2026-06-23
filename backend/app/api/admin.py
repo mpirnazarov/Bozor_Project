@@ -45,7 +45,7 @@ from app.services.rollback_service import (
 from app.models.change_snapshot import ChangeSnapshot
 from app.models.import_log import ImportLog
 from app.utils.safe_fetch import UnsafeUrlError, fetch_url_safely
-from app.services.dashboard_service import get_dashboard_from_settings
+from app.services.dashboard_service import get_dashboard_from_settings, get_dashboard_from_market
 from app.services.import_service import import_balances_xlsx
 from app.services.shop_import_service import import_shops_csv
 
@@ -106,28 +106,44 @@ async def update_theme(
 async def update_dashboard(
     payload: DashboardUpdate,
     admin: AdminUser,
+    market: CurrentMarket,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> DashboardOut:
-    """Dashboard summalarini yangilaydi — barcha userlarda ko'rinadi (DB'da)."""
+    """Dashboard summalarini yangilaydi.
+
+    - O'rikzor: global settings.dashboard_stats (eski xatti-harakat saqlanadi)
+    - Boshqa bozorlar: market.dashboard_stats (har bozor o'z statsiga ega)
+    """
     value = {
         "total": payload.total,
         "paid": payload.paid,
         "services": payload.services.model_dump(),
         "period": payload.period.model_dump() if payload.period else {"year": 2026, "month": 5},
     }
-    setting = await db.get(Setting, DASHBOARD_SETTINGS_KEY)
-    if setting is None:
-        setting = Setting(key=DASHBOARD_SETTINGS_KEY, value=value, updated_by=admin.id)
-        db.add(setting)
-    else:
-        setting.value = value
-        setting.updated_by = admin.id
 
-    await write_audit(
-        db, admin.id, "update_dashboard", "settings", DASHBOARD_SETTINGS_KEY, value
-    )
-    await db.commit()
-    return await get_dashboard_from_settings(db)
+    if market.slug == "orikzor":
+        # Eski yo'l — global settings jadvali
+        setting = await db.get(Setting, DASHBOARD_SETTINGS_KEY)
+        if setting is None:
+            setting = Setting(key=DASHBOARD_SETTINGS_KEY, value=value, updated_by=admin.id)
+            db.add(setting)
+        else:
+            setting.value = value
+            setting.updated_by = admin.id
+        await write_audit(
+            db, admin.id, "update_dashboard", "settings", DASHBOARD_SETTINGS_KEY, value
+        )
+        await db.commit()
+        return await get_dashboard_from_settings(db)
+    else:
+        # Yangi bozorlar — market.dashboard_stats ga saqlaymiz
+        market.dashboard_stats = value
+        await write_audit(
+            db, admin.id, "update_dashboard", "market", str(market.id), value
+        )
+        await db.commit()
+        await db.refresh(market)
+        return get_dashboard_from_market(market)
 
 
 @router.put("/shops/{shop_id}")

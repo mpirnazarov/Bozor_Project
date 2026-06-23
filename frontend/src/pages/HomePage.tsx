@@ -43,6 +43,11 @@ export function HomePage() {
   const unpaidCount = (marketInvoices?.stats?.counts.pending ?? 0) + (marketInvoices?.stats?.counts.overdue ?? 0) + (marketInvoices?.stats?.counts.partial ?? 0);
   const t = useT();
 
+  // Bozor nomi: O'rikzor uchun to'liq nom, boshqa bozorlar uchun market_name
+  const marketTitle = user?.market_slug === "orikzor"
+    ? "O'rikzor Savdo Kompleksi"
+    : user?.market_name ?? t("app.title");
+
   const [activePavilion, setActivePavilion] = useState<Pavilion | null>(null);
   const [activeShop, setActiveShop] = useState<string | null>(null);
   const [activeInn, setActiveInn] = useState<string | null>(null);
@@ -75,7 +80,7 @@ export function HomePage() {
               ) : (
                 <>
                   <h1 className="font-display text-base font-extrabold leading-tight text-ink">
-                    {t("app.title")}
+                    {marketTitle}
                   </h1>
                   <p className="text-xs text-ink-faint">{t("app.subtitle")}</p>
                 </>
