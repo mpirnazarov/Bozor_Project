@@ -37,9 +37,10 @@ export function SuperDashboardPage() {
 
   function openMarket(slug: string, isDemo?: boolean) {
     setCurrentMarket(slug);
-    // Demo bozor uchun belgi qo'shamiz — bozor sahifasi vaqtinchalik
-    // (namuna) ma'lumot ekanini ko'rsatadi
-    navigate(isDemo ? "/?demo=1" : "/");
+    // market=slug URL da bo'lishi shart — HomePage bozor nomini shu orqali aniqlaydi
+    const params = new URLSearchParams({ market: slug });
+    if (isDemo) params.set("demo", "1");
+    navigate(`/?${params.toString()}`);
   }
 
   function toggleFullscreen() {

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { getMarket } from "@/api/markets";
 import { LogOut, Settings, ArrowLeft, Info, AlertTriangle } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { useT } from "@/i18n/useT";
@@ -43,10 +44,21 @@ export function HomePage() {
   const unpaidCount = (marketInvoices?.stats?.counts.pending ?? 0) + (marketInvoices?.stats?.counts.overdue ?? 0) + (marketInvoices?.stats?.counts.partial ?? 0);
   const t = useT();
 
-  // Bozor nomi: O'rikzor uchun to'liq nom, boshqa bozorlar uchun market_name
-  const marketTitle = user?.market_slug === "orikzor"
+  // super_admin/owner ?market=slug bilan kiradi — slug'dan nomni olamiz
+  const marketSlugFromUrl = searchParams.get("market");
+  const { data: marketFromUrl } = useQuery({
+    queryKey: ["market", marketSlugFromUrl],
+    queryFn: () => getMarket(marketSlugFromUrl!),
+    enabled: !!marketSlugFromUrl,
+    staleTime: 60_000,
+  });
+
+  // Bozor nomi: URL slug > user.market_name > fallback
+  const resolvedSlug = marketSlugFromUrl ?? user?.market_slug;
+  const resolvedName = marketFromUrl?.name ?? user?.market_name;
+  const marketTitle = resolvedSlug === "orikzor"
     ? "O'rikzor Savdo Kompleksi"
-    : user?.market_name ?? t("app.title");
+    : resolvedName ?? t("app.title");
 
   const [activePavilion, setActivePavilion] = useState<Pavilion | null>(null);
   const [activeShop, setActiveShop] = useState<string | null>(null);
