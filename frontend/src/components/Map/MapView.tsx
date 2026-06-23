@@ -29,7 +29,7 @@ export function MapView({ onSelectPavilion }: Props) {
   const user = useAuthStore((s) => s.user);
   const isMarketAdmin = ["admin", "market_admin"].includes(user?.role ?? "");
 
-  // Bozorning xaritalari (qavatlar). Bo'lmasa — eski yagona /map.jpg rejimi.
+  // Bozorning xaritalari (qavatlar). Bo'lmasa — xarita yuklanmagan xabari.
   const { data: layers } = useQuery({ queryKey: ["map-layers"], queryFn: () => getMapLayers() });
   const [activeIdx, setActiveIdx] = useState(0);
   const activeLayer = layers && layers.length > 0 ? layers[Math.min(activeIdx, layers.length - 1)] : null;
@@ -40,12 +40,15 @@ export function MapView({ onSelectPavilion }: Props) {
   });
 
   // Joriy qavat rasmi manbasi
-  const mapSrc = activeLayer?.has_image ? mapImageUrl(activeLayer.id) : "/map.jpg";
+  // has_image bo'lmasa mapSrc null — /map.jpg ga FALLBACK YO'Q (O'rikzor xaritasi boshqa bozorlarga chiqmasin)
+  const mapSrc = activeLayer?.has_image ? mapImageUrl(activeLayer.id) : null;
 
   // Rasm yuklanmaguncha progress. DIQQAT: hook'lar har doim early return'lardan
   // OLDIN chaqirilishi kerak (React hooks qoidasi).
-  const [imgLoading, setImgLoading] = useState(true);
+  // mapSrc null bo'lsa (xarita yo'q) — loading spinner kerak emas
+  const [imgLoading, setImgLoading] = useState(!!mapSrc);
   useEffect(() => {
+    if (!mapSrc) { setImgLoading(false); return; }
     setImgLoading(true);
     const tmr = window.setTimeout(() => setImgLoading(false), 4000);
     return () => window.clearTimeout(tmr);
@@ -275,19 +278,22 @@ export function MapView({ onSelectPavilion }: Props) {
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
       >
-        <image
-          href={mapSrc}
-          x="0"
-          y="0"
-          width={VIEW_W}
-          height={VIEW_H}
-          preserveAspectRatio="xMidYMid meet"
-          onLoad={() => setImgLoading(false)}
-          onError={(e) => {
-            setImgLoading(false);
-            (e.target as SVGImageElement).style.display = "none";
-          }}
-        />
+        {/* mapSrc null bo'lsa (xarita yuklanmagan) SVG image ko'rsatmaymiz — /map.jpg fallback YO'Q */}
+        {mapSrc && (
+          <image
+            href={mapSrc}
+            x="0"
+            y="0"
+            width={VIEW_W}
+            height={VIEW_H}
+            preserveAspectRatio="xMidYMid meet"
+            onLoad={() => setImgLoading(false)}
+            onError={(e) => {
+              setImgLoading(false);
+              (e.target as SVGImageElement).style.display = "none";
+            }}
+          />
+        )}
 
         {safePavilions.map((p) => {
           const meta = p.meta ?? {};

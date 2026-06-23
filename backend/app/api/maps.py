@@ -76,30 +76,10 @@ async def list_map_layers(
     layers = list(rows.scalars())
 
     if not layers:
-        # Default "1-etaj" — rasmsiz (image yo'q => frontend /map.jpg ga tushadi)
-        default_layer = MapLayer(
-            market_id=market.id,
-            name="1-etaj",
-            display_order=0,
-            is_active=True,
-        )
-        db.add(default_layer)
-        await db.commit()
-        await db.refresh(default_layer)
-
-        # Eski (xaritaga biriktirilmagan) regionlarni shu 1-etajga bog'laymiz,
-        # aks holda ular hech qaysi xaritada ko'rinmaydi ("Pavilionlar topilmadi").
-        await db.execute(
-            update(Pavilion)
-            .where(
-                Pavilion.market_id == market.id,
-                Pavilion.map_layer_id.is_(None),
-            )
-            .values(map_layer_id=default_layer.id)
-        )
-        await db.commit()
-
-        layers = [default_layer]
+        # Yangi bozor — xarita yo'q, bo'sh list qaytaramiz.
+        # Frontend "Xarita hali yuklanmagan" xabarini ko'rsatadi.
+        # O'rikzor uchun eski /map.jpg ga fallback frontend tomonida ham o'chirilgan.
+        return []
     else:
         # Migratsiya: agar xaritaga biriktirilmagan eski regionlar bo'lsa,
         # ularni BIRINCHI xaritaga (1-etaj) bog'laymiz. Bu, default 1-etaj
