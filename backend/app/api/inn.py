@@ -6,7 +6,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.deps import CurrentUser
+from app.deps import CurrentMarket, CurrentUser
 from app.models import Counterparty, Shop
 from app.schemas.billing import (
     CounterpartyOut,
@@ -21,11 +21,12 @@ router = APIRouter()
 @router.get("/search", response_model=list[InnSearchResult])
 async def search_inn(
     _user: CurrentUser,
+    market: CurrentMarket,
     db: Annotated[AsyncSession, Depends(get_db)],
     q: str = Query(..., min_length=1, description="INN yoki nom"),
     limit: int = Query(20, ge=1, le=100),
 ) -> list[InnSearchResult]:
-    """INN yoki nom bo'yicha qidirish (nom uchun fuzzy ILIKE)."""
+    """INN yoki nom bo'yicha qidirish — faqat shu bozor magazinlari."""
     pattern = f"%{q.strip()}%"
     stmt = (
         select(
@@ -33,13 +34,14 @@ async def search_inn(
             Counterparty.name,
             func.count(Shop.id).label("shop_count"),
         )
-        .outerjoin(Shop, Shop.inn == Counterparty.inn)
+        .outerjoin(Shop, (Shop.inn == Counterparty.inn) & (Shop.market_id == market.id))
         .where(
             or_(
                 Counterparty.inn.ilike(pattern),
                 Counterparty.name.ilike(pattern),
             )
         )
+        .where(Shop.market_id == market.id)
         .group_by(Counterparty.inn, Counterparty.name)
         .order_by(Counterparty.name)
         .limit(limit)
@@ -78,15 +80,16 @@ async def debug_inn_debt(
 async def get_inn(
     inn: str,
     _user: CurrentUser,
+    market: CurrentMarket,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> InnDetailOut:
-    """INN bo'yicha kontragent + uning barcha magazinlari."""
+    """INN bo'yicha kontragent + faqat shu bozordagi magazinlari."""
     cp = await db.get(Counterparty, inn)
     if cp is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Kontragent topilmadi")
 
     result = await db.execute(
-        select(Shop).where(Shop.inn == inn).order_by(Shop.shop_id)
+        select(Shop).where(Shop.inn == inn, Shop.market_id == market.id).order_by(Shop.shop_id)
     )
     shops = [ShopOut.model_validate(s) for s in result.scalars()]
 
