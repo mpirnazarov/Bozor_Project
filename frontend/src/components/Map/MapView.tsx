@@ -41,7 +41,7 @@ export function MapView({ onSelectPavilion }: Props) {
 
   // Joriy qavat rasmi manbasi
   // has_image bo'lmasa mapSrc null — /map.jpg ga FALLBACK YO'Q (O'rikzor xaritasi boshqa bozorlarga chiqmasin)
-  const mapSrc = activeLayer?.has_image ? mapImageUrl(activeLayer.id) : null;
+  const mapSrc = activeLayer?.has_image ? mapImageUrl(activeLayer.id) : undefined;
 
   // Rasm yuklanmaguncha progress. DIQQAT: hook'lar har doim early return'lardan
   // OLDIN chaqirilishi kerak (React hooks qoidasi).
