@@ -23,6 +23,7 @@ export function ShopsManager() {
   const [innResult, setInnResult] = useState<InnContractImportResult | null>(null);
   const [innErr, setInnErr] = useState("");
   const [innBusy, setInnBusy] = useState(false);
+  const [showAllNotFound, setShowAllNotFound] = useState(false);
 
   // Umumiy magazin statistikasi
   const { data: shopStats } = useQuery({
@@ -255,14 +256,29 @@ export function ShopsManager() {
             </div>
             {innResult.not_found.length > 0 && (
               <div className="card p-3">
-                <div className="mb-2 text-xs font-bold text-ink">
-                  <AlertTriangle size={13} className="mr-1 inline text-status-unpaid" />
-                  DB da topilmagan shop_id lar (birinchi 20 ta):
+                <div className="mb-2 flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-status-unpaid">
+                    <AlertTriangle size={13} />
+                    DB da topilmagan shop_id lar ({innResult.not_found.length} ta)
+                  </div>
+                  <button
+                    className={showAllNotFound ? "btn-primary px-3 py-1 text-xs" : "btn-ghost px-3 py-1 text-xs"}
+                    onClick={() => setShowAllNotFound(v => !v)}
+                  >
+                    {showAllNotFound ? "Yig'ish" : "Batafsil (hammasi)"}
+                  </button>
                 </div>
-                <div className="max-h-40 space-y-1 overflow-y-auto font-mono text-xs text-ink-soft">
-                  {innResult.not_found.slice(0, 20).map((s, i) => <div key={i}>{s}</div>)}
-                  {innResult.not_found.length > 20 && (
-                    <div className="text-ink-faint">... va yana {innResult.not_found.length - 20} ta</div>
+                <div className={`space-y-1 overflow-y-auto font-mono text-xs text-ink-soft ${showAllNotFound ? "max-h-96" : "max-h-32"}`}>
+                  {(showAllNotFound ? innResult.not_found : innResult.not_found.slice(0, 10)).map((s, i) => (
+                    <div key={i} className="rounded bg-slate-50 px-2 py-0.5">{s}</div>
+                  ))}
+                  {!showAllNotFound && innResult.not_found.length > 10 && (
+                    <button
+                      className="w-full py-1 text-center text-xs font-semibold text-brand"
+                      onClick={() => setShowAllNotFound(true)}
+                    >
+                      Yana {innResult.not_found.length - 10} ta ko'rsatish →
+                    </button>
                   )}
                 </div>
               </div>

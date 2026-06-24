@@ -1200,6 +1200,16 @@ async def import_inn_contract(
     content = await file.read()
     try:
         result = await import_inn_from_excel(db, content, market_id=market.id)
+        # Audit log
+        await write_audit(
+            db, _admin.id, "import_inn_contract", "shops", file.filename or "excel",
+            {
+                "shops_updated": result.shops_updated,
+                "counterparties_created": result.counterparties_created,
+                "not_found_count": len(result.not_found),
+                "market_id": market.id,
+            },
+        )
         await db.commit()
     except Exception as exc:  # noqa: BLE001
         await db.rollback()
@@ -1215,6 +1225,6 @@ async def import_inn_contract(
         counterparties_created=result.counterparties_created,
         counterparties_updated=result.counterparties_updated,
         skipped=result.skipped,
-        not_found=result.not_found[:200],
+        not_found=result.not_found,   # hammasi — frontend filtrlaydi
         errors=result.errors[:100],
     )
