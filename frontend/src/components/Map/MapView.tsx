@@ -104,13 +104,6 @@ export function MapView({ onSelectPavilion }: Props) {
   }
 
   // Ekran -> viewBox koordinatasi
-  function toVb(clientX: number, clientY: number): { x: number; y: number } {
-    const rect = svgRef.current!.getBoundingClientRect();
-    const px = (clientX - rect.left) / rect.width;
-    const py = (clientY - rect.top) / rect.height;
-    return { x: vb.x + px * vb.w, y: vb.y + py * vb.h };
-  }
-
   function handlePointerDown(e: React.PointerEvent) {
     // DIQQAT: setPointerCapture'ni shu yerda chaqirmaymiz — aks holda region
     // polygonining onClick'i ishlamaydi (pointer SVG'ga qamalib qoladi).
