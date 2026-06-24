@@ -35,7 +35,16 @@ export function MapView({ onSelectPavilion }: Props) {
   const marketSlug = searchParams.get("market") ?? getCurrentMarket() ?? user?.market_slug ?? "orikzor";
 
   // Bozorning xaritalari (qavatlar). Bo'lmasa — xarita yuklanmagan xabari.
-  const { data: layers } = useQuery({ queryKey: ["map-layers", marketSlug], queryFn: () => getMapLayers() });
+  const { data: rawLayers } = useQuery({ queryKey: ["map-layers", marketSlug], queryFn: () => getMapLayers() });
+
+  // O'rikzor uchun: has_image=false layer (map.jpg, 1-etaj) ni har doim birinchiga qo'yamiz
+  // Chunki DB da display_order noto'g'ri bo'lishi mumkin
+  const layers = rawLayers
+    ? marketSlug === "orikzor"
+      ? [...rawLayers].sort((a, b) => (a.has_image === b.has_image ? a.display_order - b.display_order : a.has_image ? 1 : -1))
+      : rawLayers
+    : rawLayers;
+
   const [activeIdx, setActiveIdx] = useState(0);
   const activeLayer = layers && layers.length > 0 ? layers[Math.min(activeIdx, layers.length - 1)] : null;
 
