@@ -1,7 +1,8 @@
 """INN va dogovor ma'lumotlarini Excel'dan yangilash.
 
 Excel ustunlari (Nach_iyun_2026 format):
-  Col B (1): Arenda joyi ID — shop_id (asosiy)
+  Col A (0): Pavilyon nomi (source_sheet)
+  Col B (1): Arenda joyi ID — shop_id
   Col C (2): Dogovor arenda joyi — fallback shop_id
   Col D (3): Arenda turi — shop_type
   Col E (4): Maqsad — purpose
@@ -10,12 +11,12 @@ Excel ustunlari (Nach_iyun_2026 format):
   Col H (7): Dogovor raqami (contract_no)
   Col I (8): Dogovor sanasi
 
-Qidirish tartibi (shop topish):
+Qidirish tartibi:
   1. col_b aniq moslik
-  2. col_b dan R/R2/R3... suffix olib base moslik (01-1-1-047R3 -> 01-1-1-047)
+  2. col_b dan R/R2/R3 suffix olib base
   3. col_c aniq moslik
-  4. col_c dan R suffix olib base moslik
-  Topilmasa — not_found ga qo'shiladi.
+  4. col_c dan R suffix olib base
+  Topilmasa va create_missing=True bo'lsa — yangi shop yaratiladi.
 """
 from __future__ import annotations
 
@@ -30,9 +31,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Counterparty, Shop
 
-
+_COL_PAVILION  = 0   # A — pavilyon (source_sheet)
 _COL_SHOP_ID   = 1   # B
-_COL_SHOP_ALT  = 2   # C — fallback shop_id
+_COL_SHOP_ALT  = 2   # C — fallback
 _COL_SHOP_TYPE = 3   # D
 _COL_PURPOSE   = 4   # E
 _COL_NAME      = 5   # F
@@ -40,7 +41,6 @@ _COL_INN       = 6   # G
 _COL_CONTRACT  = 7   # H
 _COL_DATE      = 8   # I
 
-# R2, R3, R4... yoki faqat R — qayta ijarachilar suffiksi
 _R_SUFFIX = re.compile(r'R\d*$', re.IGNORECASE)
 
 
@@ -48,6 +48,7 @@ _R_SUFFIX = re.compile(r'R\d*$', re.IGNORECASE)
 class InnImportResult:
     rows_read: int = 0
     shops_updated: int = 0
+    shops_created: int = 0
     counterparties_created: int = 0
     counterparties_updated: int = 0
     skipped: int = 0
@@ -80,25 +81,19 @@ def _parse_date(v) -> date | None:
 
 
 def _base_id(shop_id: str) -> str | None:
-    """R/R2/R3 suffixini olib tashlaydi. Farq bo'lmasa None qaytaradi."""
     base = _R_SUFFIX.sub("", shop_id).rstrip("-")
     return base if base != shop_id else None
 
 
 def _find_shop(shop_id: str, alt_id: str, shop_map: dict[str, Shop]) -> Shop | None:
-    """4 bosqichli qidiruv: aniq -> base -> alt -> alt_base."""
-    # 1. Aniq moslik
     if shop := shop_map.get(shop_id):
         return shop
-    # 2. R suffix olib base
     if base := _base_id(shop_id):
         if shop := shop_map.get(base):
             return shop
-    # 3. col_c (alt) aniq
     if alt_id and alt_id != shop_id:
         if shop := shop_map.get(alt_id):
             return shop
-        # 4. col_c base
         if base := _base_id(alt_id):
             if shop := shop_map.get(base):
                 return shop
@@ -109,6 +104,7 @@ async def import_inn_from_excel(
     db: AsyncSession,
     content: bytes,
     market_id: int,
+    create_missing: bool = True,
 ) -> InnImportResult:
     res = InnImportResult()
 
@@ -116,12 +112,9 @@ async def import_inn_from_excel(
     ws = wb.active
 
     # 1. Shoplarni yuklaymiz
-    mkt_result = await db.execute(
-        select(Shop).where(Shop.market_id == market_id)
-    )
+    mkt_result = await db.execute(select(Shop).where(Shop.market_id == market_id))
     shop_map: dict[str, Shop] = {s.shop_id: s for s in mkt_result.scalars()}
 
-    # Fallback: market_id bo'yicha hech narsa topilmasa — barchasini yukla
     if not shop_map:
         all_result = await db.execute(select(Shop))
         shop_map = {s.shop_id: s for s in all_result.scalars()}
@@ -138,6 +131,7 @@ async def import_inn_from_excel(
 
         shop_id   = _clean(row[_COL_SHOP_ID])
         alt_id    = _clean(row[_COL_SHOP_ALT])
+        pavilion  = _clean(row[_COL_PAVILION])
         inn       = _clean_inn(row[_COL_INN])
         name      = _clean(row[_COL_NAME])
         contract  = _clean(row[_COL_CONTRACT]) or None
@@ -151,11 +145,26 @@ async def import_inn_from_excel(
 
         res.rows_read += 1
 
-        # 4. Shop topish — 4 bosqichli qidiruv
+        # 4. Shop topish
         shop = _find_shop(shop_id, alt_id, shop_map)
+
         if shop is None:
-            res.not_found.append(shop_id)
-            continue
+            if create_missing:
+                # Yangi shop yaratamiz — faqat shop_id va meta ma'lumotlar
+                shop = Shop(
+                    shop_id=shop_id,
+                    market_id=market_id,
+                    shop_type=shop_type,
+                    purpose=purpose,
+                    source_sheet=pavilion or None,
+                    is_active=True,
+                )
+                db.add(shop)
+                shop_map[shop_id] = shop
+                res.shops_created += 1
+            else:
+                res.not_found.append(shop_id)
+                continue
 
         # 5. Kontragent
         if inn:
@@ -191,6 +200,8 @@ async def import_inn_from_excel(
             shop.shop_type = shop_type
         if purpose:
             shop.purpose = purpose
+        if pavilion and not shop.source_sheet:
+            shop.source_sheet = pavilion
 
         res.shops_updated += 1
 

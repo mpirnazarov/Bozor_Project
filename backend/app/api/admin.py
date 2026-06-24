@@ -1172,6 +1172,7 @@ class InnImportOut(BaseModel):
     ok: bool
     rows_read: int
     shops_updated: int
+    shops_created: int
     counterparties_created: int
     counterparties_updated: int
     skipped: int
@@ -1205,8 +1206,13 @@ async def import_inn_contract(
             db, _admin.id, "import_inn_contract", "shops", file.filename or "excel",
             {
                 "shops_updated": result.shops_updated,
+                "shops_created": result.shops_created,
                 "counterparties_created": result.counterparties_created,
+                "counterparties_updated": result.counterparties_updated,
                 "not_found_count": len(result.not_found),
+                "not_found": result.not_found,   # to'liq ro'yxat — audit da ko'rinadi
+                "skipped": result.skipped,
+                "rows_read": result.rows_read,
                 "market_id": market.id,
             },
         )
@@ -1222,9 +1228,10 @@ async def import_inn_contract(
         ok=True,
         rows_read=result.rows_read,
         shops_updated=result.shops_updated,
+        shops_created=result.shops_created,
         counterparties_created=result.counterparties_created,
         counterparties_updated=result.counterparties_updated,
         skipped=result.skipped,
-        not_found=result.not_found,   # hammasi — frontend filtrlaydi
+        not_found=result.not_found,
         errors=result.errors[:100],
     )

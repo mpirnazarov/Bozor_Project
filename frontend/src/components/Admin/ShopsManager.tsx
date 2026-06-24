@@ -248,6 +248,7 @@ export function ShopsManager() {
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <StatBox label="O'qildi" value={innResult.rows_read} tone="ink" icon={<Store size={16} />} />
               <StatBox label="Yangilandi" value={innResult.shops_updated} tone="paid" icon={<CheckCircle2 size={16} />} />
+              <StatBox label="Yangi do'kon" value={innResult.shops_created} tone="brand" icon={<CheckCircle2 size={16} />} />
               <StatBox label="Yangi kontragent" value={innResult.counterparties_created} tone="brand" icon={<CheckCircle2 size={16} />} />
               <StatBox label="Topilmadi" value={innResult.not_found.length} tone="unpaid" icon={<AlertTriangle size={16} />} />
             </div>

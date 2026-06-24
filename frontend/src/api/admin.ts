@@ -335,6 +335,7 @@ export interface InnContractImportResult {
   ok: boolean;
   rows_read: number;
   shops_updated: number;
+  shops_created: number;
   counterparties_created: number;
   counterparties_updated: number;
   skipped: number;
