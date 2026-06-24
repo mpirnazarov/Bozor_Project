@@ -55,6 +55,27 @@ def _to_out(m: MapLayer) -> MapLayerOut:
     )
 
 
+@router.get("/legacy-map")
+async def get_legacy_map(
+    _user: CurrentUser,
+    market: CurrentMarket,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> Response:
+    """Eski /map.jpg URL uchun — shu bozorning birinchi faol layer rasmini qaytaradi."""
+    from fastapi.responses import Response as FastAPIResponse
+    result = await db.execute(
+        select(MapLayer)
+        .where(MapLayer.market_id == market.id, MapLayer.image_data.isnot(None))
+        .order_by(MapLayer.display_order)
+        .limit(1)
+    )
+    layer = result.scalar_one_or_none()
+    if layer is None or not layer.image_data:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Xarita topilmadi")
+    raw = base64.b64decode(layer.image_data)
+    return FastAPIResponse(content=raw, media_type="image/jpeg")
+
+
 @router.get("", response_model=list[MapLayerOut])
 async def list_map_layers(
     _user: CurrentUser,

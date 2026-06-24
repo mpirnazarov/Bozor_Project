@@ -1,8 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRef, useState, useCallback, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Plus, Minus, Maximize2, ChevronLeft, ChevronRight, Layers, MapPin } from "lucide-react";
 import { getPavilions } from "@/api/pavilions";
 import { getMapLayers, mapImageUrl } from "@/api/maps";
+import { getCurrentMarket } from "@/api/client";
 import { Spinner } from "@/components/ui/Modal";
 import type { Pavilion } from "@/types/api";
 import { useT } from "@/i18n/useT";
@@ -28,14 +30,17 @@ export function MapView({ onSelectPavilion }: Props) {
   const t = useT();
   const user = useAuthStore((s) => s.user);
   const isMarketAdmin = ["admin", "market_admin"].includes(user?.role ?? "");
+  // URL ?market= parametri — React state, o'zgarganda qayta render bo'ladi
+  const [searchParams] = useSearchParams();
+  const marketSlug = searchParams.get("market") ?? getCurrentMarket() ?? user?.market_slug ?? "orikzor";
 
   // Bozorning xaritalari (qavatlar). Bo'lmasa — xarita yuklanmagan xabari.
-  const { data: layers } = useQuery({ queryKey: ["map-layers"], queryFn: () => getMapLayers() });
+  const { data: layers } = useQuery({ queryKey: ["map-layers", marketSlug], queryFn: () => getMapLayers() });
   const [activeIdx, setActiveIdx] = useState(0);
   const activeLayer = layers && layers.length > 0 ? layers[Math.min(activeIdx, layers.length - 1)] : null;
 
   const { data: pavilions, isLoading, isError, error } = useQuery({
-    queryKey: ["pavilions", activeLayer?.id ?? "all"],
+    queryKey: ["pavilions", marketSlug, activeLayer?.id ?? "all"],
     queryFn: () => getPavilions(activeLayer?.id),
   });
 

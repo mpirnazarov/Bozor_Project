@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
   LayoutGrid, LogOut, Wallet, CheckCircle2, AlertTriangle, Store,
@@ -18,6 +18,7 @@ type ViewMode = "list" | "cards";
 
 export function SuperDashboardPage() {
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const logout = useAuthStore((s) => s.logout);
   const [theme, setTheme] = useState<Theme>("dark");
   const [view, setView] = useState<ViewMode>("list");
@@ -37,6 +38,10 @@ export function SuperDashboardPage() {
 
   function openMarket(slug: string, isDemo?: boolean) {
     setCurrentMarket(slug);
+    // Eski bozor cache larini tozalaymiz — yangi bozor o'z map/pavilion larini yuklaydi
+    qc.removeQueries({ queryKey: ["map-layers"] });
+    qc.removeQueries({ queryKey: ["pavilions"] });
+    qc.removeQueries({ queryKey: ["dashboard"] });
     // market=slug URL da bo'lishi shart — HomePage bozor nomini shu orqali aniqlaydi
     const params = new URLSearchParams({ market: slug });
     if (isDemo) params.set("demo", "1");
