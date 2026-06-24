@@ -329,3 +329,26 @@ export async function importElectricity(file: File, year: number, month: number)
   );
   return data;
 }
+
+// === INN va dogovor import ===
+export interface InnContractImportResult {
+  ok: boolean;
+  rows_read: number;
+  shops_updated: number;
+  counterparties_created: number;
+  counterparties_updated: number;
+  skipped: number;
+  not_found: string[];
+  errors: string[];
+}
+
+export async function importInnContract(file: File): Promise<InnContractImportResult> {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await apiClient.post<InnContractImportResult>(
+    "/admin/import/inn-contract",
+    form,
+    { headers: { "Content-Type": "multipart/form-data" } }
+  );
+  return data;
+}

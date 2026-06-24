@@ -41,6 +41,7 @@ class Shop(Base):
     )
     shop_type: Mapped[str | None] = mapped_column(String(200), nullable=True)
     purpose: Mapped[str | None] = mapped_column(Text, nullable=True)
+    contract_no: Mapped[str | None] = mapped_column(String(150), nullable=True)  # dogovor raqami
     monthly_rent: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=0, nullable=False)
     source_sheet: Mapped[str | None] = mapped_column(String(100), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)

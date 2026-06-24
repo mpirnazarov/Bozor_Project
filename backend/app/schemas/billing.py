@@ -54,6 +54,7 @@ class ShopOut(BaseModel):
     inn: str | None = None
     shop_type: str | None = None
     purpose: str | None = None
+    contract_no: str | None = None  # dogovor raqami (Excel importdan)
     monthly_rent: Decimal
     is_active: bool
 

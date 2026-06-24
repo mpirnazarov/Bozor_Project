@@ -1162,3 +1162,59 @@ async def import_electricity(
         detected_columns=result.detected_columns,
         snapshot_id=snap.id,
     )
+
+
+# ── INN va dogovor import ────────────────────────────────────────────────────
+from app.services.inn_contract_import_service import import_inn_from_excel
+
+
+class InnImportOut(BaseModel):
+    ok: bool
+    rows_read: int
+    shops_updated: int
+    counterparties_created: int
+    counterparties_updated: int
+    skipped: int
+    not_found: list[str]
+    errors: list[str]
+
+
+@router.post("/import/inn-contract", response_model=InnImportOut)
+async def import_inn_contract(
+    _admin: AdminUser,
+    market: CurrentMarket,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    file: UploadFile = File(...),
+) -> InnImportOut:
+    """Excel'dan do'konlarning INN, dogovor raqami, arenda turi va maqsadini yangilaydi.
+
+    Excel format (Nach_iyun_2026 ko'rinishi):
+    - B ustun: Arenda joyi ID (shop_id)
+    - D ustun: Arenda turi (shop_type)
+    - E ustun: Maqsad (purpose)
+    - F ustun: Kontragent nomi
+    - G ustun: INN
+    - H ustun: Dogovor raqami (contract_no)
+    - I ustun: Dogovor sanasi
+    """
+    content = await file.read()
+    try:
+        result = await import_inn_from_excel(db, content, market_id=market.id)
+        await db.commit()
+    except Exception as exc:  # noqa: BLE001
+        await db.rollback()
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"Import xatoligi: {type(exc).__name__}: {exc}",
+        ) from exc
+
+    return InnImportOut(
+        ok=True,
+        rows_read=result.rows_read,
+        shops_updated=result.shops_updated,
+        counterparties_created=result.counterparties_created,
+        counterparties_updated=result.counterparties_updated,
+        skipped=result.skipped,
+        not_found=result.not_found[:200],
+        errors=result.errors[:100],
+    )

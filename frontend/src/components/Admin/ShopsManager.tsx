@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Upload, Link2, Loader2, CheckCircle2, AlertTriangle, Filter, Store,
+  Upload, Link2, Loader2, CheckCircle2, AlertTriangle, Filter, Store, RefreshCw,
 } from "lucide-react";
 import {
   importShopsCsv, importShopsGsheet, type ShopImportResult,
+  importInnContract, type InnContractImportResult,
 } from "@/api/admin";
 import { listShops } from "@/api/shops";
 import { useT } from "@/i18n/useT";
@@ -17,6 +18,11 @@ export function ShopsManager() {
   const [result, setResult] = useState<ShopImportResult | null>(null);
   const [err, setErr] = useState("");
   const [onlyNotFound, setOnlyNotFound] = useState(false);
+
+  // INN va dogovor import
+  const [innResult, setInnResult] = useState<InnContractImportResult | null>(null);
+  const [innErr, setInnErr] = useState("");
+  const [innBusy, setInnBusy] = useState(false);
 
   // Umumiy magazin statistikasi
   const { data: shopStats } = useQuery({
@@ -50,6 +56,20 @@ export function ShopsManager() {
       setErr(e?.response?.data?.detail ?? "Import xatosi");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function runInnFile(file: File) {
+    setInnBusy(true); setInnErr(""); setInnResult(null);
+    try {
+      const r = await importInnContract(file);
+      setInnResult(r);
+      qc.invalidateQueries({ queryKey: ["shops-stat"] });
+      qc.invalidateQueries({ queryKey: ["shops"] });
+    } catch (e: any) {
+      setInnErr(e?.response?.data?.detail ?? "Import xatosi");
+    } finally {
+      setInnBusy(false);
     }
   }
 
@@ -185,6 +205,71 @@ export function ShopsManager() {
           )}
         </div>
       )}
+
+      {/* INN va dogovor import */}
+      <div className="card space-y-3 p-4">
+        <div className="flex items-center gap-2 text-sm font-bold text-ink">
+          <RefreshCw size={16} className="text-brand" />
+          INN va dogovor ma'lumotlarini yangilash
+        </div>
+        <p className="text-xs text-ink-faint">
+          Excel fayl (Nach_iyun format): B — shop_id, D — arenda turi, E — maqsad, F — kontragent, G — INN, H — dogovor raqami
+        </p>
+        <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 py-5 text-center transition-colors hover:border-brand hover:bg-brand-50">
+          <Upload size={20} className="text-ink-faint" />
+          <span className="text-xs font-semibold text-ink-soft">
+            Excel (.xlsx) faylni yuklang
+          </span>
+          <input
+            type="file"
+            accept=".xlsx,.xls"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) runInnFile(f);
+              e.target.value = "";
+            }}
+          />
+        </label>
+
+        {innErr && (
+          <div className="rounded-xl bg-status-unpaid/10 px-4 py-3 text-sm font-semibold text-status-unpaid">
+            {innErr}
+          </div>
+        )}
+        {innBusy && (
+          <div className="flex items-center gap-2 rounded-xl bg-brand-50 px-4 py-3 text-sm font-semibold text-brand">
+            <Loader2 size={16} className="animate-spin" /> Yangilanmoqda...
+          </div>
+        )}
+        {innResult && (
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <StatBox label="O'qildi" value={innResult.rows_read} tone="ink" icon={<Store size={16} />} />
+              <StatBox label="Yangilandi" value={innResult.shops_updated} tone="paid" icon={<CheckCircle2 size={16} />} />
+              <StatBox label="Yangi kontragent" value={innResult.counterparties_created} tone="brand" icon={<CheckCircle2 size={16} />} />
+              <StatBox label="Topilmadi" value={innResult.not_found.length} tone="unpaid" icon={<AlertTriangle size={16} />} />
+            </div>
+            <div className="text-xs text-ink-soft">
+              O'tkazib yuborildi: <b>{innResult.skipped}</b> · Kontragent yangilandi: <b>{innResult.counterparties_updated}</b>
+            </div>
+            {innResult.not_found.length > 0 && (
+              <div className="card p-3">
+                <div className="mb-2 text-xs font-bold text-ink">
+                  <AlertTriangle size={13} className="mr-1 inline text-status-unpaid" />
+                  DB da topilmagan shop_id lar (birinchi 20 ta):
+                </div>
+                <div className="max-h-40 space-y-1 overflow-y-auto font-mono text-xs text-ink-soft">
+                  {innResult.not_found.slice(0, 20).map((s, i) => <div key={i}>{s}</div>)}
+                  {innResult.not_found.length > 20 && (
+                    <div className="text-ink-faint">... va yana {innResult.not_found.length - 20} ta</div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Umumiy magazin statistikasi (DB) */}
       {!result && shopStats && (
