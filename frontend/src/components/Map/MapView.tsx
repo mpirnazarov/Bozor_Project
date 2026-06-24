@@ -111,12 +111,6 @@ export function MapView({ onSelectPavilion }: Props) {
     return { x: vb.x + px * vb.w, y: vb.y + py * vb.h };
   }
 
-  function handleWheel(e: React.WheelEvent) {
-    e.preventDefault();
-    const { x, y } = toVb(e.clientX, e.clientY);
-    applyZoom(e.deltaY < 0 ? 1.2 : 1 / 1.2, x, y);
-  }
-
   function handlePointerDown(e: React.PointerEvent) {
     // DIQQAT: setPointerCapture'ni shu yerda chaqirmaymiz — aks holda region
     // polygonining onClick'i ishlamaydi (pointer SVG'ga qamalib qoladi).
@@ -292,7 +286,6 @@ export function MapView({ onSelectPavilion }: Props) {
           cursor: pan.current.active ? "grabbing" : "grab",
         }}
         preserveAspectRatio="xMidYMid meet"
-        onWheel={handleWheel}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
