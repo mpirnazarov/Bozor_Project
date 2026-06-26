@@ -28,9 +28,6 @@ _COL_ALIASES = {
     "purpose": ["purpose", "maqsad", "faoliyat", "shop_type", "tur", "вид"],
 }
 
-# shop_id formati: NN-N-N-NNN (masalan 04-1-1-001). Moslashuvchan: raqam-tire bo'limlar
-_SHOP_ID_RE = re.compile(r"^\d{2}-\d+-\d+-\d+$")
-
 
 def _norm_header(h: str) -> str:
     return (h or "").strip().lower().replace("ʼ", "'").replace("`", "'")
@@ -120,10 +117,6 @@ async def import_shops_csv(
         if not shop_id:
             not_found.append({"row": idx, "reason": "shop_id yo'q", "raw": ",".join(row[:3])})
             continue
-        if not _SHOP_ID_RE.match(shop_id):
-            # format mos kelmasa ham qabul qilamiz, lekin belgilab qo'yamiz
-            errors.append(f"Qator {idx}: shop_id formati g'alati ({shop_id})")
-
         name = get("name")
         inn = _clean_inn(get("inn"))
         rent = _parse_decimal(get("rent"))
