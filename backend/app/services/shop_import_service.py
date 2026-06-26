@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Counterparty, Shop
+from app.models.shop_history import ShopHistory
 
 # Ustun nomlarini moslashtirish — turli sarlavhalarni qabul qilamiz
 _COL_ALIASES = {
@@ -135,12 +136,7 @@ async def import_shops_csv(
                 existing_inns.add(inn)
                 cp_created += 1
             linked += 1
-        else:
-            not_found.append({
-                "row": idx, "shop_id": shop_id,
-                "reason": "INN yo'q — kontragentga bog'lanmadi",
-                "name": name,
-            })
+        # INN yo'q — bu bo'sh do'kon, not_found emas (normal holat)
 
         # Magazin upsert — shop_id VA market_id bo'yicha qidiramiz, shunda
         # turli bozorlarda bir xil shop_id bo'lsa ham aralashmaydi.
@@ -154,7 +150,25 @@ async def import_shops_csv(
         ).scalar_one_or_none()
 
         if existing:
-            existing.inn = inn or existing.inn
+            old_inn = existing.inn
+            # inn bo'sh kelsa — bo'sh do'kon qilamiz (None), eski INNni SAQLAMAYMIZ
+            new_inn = inn  # None bo'lishi mumkin
+            # INN o'zgargan bo'lsa — tarixga yozamiz
+            if old_inn != new_inn:
+                old_cp = (await db.execute(
+                    select(Counterparty).where(Counterparty.inn == old_inn)
+                )).scalar_one_or_none() if old_inn else None
+                new_cp_name = name if inn else None
+                db.add(ShopHistory(
+                    shop_id=existing.id,
+                    old_inn=old_inn,
+                    old_name=old_cp.name if old_cp else None,
+                    new_inn=new_inn,
+                    new_name=new_cp_name,
+                    changed_by="csv_import",
+                    reason="shop_import_csv",
+                ))
+            existing.inn = new_inn
             existing.shop_type = name or existing.shop_type
             existing.purpose = purpose or existing.purpose
             if rent:
