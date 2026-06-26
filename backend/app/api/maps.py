@@ -19,7 +19,7 @@ from app.models.pavilion import Pavilion
 
 router = APIRouter()
 
-MAX_IMAGE_BYTES = 8 * 1024 * 1024  # 8 MB
+MAX_IMAGE_BYTES = 50 * 1024 * 1024  # 50 MB — xarita rasmlari katta bo'lishi mumkin
 
 
 class MapLayerOut(BaseModel):
@@ -123,6 +123,10 @@ async def list_map_layers(
             )
             await db.commit()
 
+    # O'rikzor uchun: image_data=None layer (map.jpg, 1-etaj) ni har doim birinchiga
+    # DB da display_order noto'g'ri bo'lishi mumkin — backend da ham sort qilamiz
+    if market.slug == "orikzor":
+        layers.sort(key=lambda m: (0 if m.image_data is None else 1, m.display_order))
     return [_to_out(m) for m in layers]
 
 
@@ -207,7 +211,7 @@ async def upload_map_image(
 
     content = await file.read()
     if len(content) > MAX_IMAGE_BYTES:
-        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Fayl juda katta (8 MB chegarasi)")
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Fayl juda katta (50 MB chegarasi)")
 
     if is_pdf:
         # PDF birinchi sahifasini yuqori sifatли PNG ga aylantiramiz.
