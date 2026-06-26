@@ -30,6 +30,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Counterparty, Shop
+from app.models.shop_history import ShopHistory
 
 _COL_PAVILION  = 0   # A — pavilyon (source_sheet)
 _COL_SHOP_ID   = 1   # B
@@ -193,8 +194,27 @@ async def import_inn_from_excel(
                 if changed:
                     res.counterparties_updated += 1
 
-        # 6. Shop yangilash
-        shop.inn         = inn
+        # 6. INN o'zgargan bo'lsa — tarixga yozamiz
+        old_inn = shop.inn
+        new_inn = inn  # None bo'lishi mumkin (bo'sh do'kon)
+
+        if old_inn != new_inn:
+            # Eski egasi nomini olish
+            old_cp = cp_map.get(old_inn) if old_inn else None
+            new_cp = cp_map.get(new_inn) if new_inn else None
+            hist = ShopHistory(
+                shop_id=shop.id,
+                old_inn=old_inn,
+                old_name=old_cp.name if old_cp else None,
+                new_inn=new_inn,
+                new_name=new_cp.name if new_cp else (name or None),
+                changed_by="import",
+                reason="inn_contract_import",
+            )
+            db.add(hist)
+
+        # 7. Shop yangilash (inn=None bo'lsa — bo'sh do'kon)
+        shop.inn         = new_inn
         shop.contract_no = contract
         if shop_type:
             shop.shop_type = shop_type

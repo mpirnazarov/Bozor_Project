@@ -57,6 +57,9 @@ class Shop(Base):
         back_populates="shops"
     )
     pavilion: Mapped["Pavilion | None"] = relationship(back_populates="shops")  # noqa: F821
+    history: Mapped[list["ShopHistory"]] = relationship(  # noqa: F821
+        back_populates="shop", order_by="ShopHistory.changed_at.desc()", cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:
         return f"<Shop {self.shop_id}>"

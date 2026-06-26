@@ -99,6 +99,54 @@ async def get_shop_by_query(
     return await _build_shop_detail(shop_id, market, db, year, month)
 
 
+@router.get("/history/{shop_id}", response_model=list[dict])
+async def get_shop_history(
+    shop_id: str,
+    _user: CurrentUser,
+    market: CurrentMarket,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> list[dict]:
+    """Do'kon egalik tarixi — qachon kim egalik qilgani."""
+    from sqlalchemy import select as _sel
+    shop = (await db.execute(
+        _sel(Shop).where(Shop.shop_id == shop_id, Shop.market_id == market.id)
+    )).scalar_one_or_none()
+    if shop is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Do'kon topilmadi")
+
+    rows = (await db.execute(
+        _sel(ShopHistory)
+        .where(ShopHistory.shop_id == shop.id)
+        .order_by(ShopHistory.changed_at.desc())
+        .limit(50)
+    )).scalars().all()
+
+    return [
+        {
+            "id": r.id,
+            "old_inn": r.old_inn,
+            "old_name": r.old_name,
+            "new_inn": r.new_inn,
+            "new_name": r.new_name,
+            "changed_by": r.changed_by,
+            "reason": r.reason,
+            "changed_at": r.changed_at.isoformat() if r.changed_at else None,
+        }
+        for r in rows
+    ]
+
+
+@router.get("/history-by-id", response_model=list[dict])
+async def get_shop_history_by_id(
+    shop_id: str = Query(...),
+    _user: CurrentUser = Depends(),
+    market: CurrentMarket = Depends(),
+    db: AsyncSession = Depends(get_db),
+) -> list[dict]:
+    """Do'kon tarixi — query param orqali (maxsus belgilar uchun)."""
+    return await get_shop_history(shop_id, _user, market, db)
+
+
 @router.get("/{shop_id}", response_model=ShopDetailOut)
 async def get_shop(
     shop_id: str,
