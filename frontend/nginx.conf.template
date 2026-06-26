@@ -32,6 +32,10 @@ server {
         add_header Cache-Control "public";
     }
 
+    # Vite HMR WebSocket va dev-only endpointlarni bloklash (production)
+    location /@vite/ { return 404; }
+    location /node_modules/ { return 404; }
+
     # SPA — barcha yo'llar index.html ga
     location / {
         try_files $uri $uri/ /index.html;
