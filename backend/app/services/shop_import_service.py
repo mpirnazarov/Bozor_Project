@@ -14,8 +14,9 @@ from decimal import Decimal, InvalidOperation
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Counterparty, Shop
+from app.models import Counterparty, Shop, MonthlyBalance
 from app.models.shop_history import ShopHistory
+from sqlalchemy import update as _update
 
 # Ustun nomlarini moslashtirish — turli sarlavhalarni qabul qilamiz
 _COL_ALIASES = {
@@ -169,18 +170,29 @@ async def import_shops_csv(
                     reason="shop_import_csv",
                 ))
             existing.inn = new_inn
-            existing.shop_type = name or existing.shop_type
-            existing.purpose = purpose or existing.purpose
+            # shop_type ni kontragent nomi bilan ALMASHTIRMAYMIZ
+            # purpose/shop_type ustunidan kelsa yangilaymiz
+            if purpose:
+                existing.purpose = purpose
             if rent:
                 existing.monthly_rent = rent
             existing.source_sheet = source
+            # Bo'sh do'kon bo'lganda (inn=None, avval egasi bor edi) qarzni 0 qilamiz
+            if new_inn is None and old_inn is not None:
+                await db.execute(
+                    _update(MonthlyBalance)
+                    .where(MonthlyBalance.inn == old_inn,
+                           MonthlyBalance.market_id == market_id)
+                    .values(due_amount=0, paid_amount=0)
+                )
             updated += 1
         else:
             db.add(Shop(
                 shop_id=shop_id,
                 market_id=market_id,
                 inn=inn,
-                shop_type=name or None,
+                # shop_type = name emas! name = kontragent nomi
+                shop_type=purpose or None,
                 purpose=purpose,
                 monthly_rent=rent,
                 source_sheet=source,

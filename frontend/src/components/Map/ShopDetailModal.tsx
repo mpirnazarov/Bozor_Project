@@ -76,7 +76,10 @@ export function ShopDetailModal({ shopId, onClose }: Props) {
           <div className="card p-3 text-sm">
             <Row label={t("shop.shopId")} value={data.shop.shop_id} mono />
             <Row label={t("shop.pavilion")} value={data.shop.pavilion_code ?? "—"} />
-            <Row label={t("shop.type")} value={data.shop.shop_type ?? "—"} />
+            {/* shop_type — faqat egasi bo'lmaganda yoki purpose bor bo'lganda ko'rsatamiz */}
+            {data.shop.purpose && (
+              <Row label="Tovar turi" value={data.shop.purpose} />
+            )}
             <Row label={t("shop.rent")} value={fmtUZS(data.shop.monthly_rent)} mono />
             {data.counterparty && (
               <>
