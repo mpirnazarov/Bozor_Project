@@ -1382,3 +1382,93 @@ async def import_water(
         detected_columns=result.detected_columns,
         snapshot_id=snap.id,
     )
+
+
+# ===== BO'SH DO'KONLAR QARZINI 0 QILISH =====
+
+class ClearVacantDebtsOut(BaseModel):
+    ok: bool = True
+    shops_checked: int = 0
+    debts_cleared: int = 0
+    inns_cleared: list[str] = []
+
+
+@router.post("/clear-vacant-debts", response_model=ClearVacantDebtsOut)
+async def clear_vacant_debts(
+    admin: AdminUser,
+    market: CurrentMarket,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ClearVacantDebtsOut:
+    """Bo'sh do'konlar (inn=None) bilan bog'liq barcha qarzlarni 0 qiladi.
+
+    1. Barcha bo'sh do'konlarni topadi
+    2. Ularning shop_type ni tozalaydi
+    3. shop_history dan eski INNlarini topadi
+    4. monthly_balances da o'sha INNlar uchun due_amount=0, paid_amount=0 qiladi
+    """
+    from sqlalchemy import select as _sel
+
+    # 1. Barcha bo'sh do'konlar
+    vacant_shops = (await db.execute(
+        _sel(Shop).where(Shop.market_id == market.id, Shop.inn.is_(None))
+    )).scalars().all()
+
+    shops_checked = len(vacant_shops)
+    inns_cleared = []
+
+    from app.models.shop_history import ShopHistory as _SH
+
+    # Bo'sh do'konlarning barcha eski INNlarini shop_history dan topamiz
+    vacant_ids = [s.id for s in vacant_shops]
+
+    # shop_type tozalash
+    for shop in vacant_shops:
+        if shop.shop_type:
+            shop.shop_type = None
+
+    if vacant_ids:
+        # 1. shop_history dan eski INNlar
+        hist_inns = (await db.execute(
+            _sel(_SH.old_inn)
+            .where(_SH.shop_id.in_(vacant_ids), _SH.old_inn.isnot(None))
+            .distinct()
+        )).scalars().all()
+
+        # 2. inn_contract_import orqali biriktirilgan INNlar — shops.inn
+        #    (agar shop_history yo'q bo'lsa, lekin inn_contract_import yozgan)
+        #    Bu holat: shop.inn bor edi, keyin CSV import None qildi,
+        #    lekin shop_history yozilmadi
+        # monthly_balances da shu market dagi BARCHA INNlarni
+        # bo'sh do'konlar bilan solishtirish uchun
+        # shop_history + inn_contract_import history ni birlashtiramiz
+
+        all_inns_to_clear = set(hist_inns)
+
+        # Agar shop_history bo'sh bo'lsa — monthly_balances ni shop_id orqali topmaymiz
+        # (ular bog'liq emas), lekin inn_contract_import_service yozgan
+        # ShopHistory yozuvlari bor bo'lishi kerak
+
+        for h_inn in all_inns_to_clear:
+            await db.execute(
+                _update(MonthlyBalance)
+                .where(
+                    MonthlyBalance.inn == h_inn,
+                    MonthlyBalance.market_id == market.id,
+                )
+                .values(due_amount=0, paid_amount=0)
+            )
+            if h_inn not in inns_cleared:
+                inns_cleared.append(h_inn)
+
+    await write_audit(
+        db, admin.id, "clear_vacant_debts", "monthly_balances", f"market={market.id}",
+        {"shops_checked": shops_checked, "inns_cleared": len(inns_cleared)},
+    )
+    await db.commit()
+
+    return ClearVacantDebtsOut(
+        ok=True,
+        shops_checked=shops_checked,
+        debts_cleared=len(inns_cleared),
+        inns_cleared=inns_cleared,
+    )

@@ -380,3 +380,16 @@ export async function importInnContract(file: File): Promise<InnContractImportRe
   );
   return data;
 }
+
+// === Bo'sh do'konlar qarzini 0 qilish ===
+export interface ClearVacantDebtsResult {
+  ok: boolean;
+  shops_checked: number;
+  debts_cleared: number;
+  inns_cleared: string[];
+}
+
+export async function clearVacantDebts(): Promise<ClearVacantDebtsResult> {
+  const { data } = await apiClient.post<ClearVacantDebtsResult>("/admin/clear-vacant-debts");
+  return data;
+}

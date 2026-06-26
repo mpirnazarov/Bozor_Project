@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Upload, Link2, Loader2, CheckCircle2, AlertTriangle, Filter, Store, RefreshCw,
+  Upload, Link2, Loader2, CheckCircle2, AlertTriangle, Filter, Store, RefreshCw, Trash2,
 } from "lucide-react";
 import {
   importShopsCsv, importShopsGsheet, type ShopImportResult,
   importInnContract, type InnContractImportResult,
+  clearVacantDebts, type ClearVacantDebtsResult,
 } from "@/api/admin";
 import { listShops } from "@/api/shops";
 import { useT } from "@/i18n/useT";
@@ -24,6 +25,9 @@ export function ShopsManager() {
   const [innErr, setInnErr] = useState("");
   const [innBusy, setInnBusy] = useState(false);
   const [showAllNotFound, setShowAllNotFound] = useState(false);
+  const [vacantResult, setVacantResult] = useState<ClearVacantDebtsResult | null>(null);
+  const [vacantBusy, setVacantBusy] = useState(false);
+  const [vacantErr, setVacantErr] = useState("");
 
   // Umumiy magazin statistikasi
   const { data: shopStats } = useQuery({
@@ -57,6 +61,19 @@ export function ShopsManager() {
       setErr(e?.response?.data?.detail ?? "Import xatosi");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function runClearVacant() {
+    setVacantBusy(true); setVacantErr(""); setVacantResult(null);
+    try {
+      const r = await clearVacantDebts();
+      setVacantResult(r);
+      qc.invalidateQueries({ queryKey: ["shops"] });
+    } catch (e: any) {
+      setVacantErr(e?.response?.data?.detail ?? "Xatolik yuz berdi");
+    } finally {
+      setVacantBusy(false);
     }
   }
 
@@ -284,6 +301,39 @@ export function ShopsManager() {
                 </div>
               </div>
             )}
+          </div>
+        )}
+      </div>
+
+      {/* Bo'sh do'konlar qarzini 0 qilish */}
+      <div className="card space-y-3 p-4">
+        <div className="flex items-center gap-2 text-sm font-bold text-ink">
+          <Trash2 size={16} className="text-status-unpaid" />
+          Bo'sh do'konlar qarzini tozalash
+        </div>
+        <p className="text-xs text-ink-faint">
+          Egasi yo'q (bo'sh) do'konlarning barcha qarzlarini 0 qiladi va turini tozalaydi.
+          CSV importdan keyin ishlatilishi tavsiya etiladi.
+        </p>
+        <button
+          className="btn-primary w-full py-2 text-sm disabled:opacity-50"
+          disabled={vacantBusy}
+          onClick={runClearVacant}
+        >
+          {vacantBusy ? <><Loader2 size={15} className="animate-spin" /> Tozalanmoqda...</> : "Bo'sh do'konlar qarzini 0 qilish"}
+        </button>
+        {vacantErr && (
+          <div className="rounded-xl bg-status-unpaid/10 px-4 py-2 text-sm text-status-unpaid">{vacantErr}</div>
+        )}
+        {vacantResult && (
+          <div className="rounded-xl bg-status-paid/8 p-3 text-sm">
+            <div className="flex items-center gap-2 font-bold text-status-paid">
+              <CheckCircle2 size={15} /> Muvaffaqiyatli
+            </div>
+            <div className="mt-1 text-ink-soft">
+              Tekshirildi: <b>{vacantResult.shops_checked}</b> ta bo'sh do'kon ·
+              Qarz 0 qilindi: <b>{vacantResult.debts_cleared}</b> ta INN
+            </div>
           </div>
         )}
       </div>
