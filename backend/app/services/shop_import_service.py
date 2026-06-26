@@ -170,21 +170,40 @@ async def import_shops_csv(
                     reason="shop_import_csv",
                 ))
             existing.inn = new_inn
-            # shop_type ni kontragent nomi bilan ALMASHTIRMAYMIZ
             # purpose/shop_type ustunidan kelsa yangilaymiz
             if purpose:
                 existing.purpose = purpose
             if rent:
                 existing.monthly_rent = rent
             existing.source_sheet = source
-            # Bo'sh do'kon bo'lganda (inn=None, avval egasi bor edi) qarzni 0 qilamiz
-            if new_inn is None and old_inn is not None:
-                await db.execute(
-                    _update(MonthlyBalance)
-                    .where(MonthlyBalance.inn == old_inn,
-                           MonthlyBalance.market_id == market_id)
-                    .values(due_amount=0, paid_amount=0)
-                )
+
+            # Bo'sh do'kon bo'lganda (new_inn=None):
+            # 1. shop_type ni tozalaymiz (kontragent nomi qolib ketmasin)
+            # 2. qarzni 0 qilamiz — kim bo'lishidan qat'iy nazar
+            if new_inn is None:
+                existing.shop_type = None
+                # Eski egasi bo'lsa — uning qarzini 0 qilamiz
+                if old_inn is not None:
+                    await db.execute(
+                        _update(MonthlyBalance)
+                        .where(MonthlyBalance.inn == old_inn,
+                               MonthlyBalance.market_id == market_id)
+                        .values(due_amount=0, paid_amount=0)
+                    )
+                # Do'kon allaqachon bo'sh bo'lsa — shop_id bo'yicha qarzni 0 qilamiz
+                else:
+                    await db.execute(
+                        _update(MonthlyBalance)
+                        .where(MonthlyBalance.market_id == market_id,
+                               MonthlyBalance.inn.in_(
+                                   select(Shop.inn).where(
+                                       Shop.shop_id == existing.shop_id,
+                                       Shop.market_id == market_id,
+                                       Shop.inn.isnot(None),
+                                   )
+                               ))
+                        .values(due_amount=0, paid_amount=0)
+                    )
             updated += 1
         else:
             db.add(Shop(
