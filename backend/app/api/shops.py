@@ -99,14 +99,14 @@ async def get_shop_by_query(
     return await _build_shop_detail(shop_id, market, db, year, month)
 
 
-@router.get("/history/{shop_id}", response_model=list[dict])
-async def get_shop_history(
-    shop_id: str,
+@router.get("/history-by-id", response_model=list[dict])
+async def get_shop_history_by_id(
     _user: CurrentUser,
     market: CurrentMarket,
     db: Annotated[AsyncSession, Depends(get_db)],
+    shop_id: str = Query(...),
 ) -> list[dict]:
-    """Do'kon egalik tarixi — qachon kim egalik qilgani."""
+    """Do'kon egalik tarixi — qachon kim egalik qilgani (query param orqali)."""
     from sqlalchemy import select as _sel
     shop = (await db.execute(
         _sel(Shop).where(Shop.shop_id == shop_id, Shop.market_id == market.id)
@@ -134,17 +134,6 @@ async def get_shop_history(
         }
         for r in rows
     ]
-
-
-@router.get("/history-by-id", response_model=list[dict])
-async def get_shop_history_by_id(
-    shop_id: str = Query(...),
-    _user: CurrentUser = Depends(),
-    market: CurrentMarket = Depends(),
-    db: AsyncSession = Depends(get_db),
-) -> list[dict]:
-    """Do'kon tarixi — query param orqali (maxsus belgilar uchun)."""
-    return await get_shop_history(shop_id, _user, market, db)
 
 
 @router.get("/{shop_id}", response_model=ShopDetailOut)
