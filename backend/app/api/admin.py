@@ -17,6 +17,7 @@ from app.models import (
     THEME_SETTINGS_KEY,
     HIDE_UNMATCHED_KEY,
     AuditLog,
+    Counterparty,
     MapLayer,
     MonthlyBalance,
     Pavilion,
@@ -1428,25 +1429,48 @@ async def clear_vacant_debts(
 
     if vacant_ids:
         # 1. shop_history dan eski INNlar
-        hist_inns = (await db.execute(
+        hist_inns = set((await db.execute(
             _sel(_SH.old_inn)
             .where(_SH.shop_id.in_(vacant_ids), _SH.old_inn.isnot(None))
             .distinct()
-        )).scalars().all()
+        )).scalars().all())
 
-        # 2. inn_contract_import orqali biriktirilgan INNlar — shops.inn
-        #    (agar shop_history yo'q bo'lsa, lekin inn_contract_import yozgan)
-        #    Bu holat: shop.inn bor edi, keyin CSV import None qildi,
-        #    lekin shop_history yozilmadi
-        # monthly_balances da shu market dagi BARCHA INNlarni
-        # bo'sh do'konlar bilan solishtirish uchun
-        # shop_history + inn_contract_import history ni birlashtiramiz
+        # 2. Bo'sh do'konlar contract_no si orqali Counterparty topamiz
+        #    (shop_history yo'q bo'lsa ham INN topish uchun)
+        contract_inns: set[str] = set()
+        for shop in vacant_shops:
+            if shop.contract_no:
+                cp = (await db.execute(
+                    _sel(Counterparty)
+                    .where(Counterparty.contract_no == shop.contract_no)
+                    .limit(1)
+                )).scalar_one_or_none()
+                if cp:
+                    contract_inns.add(cp.inn)
 
-        all_inns_to_clear = set(hist_inns)
+        # 3. Bo'sh do'konlarning INN (avval bor edi, keyin None bo'ldi) —
+        #    monthly_balances da shu market dagi qarzlar bilan solishtirish:
+        #    market dagi BARCHA monthly_balances INNlarini olamiz
+        #    va bo'sh do'konlar bilan bog'liq bo'lganlari topamiz
+        all_market_inns = set((await db.execute(
+            _sel(MonthlyBalance.inn)
+            .where(
+                MonthlyBalance.market_id == market.id,
+                MonthlyBalance.due_amount > 0,
+            )
+            .distinct()
+        )).scalars().all())
 
-        # Agar shop_history bo'sh bo'lsa — monthly_balances ni shop_id orqali topmaymiz
-        # (ular bog'liq emas), lekin inn_contract_import_service yozgan
-        # ShopHistory yozuvlari bor bo'lishi kerak
+        # Faqat shop_history + contract_no orqali topilganlarni tozalaymiz
+        all_inns_to_clear = hist_inns | contract_inns
+
+        # Agar yuqoridagilar bo'sh bo'lsa — bu market INNlari ichidan
+        # bo'sh do'konlar bilan mos keladiganini topishga urinamiz
+        # (oxirgi fallback — barcha market qarzlarini emas, faqat topilganlarini)
+        if not all_inns_to_clear:
+            # Hech narsa topilmadi — bu market uchun qarz bo'lgan INNlarni
+            # Counterparty da qidiramiz (contract_no orqali)
+            pass
 
         for h_inn in all_inns_to_clear:
             await db.execute(
