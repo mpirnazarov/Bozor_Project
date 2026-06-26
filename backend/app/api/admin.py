@@ -1393,12 +1393,16 @@ class ClearVacantDebtsOut(BaseModel):
     debts_cleared: int = 0
     inns_cleared: list[str] = []
 
+class ClearVacantDebtsIn(BaseModel):
+    extra_inns: list[str] = []  # qo'shimcha INNlar (manual kiritish)
+
 
 @router.post("/clear-vacant-debts", response_model=ClearVacantDebtsOut)
 async def clear_vacant_debts(
     admin: AdminUser,
     market: CurrentMarket,
     db: Annotated[AsyncSession, Depends(get_db)],
+    body: ClearVacantDebtsIn = ClearVacantDebtsIn(),
 ) -> ClearVacantDebtsOut:
     """Bo'sh do'konlar (inn=None) bilan bog'liq barcha qarzlarni 0 qiladi.
 
@@ -1471,6 +1475,9 @@ async def clear_vacant_debts(
             # Hech narsa topilmadi — bu market uchun qarz bo'lgan INNlarni
             # Counterparty da qidiramiz (contract_no orqali)
             pass
+
+        # body.extra_inns — manual kiritilgan INNlar
+        all_inns_to_clear |= set(body.extra_inns)
 
         for h_inn in all_inns_to_clear:
             await db.execute(

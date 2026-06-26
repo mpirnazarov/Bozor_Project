@@ -28,6 +28,7 @@ export function ShopsManager() {
   const [vacantResult, setVacantResult] = useState<ClearVacantDebtsResult | null>(null);
   const [vacantBusy, setVacantBusy] = useState(false);
   const [vacantErr, setVacantErr] = useState("");
+  const [extraInns, setExtraInns] = useState("");
 
   // Umumiy magazin statistikasi
   const { data: shopStats } = useQuery({
@@ -67,7 +68,8 @@ export function ShopsManager() {
   async function runClearVacant() {
     setVacantBusy(true); setVacantErr(""); setVacantResult(null);
     try {
-      const r = await clearVacantDebts();
+      const inns = extraInns.split(/[\n,;\s]+/).map(s => s.trim()).filter(Boolean);
+      const r = await clearVacantDebts(inns);
       setVacantResult(r);
       qc.invalidateQueries({ queryKey: ["shops"] });
     } catch (e: any) {
@@ -315,6 +317,13 @@ export function ShopsManager() {
           Egasi yo'q (bo'sh) do'konlarning barcha qarzlarini 0 qiladi va turini tozalaydi.
           CSV importdan keyin ishlatilishi tavsiya etiladi.
         </p>
+        <textarea
+          className="input w-full font-mono text-xs"
+          rows={3}
+          placeholder="Qo'shimcha INNlar (ixtiyoriy): har birini yangi qatorga yoki vergul bilan\nMasalan: 307123456\n504987654"
+          value={extraInns}
+          onChange={(e) => setExtraInns(e.target.value)}
+        />
         <button
           className="btn-primary w-full py-2 text-sm disabled:opacity-50"
           disabled={vacantBusy}

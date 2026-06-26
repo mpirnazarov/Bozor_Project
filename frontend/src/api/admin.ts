@@ -389,7 +389,7 @@ export interface ClearVacantDebtsResult {
   inns_cleared: string[];
 }
 
-export async function clearVacantDebts(): Promise<ClearVacantDebtsResult> {
-  const { data } = await apiClient.post<ClearVacantDebtsResult>("/admin/clear-vacant-debts");
+export async function clearVacantDebts(extraInns: string[] = []): Promise<ClearVacantDebtsResult> {
+  const { data } = await apiClient.post<ClearVacantDebtsResult>("/admin/clear-vacant-debts", { extra_inns: extraInns });
   return data;
 }
