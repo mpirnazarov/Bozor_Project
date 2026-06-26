@@ -144,9 +144,8 @@ async def import_shops_csv(
         ).scalar_one_or_none()
 
         if existing:
-            old_inn = existing.inn
-            # inn bo'sh kelsa — bo'sh do'kon qilamiz (None), eski INNni SAQLAMAYMIZ
-            new_inn = inn  # None bo'lishi mumkin
+            old_inn = existing.inn  # DB dagi hozirgi INN (None bo'lishi mumkin)
+            new_inn = inn           # CSV dagi yangi INN (None = bo'sh do'kon)
             # INN o'zgargan bo'lsa — tarixga yozamiz
             if old_inn != new_inn:
                 old_cp = (await db.execute(
@@ -183,20 +182,23 @@ async def import_shops_csv(
                                MonthlyBalance.market_id == market_id)
                         .values(due_amount=0, paid_amount=0)
                     )
-                # Do'kon allaqachon bo'sh bo'lsa — shop_id bo'yicha qarzni 0 qilamiz
+                # Do'kon allaqachon bo'sh edi — shop_history dan yoki
+                # barcha yillar monthly_balances ni shu shop bilan bog'liq INNlar orqali 0 qilamiz
                 else:
-                    await db.execute(
-                        _update(MonthlyBalance)
-                        .where(MonthlyBalance.market_id == market_id,
-                               MonthlyBalance.inn.in_(
-                                   select(Shop.inn).where(
-                                       Shop.shop_id == existing.shop_id,
-                                       Shop.market_id == market_id,
-                                       Shop.inn.isnot(None),
-                                   )
-                               ))
-                        .values(due_amount=0, paid_amount=0)
-                    )
+                    from app.models.shop_history import ShopHistory as _SH
+                    # shop_history dan barcha eski INNlarni topamiz
+                    hist_rows = (await db.execute(
+                        select(_SH.old_inn)
+                        .where(_SH.shop_id == existing.id, _SH.old_inn.isnot(None))
+                        .distinct()
+                    )).scalars().all()
+                    for h_inn in hist_rows:
+                        await db.execute(
+                            _update(MonthlyBalance)
+                            .where(MonthlyBalance.inn == h_inn,
+                                   MonthlyBalance.market_id == market_id)
+                            .values(due_amount=0, paid_amount=0)
+                        )
             updated += 1
         else:
             db.add(Shop(
