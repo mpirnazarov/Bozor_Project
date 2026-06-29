@@ -10,7 +10,6 @@ import {
 import {
   ownerListMarkets, ownerCreateMarket, ownerDeleteMarket, ownerChangePassword,
   ownerChangeViewerPassword,
-  ownerCreateViewer,
   ownerMarkPayment, ownerBlockMarket, getOwnerRailway, getInvoices, getBackups,
   type OwnerMarket, type NewMarketResult, type RailwayOverview,
 } from "@/api/owner";
@@ -424,7 +423,7 @@ export function OwnerPage() {
                 if (pwdTarget === "admin") {
                   pwdMut.mutate({ id: pwdFor.id, p: newPwd });
                 } else {
-                  ownerChangeViewerPassword(pwdFor.id, newPwd).then(() => { setPwdFor(null); setViewerPwd(""); setNewPwd(""); });
+                  ownerChangeViewerPassword(pwdFor.id, newPwd).then(() => { setPwdFor(null); setNewPwd(""); });
                 }
               }} disabled={newPwd.length < 6 || pwdMut.isPending}
               className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#0066ff] to-[#0090ff] px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">
