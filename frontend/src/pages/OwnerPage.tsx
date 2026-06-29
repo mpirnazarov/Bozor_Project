@@ -10,6 +10,7 @@ import {
 import {
   ownerListMarkets, ownerCreateMarket, ownerDeleteMarket, ownerChangePassword,
   ownerChangeViewerPassword,
+  ownerCreateViewer,
   ownerMarkPayment, ownerBlockMarket, getOwnerRailway, getInvoices, getBackups,
   type OwnerMarket, type NewMarketResult, type RailwayOverview,
 } from "@/api/owner";
@@ -649,6 +650,23 @@ function MarketCard({ m, curM, onView, onPay, onBlock, onPwd, onDelete, delay, b
           </div>
           <div className="mt-0.5 font-mono text-xs text-slate-500">
             /{m.slug} · {m.shop_count} magazin · {m.admin_username ?? "—"}
+          </div>
+          <div className="mt-0.5 flex items-center gap-2 font-mono text-xs text-slate-600">
+            {m.viewer_username ? (
+              <span>{m.viewer_username} <span className="text-slate-700">ko'ruvchi</span></span>
+            ) : (
+              <button
+                className="text-brand/60 hover:text-brand transition-colors"
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  const r = await ownerCreateViewer(m.id);
+                  if (!r.already_exists && r.password) {
+                    alert(`Viewer yaratildi!\nLogin: ${r.username}\nParol: ${r.password}\n\nSaqlab oling!`);
+                    window.location.reload();
+                  }
+                }}
+              >+ viewer yaratish</button>
+            )}
           </div>
           {/* status pill */}
           <div className="mt-2.5">
