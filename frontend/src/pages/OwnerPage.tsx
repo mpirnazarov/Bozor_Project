@@ -10,7 +10,6 @@ import {
 import {
   ownerListMarkets, ownerCreateMarket, ownerDeleteMarket, ownerChangePassword,
   ownerChangeViewerPassword,
-  ownerGetCredentials,
   ownerCreateViewer,
   ownerMarkPayment, ownerBlockMarket, getOwnerRailway, getInvoices, getBackups,
   type OwnerMarket, type NewMarketResult, type RailwayOverview,
@@ -50,7 +49,6 @@ export function OwnerPage() {
   const [created, setCreated] = useState<NewMarketResult | null>(null);
   const [pwdFor, setPwdFor] = useState<OwnerMarket | null>(null);
   const [pwdTarget, setPwdTarget] = useState<"admin" | "viewer">("admin");
-  const [viewerPwd, setViewerPwd] = useState("");
   const [newPwd, setNewPwd] = useState("");
   const [showAttention, setShowAttention] = useState(true);
 
@@ -625,10 +623,10 @@ function AttentionCenter({ markets, open, onToggle, onOpen, curM }: {
 }
 
 /* ============ MARKET CARD ============ */
-function MarketCard({ m, curM, onView, onPay, onBlock, onPwd, onDelete, delay, busy, onViewPwd }: {
+function MarketCard({ m, curM, onView, onPay, onBlock, onPwd, onDelete, delay, busy }: {
   m: OwnerMarket; curM: number; delay: number; busy: boolean;
   onView: () => void; onPay: (paid: boolean) => void; onBlock: (b: boolean) => void;
-  onPwd: () => void; onDelete: () => void; onViewPwd?: () => void;
+  onPwd: () => void; onDelete: () => void;
 }) {
   const s = m.support;
   const ring = attColor(s.attention);
