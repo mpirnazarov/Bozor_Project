@@ -18,7 +18,7 @@ interface Props {
 
 type ServiceKey = "all" | "rent" | "electricity" | "water";
 const SERVICE_FILTERS: { key: ServiceKey; tkey: string }[] = [
-  { key: "all", tkey: "pav.service.all" },
+  // "Barchasi" vaqtincha o'chirilgan — default arenda
   { key: "rent", tkey: "pav.service.rent" },
   { key: "electricity", tkey: "pav.service.electricity" },
   { key: "water", tkey: "pav.service.water" },
@@ -115,7 +115,7 @@ function statusForService(b: BillingStatus | undefined, service: ServiceKey): {
 }
 
 export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop }: Props) {
-  const [service, setService] = useState<ServiceKey>("all");
+  const [service, setService] = useState<ServiceKey>("rent"); // default arenda ("Barchasi" vaqtincha o'chirilgan
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const t = useT();
 

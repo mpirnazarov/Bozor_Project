@@ -103,6 +103,32 @@ async def require_owner(user: CurrentUser) -> User:
 OwnerUser = Annotated[User, Depends(require_owner)]
 
 
+async def require_manager(user: CurrentUser) -> User:
+    """Faqat manager (pavilion to'lov tekshiruvchisi)."""
+    if not user.is_manager:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bu amal uchun manager huquqi kerak",
+        )
+    return user
+
+
+ManagerUser = Annotated[User, Depends(require_manager)]
+
+
+async def require_admin_or_manager(user: CurrentUser) -> User:
+    """market_admin/admin yoki manager — ikkalasi ham bozor ichida ishlay oladi."""
+    if not (user.is_admin or user.is_manager or user.is_super_admin):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Ruxsat berilmagan",
+        )
+    return user
+
+
+AdminOrManagerUser = Annotated[User, Depends(require_admin_or_manager)]
+
+
 # === Multi-bozor: market resolver ===
 async def get_current_market(
     user: CurrentUser,

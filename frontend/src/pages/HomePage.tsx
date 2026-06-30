@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { getMarket } from "@/api/markets";
-import { LogOut, Settings, ArrowLeft, Info, AlertTriangle } from "lucide-react";
+import { LogOut, Settings, ArrowLeft, Info, AlertTriangle, Users } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { useT } from "@/i18n/useT";
 import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
@@ -118,6 +118,12 @@ export function HomePage() {
             {isSuperAdmin && (
               <Link to="/super" className="btn-ghost px-3 py-2" title="Boshqaruv markazi">
                 <ArrowLeft size={16} /> {t("home.center")}
+              </Link>
+            )}
+            {/* Managerlar tugmasi — faqat market_admin */}
+            {isMarketAdmin && (
+              <Link to="/managers" className="btn-ghost px-2.5 py-2" title="Managerlar">
+                <Users size={16} />
               </Link>
             )}
             {/* Admin tugmasi FAQAT bozor admini uchun (super admin uchun emas) */}
