@@ -188,20 +188,14 @@ async def mobile_counterparty(
         for rb in (await db.execute(rb_q)).scalars():
             rb_latest[rb.shop_id] = rb  # shu oy ichidagi oxirgi sana qoladi
         if rb_latest:
-            # JAMI = TO'LANGAN + QARZ — har doim matematik izchil.
-            # (Avval rb_due alohida Shop.monthly_rent'dan olinardi, bu
-            # rent_billing'dagi haqiqiy paid+debt bilan mos kelmasdi.)
-            rb_debt = sum((max(0.0, _f(r.debt)) for r in rb_latest.values()), 0.0)
+            # JAMI = Shop.monthly_rent yig'indisi (barqaror, to'g'ri manba).
+            # TO'LANGAN = rent_billing.paid (haqiqiy to'lov, to'g'ri manba).
+            # QARZ = JAMI - TO'LANGAN (hisoblanadi, rb.debt ustuniga ishonilmaydi —
+            # u faylda ba'zan noto'g'ri/eskirgan qiymat saqlaydi va due=paid+debt
+            # tengligini buzgan edi).
+            rb_due = sum((_f(s.monthly_rent) for s in shops_db), 0.0)
             rb_paid = sum((max(0.0, _f(r.paid)) for r in rb_latest.values()), 0.0)
-            rb_due = rb_paid + rb_debt
-
-            # Agar rent_billing'da hech narsa bo'lmasa (ikkalasi 0) — fallback
-            # sifatida Shop.monthly_rent yig'indisini ishlatamiz (qarzsiz deb hisoblanadi).
-            if rb_due <= 0:
-                rb_due = sum((_f(s.monthly_rent) for s in shops_db), 0.0)
-                rb_paid = rb_due
-                rb_debt = 0.0
-
+            rb_debt = max(0.0, rb_due - rb_paid)
             rent = {"due": rb_due, "paid": rb_paid, "debt": rb_debt}
 
     # 4. Har magazin uchun arenda holati (rent kategoriyasidagi balansdan).

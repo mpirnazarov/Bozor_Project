@@ -102,28 +102,25 @@ def _status_from_rent(
     QARZ va TO'LANGAN — rent_billing'dan (eng oxirgi sana).
     Elektr/suv esa eski monthly_balances'dan.
     """
-    qarz = Decimal(str(rb.debt or 0))
-    if qarz < 0:
-        qarz = Decimal(0)
+    # JAMI — Shop.monthly_rent (berilgan bo'lsa, to'g'ri/barqaror manba).
+    # Aks holda rent_billing summasi.
+    if shop_rent is not None and shop_rent > 0:
+        jami = shop_rent
+    else:
+        jami = Decimal(str(rb.monthly_amount or 0))
+
+    # TO'LANGAN — rent_billing.paid (haqiqiy to'lov, to'g'ri manba).
     tolangan = Decimal(str(rb.paid or 0))
     if tolangan < 0:
         tolangan = Decimal(0)
 
-    # JAMI = TO'LANGAN + QARZ — har doim matematik izchil bo'lishi shart
-    # (oldin jami alohida monthly_rent'dan olinardi, bu paid+debt bilan
-    # mos kelmasdi va Jami != To'langan+Qarz xatosiga olib kelardi).
-    jami = tolangan + qarz
-
-    # Agar rent_billing'da hech narsa bo'lmasa (ikkalasi ham 0) — fallback
-    # sifatida shops.monthly_rent yoki rent_billing.monthly_amount ishlatamiz,
-    # bu holda to'langan = jami (qarz yo'q deb hisoblanadi).
-    if jami <= 0:
-        if shop_rent is not None and shop_rent > 0:
-            jami = shop_rent
-        else:
-            jami = Decimal(str(rb.monthly_amount or 0))
-        tolangan = jami
+    # QARZ = JAMI − TO'LANGAN (hisoblanadi). rb.debt ustuniga ISHONILMAYDI —
+    # u faylda eskirgan/noto'g'ri qiymat saqlashi mumkin va Jami=To'langan+Qarz
+    # tengligini buzgan edi.
+    qarz = jami - tolangan
+    if qarz < 0:
         qarz = Decimal(0)
+        tolangan = jami  # to'langan jamidan ko'p bo'lishi mumkin emas (haddan tashqari to'lov)
 
     cats = [CategoryBalance(category="rent", due=jami, paid=tolangan, debt=qarz)]
 
@@ -251,8 +248,9 @@ async def compute_batch_status(
     # taqsimlaymiz. Boshqa bozor/demo magazinlari hisobga olinmaydi, aks holda
     # qarz keraksiz ko'p bo'lakka bo'linib, ulush juda kichrayib ketadi.
     inn_shop_count: dict[str, int] = {}
-    # Shu so'rovdagi magazinlar qaysi market(lar)ga tegishli? (har doim hisoblanadi,
-    # rent_billing filtri uchun ham kerak, inns bo'sh bo'lsa ham)
+    # Shu so'rovdagi magazinlar qaysi market(lar)ga tegishli? (har doim hisoblanadi —
+    # rent_billing filtri uchun ham kerak, boshqa bozordagi bir xil shop_id
+    # aralashib ketmasligi uchun)
     market_ids = list({
         mid for (mid,) in (await db.execute(
             select(Shop.market_id).where(Shop.shop_id.in_(shop_ids)).distinct()
@@ -271,8 +269,6 @@ async def compute_batch_status(
 
     out: dict[str, BillingStatusOut] = {}
     # rent_billing (eng oxirgi sana) bo'lsa — qarz shundan olinadi (blok uchun bayroq)
-    # MUHIM: market_ids filtri shart — aks holda boshqa bozordagi bir xil
-    # shop_id'ning rent_billing yozuvi aralashib ketadi (noto'g'ri qarz).
     rent_latest = (
         await _latest_rent_billing(db, shop_ids, market_ids=market_ids or None, year=year, month=month)
         if USE_RENT_BILLING_BATCH else {}
@@ -327,8 +323,8 @@ async def compute_shop_status(
     # rent_billing (eng oxirgi sana) bo'lsa — qarz/to'langan shundan,
     # JAMI esa monthly_rent'dan (fayldagi xato summalardan himoya). Elektr/suv eskidan.
     if USE_RENT_BILLING_SHOP:
-        market_ids = [market_id] if market_id is not None else None
-        rent_latest = await _latest_rent_billing(db, [shop_id], market_ids=market_ids, year=year, month=month)
+        m_ids = [market_id] if market_id is not None else None
+        rent_latest = await _latest_rent_billing(db, [shop_id], market_ids=m_ids, year=year, month=month)
         rb = rent_latest.get(shop_id)
         if rb is not None:
             return _status_from_rent(
