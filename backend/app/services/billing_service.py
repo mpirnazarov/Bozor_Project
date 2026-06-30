@@ -243,13 +243,14 @@ async def compute_batch_status(
     # taqsimlaymiz. Boshqa bozor/demo magazinlari hisobga olinmaydi, aks holda
     # qarz keraksiz ko'p bo'lakka bo'linib, ulush juda kichrayib ketadi.
     inn_shop_count: dict[str, int] = {}
+    # Shu so'rovdagi magazinlar qaysi market(lar)ga tegishli? (har doim hisoblanadi,
+    # rent_billing filtri uchun ham kerak, inns bo'sh bo'lsa ham)
+    market_ids = list({
+        mid for (mid,) in (await db.execute(
+            select(Shop.market_id).where(Shop.shop_id.in_(shop_ids)).distinct()
+        )).all() if mid is not None
+    })
     if inns:
-        # Shu so'rovdagi magazinlar qaysi market(lar)ga tegishli?
-        market_ids = list({
-            mid for (mid,) in (await db.execute(
-                select(Shop.market_id).where(Shop.shop_id.in_(shop_ids)).distinct()
-            )).all() if mid is not None
-        })
         cnt_q = (
             select(Shop.inn, func.count(Shop.shop_id))
             .where(Shop.inn.in_(list(set(inns))), Shop.is_active.is_(True))
@@ -262,7 +263,12 @@ async def compute_batch_status(
 
     out: dict[str, BillingStatusOut] = {}
     # rent_billing (eng oxirgi sana) bo'lsa — qarz shundan olinadi (blok uchun bayroq)
-    rent_latest = await _latest_rent_billing(db, shop_ids, year=year, month=month) if USE_RENT_BILLING_BATCH else {}
+    # MUHIM: market_ids filtri shart — aks holda boshqa bozordagi bir xil
+    # shop_id'ning rent_billing yozuvi aralashib ketadi (noto'g'ri qarz).
+    rent_latest = (
+        await _latest_rent_billing(db, shop_ids, market_ids=market_ids or None, year=year, month=month)
+        if USE_RENT_BILLING_BATCH else {}
+    )
     for sid in shop_ids:
         inn = shop_inn.get(sid)
         rb = rent_latest.get(sid)
