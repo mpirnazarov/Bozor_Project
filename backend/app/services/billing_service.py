@@ -285,7 +285,8 @@ async def compute_batch_status(
 
 
 async def compute_shop_status(
-    db: AsyncSession, shop_id: str, inn: str | None, year: int, month: int
+    db: AsyncSession, shop_id: str, inn: str | None, year: int, month: int,
+    market_id: int | None = None,
 ) -> BillingStatusOut:
     """Bitta magazin uchun billing statusi."""
     # Eski balanslar (elektr/suv uchun ham kerak)
@@ -298,10 +299,11 @@ async def compute_shop_status(
             (b.due_amount for b in balances if b.due_amount and b.due_amount > 0),
             Decimal(0),
         )
-        # INN ning aktiv magazinlari soni bo'yicha taqsimlash
-        cnt = await db.scalar(
-            select(func.count(Shop.shop_id)).where(Shop.inn == inn, Shop.is_active.is_(True))
-        )
+        # INN ning aktiv magazinlari soni bo'yicha taqsimlash (shu bozorda)
+        cnt_q = select(func.count(Shop.shop_id)).where(Shop.inn == inn, Shop.is_active.is_(True))
+        if market_id is not None:
+            cnt_q = cnt_q.where(Shop.market_id == market_id)
+        cnt = await db.scalar(cnt_q)
         debt_share = inn_debt / max(int(cnt or 1), 1)
 
     # Magazinning belgilangan summasi (JAMI uchun — barqaror manba)
@@ -311,7 +313,8 @@ async def compute_shop_status(
     # rent_billing (eng oxirgi sana) bo'lsa — qarz/to'langan shundan,
     # JAMI esa monthly_rent'dan (fayldagi xato summalardan himoya). Elektr/suv eskidan.
     if USE_RENT_BILLING_SHOP:
-        rent_latest = await _latest_rent_billing(db, [shop_id], year=year, month=month)
+        market_ids = [market_id] if market_id is not None else None
+        rent_latest = await _latest_rent_billing(db, [shop_id], market_ids=market_ids, year=year, month=month)
         rb = rent_latest.get(shop_id)
         if rb is not None:
             return _status_from_rent(

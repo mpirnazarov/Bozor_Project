@@ -74,7 +74,7 @@ async def _build_shop_detail(
                 phone=cp_obj.phone,
             )
 
-    billing = await compute_shop_status(db, shop_id, shop.inn, year, month)
+    billing = await compute_shop_status(db, shop_id, shop.inn, year, month, market_id=market.id)
     return ShopDetailOut(
         shop=ShopOut.model_validate(shop),
         counterparty=cp,
