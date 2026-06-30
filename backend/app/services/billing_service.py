@@ -106,16 +106,24 @@ def _status_from_rent(
     if qarz < 0:
         qarz = Decimal(0)
     tolangan = Decimal(str(rb.paid or 0))
+    if tolangan < 0:
+        tolangan = Decimal(0)
 
-    # JAMI — Shop.monthly_rent (berilgan bo'lsa). Aks holda rent_billing summasi.
-    if shop_rent is not None and shop_rent > 0:
-        jami = shop_rent
-    else:
-        jami = Decimal(str(rb.monthly_amount or 0))
+    # JAMI = TO'LANGAN + QARZ — har doim matematik izchil bo'lishi shart
+    # (oldin jami alohida monthly_rent'dan olinardi, bu paid+debt bilan
+    # mos kelmasdi va Jami != To'langan+Qarz xatosiga olib kelardi).
+    jami = tolangan + qarz
 
-    # To'langan berilmagan bo'lsa: jami − qarz
-    if tolangan <= 0 and jami > 0:
-        tolangan = max(Decimal(0), jami - qarz)
+    # Agar rent_billing'da hech narsa bo'lmasa (ikkalasi ham 0) — fallback
+    # sifatida shops.monthly_rent yoki rent_billing.monthly_amount ishlatamiz,
+    # bu holda to'langan = jami (qarz yo'q deb hisoblanadi).
+    if jami <= 0:
+        if shop_rent is not None and shop_rent > 0:
+            jami = shop_rent
+        else:
+            jami = Decimal(str(rb.monthly_amount or 0))
+        tolangan = jami
+        qarz = Decimal(0)
 
     cats = [CategoryBalance(category="rent", due=jami, paid=tolangan, debt=qarz)]
 
