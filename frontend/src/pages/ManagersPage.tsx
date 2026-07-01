@@ -10,7 +10,7 @@ import {
   listManagers, createManager, changeManagerPassword, toggleManagerBlock,
   deleteManager, getManagerPavilions, assignManagerPavilions,
   getManagerCredentials, getPavilionsWithManagers,
-  type Manager, type ManagerPavilionMini, type PavilionManagerInfo,
+  type Manager, type ManagerPavilionMini,
 } from "@/api/managers";
 
 type Tab = "managers" | "pavilions";
