@@ -209,18 +209,21 @@ function PavilionsByManagerTab() {
                   <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-semibold text-brand">{p.map_layer_name}</span>
                 )}
               </div>
-              <span className="text-xs text-ink-faint">{p.managers.length} ta manager</span>
+              <span className="text-xs text-ink-faint">
+                {p.managers.length > 0 ? `${p.managers.length} ta manager` : "Biriktirilmagan"}
+              </span>
             </div>
-            {p.managers.length > 0 && (
+            {p.managers.length > 0 ? (
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {p.managers.map((m) => (
-                  <span key={m.id} className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${m.is_active ? "bg-status-paid/10 text-status-paid" : "bg-slate-100 text-slate-400 line-through"}`}>
+                  <span key={m.id} className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${m.is_active ? "bg-status-paid/10 text-status-paid" : "bg-slate-100 text-slate-400"}`}>
+                    {!m.is_active && <Ban size={10} />}
                     {m.full_name ?? m.username}
+                    <span className="font-normal opacity-60">({m.username})</span>
                   </span>
                 ))}
               </div>
-            )}
-            {p.managers.length === 0 && (
+            ) : (
               <div className="mt-1 text-xs text-ink-faint">Manager biriktirilmagan</div>
             )}
           </div>
