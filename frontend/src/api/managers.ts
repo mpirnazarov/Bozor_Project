@@ -21,7 +21,16 @@ export interface ManagerPavilionMini {
   display_name: string;
   pavilion_type: string | null;
   map_layer_id: number | null;
+  map_layer_name: string | null;
   assigned: boolean;
+}
+
+export interface PavilionManagerInfo {
+  pavilion_id: number;
+  pavilion_name: string;
+  map_layer_id: number | null;
+  map_layer_name: string | null;
+  managers: { id: number; username: string; full_name: string | null; is_active: boolean }[];
 }
 
 export async function listManagers(): Promise<Manager[]> {
@@ -54,4 +63,17 @@ export async function getManagerPavilions(managerId: number): Promise<ManagerPav
 
 export async function assignManagerPavilions(managerId: number, pavilionIds: number[]): Promise<void> {
   await apiClient.put(`/managers/${managerId}/pavilions`, { pavilion_ids: pavilionIds });
+}
+
+export async function getManagerCredentials(managerId: number): Promise<{
+  id: number; username: string; full_name: string | null;
+  is_active: boolean; last_login_at: string | null;
+}> {
+  const { data } = await apiClient.get(`/managers/${managerId}/credentials`);
+  return data;
+}
+
+export async function getPavilionsWithManagers(): Promise<PavilionManagerInfo[]> {
+  const { data } = await apiClient.get<PavilionManagerInfo[]>("/managers/by-pavilion/all");
+  return data;
 }
