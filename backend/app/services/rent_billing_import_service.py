@@ -19,7 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import RentBilling
+from app.models import Counterparty, RentBilling
 
 
 # Ustun aliaslari (normalizatsiya bilan solishtiriladi)
@@ -191,6 +191,26 @@ async def import_rent_billing_excel(
 
     if not records:
         raise StructureError("Hech qanday yaroqli magazin qatori topilmadi")
+
+    # Counterparty upsert — inn bo'lsa, counterparties jadvalida bo'lishi shart
+    # (shops.inn -> counterparties.inn FK constraint bor)
+    from sqlalchemy.dialects.postgresql import insert as _cp_insert
+    cp_records = [
+        {"inn": r["inn"], "name": r["counterparty_name"] or r["inn"]}
+        for r in records if r["inn"]
+    ]
+    if cp_records:
+        # Unique INNlar bo'yicha
+        seen_inns: dict[str, dict] = {}
+        for cp in cp_records:
+            if cp["inn"] not in seen_inns:
+                seen_inns[cp["inn"]] = cp
+        cp_stmt = _cp_insert(Counterparty.__table__).values(list(seen_inns.values()))
+        cp_stmt = cp_stmt.on_conflict_do_update(
+            index_elements=["inn"],
+            set_={"name": cp_stmt.excluded.name},
+        )
+        await db.execute(cp_stmt)
 
     # Upsert (shu sana + magazin bo'yicha)
     CHUNK = 1000
