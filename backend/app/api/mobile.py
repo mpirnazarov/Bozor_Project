@@ -184,9 +184,15 @@ async def mobile_counterparty(
         )
         if use_market_filter:
             rb_q = rb_q.where(RentBilling.market_id == market_id)
-        rb_latest: dict[str, RentBilling] = {}
+        # Har magazin uchun ENG KAM QARZLI yozuvni tanlaymiz
+        # (bir oyda bir necha marta import bo'lsa, to'liq to'langan yozuv ustunlik qiladi)
+        _rb_all: dict[str, list] = {}
         for rb in (await db.execute(rb_q)).scalars():
-            rb_latest[rb.shop_id] = rb  # shu oy ichidagi oxirgi sana qoladi
+            _rb_all.setdefault(rb.shop_id, []).append(rb)
+        rb_latest: dict[str, RentBilling] = {
+            sid: min(rows, key=lambda r: (float(r.debt or 0), -float(r.paid or 0)))
+            for sid, rows in _rb_all.items()
+        }
         if rb_latest:
             # JAMI = rent_billing.monthly_amount yig'indisi (fayl bilan har oy yangilanadi).
             # Shop.monthly_rent eski/static — faylga mos kelmasligi mumkin.

@@ -81,11 +81,20 @@ async def _latest_rent_billing(
             RentBilling.bill_date >= _d(year, month, 1),
             RentBilling.bill_date <= _d(year, month, _cal.monthrange(year, month)[1]),
         )
-    # Sana bo'yicha o'sish tartibida — keyin lug'atda oxirgisi qoladi
+    # Sana bo'yicha o'sish tartibida yuklaymiz, keyin har magazin uchun
+    # ENG KAM QARZLI yozuvni tanlaymiz (bir oyda bir necha marta import
+    # bo'lsa, to'liq to'langan yozuv ham bo'lishi mumkin).
     q = q.order_by(RentBilling.bill_date.asc())
-    latest: dict[str, RentBilling] = {}
+    all_rows: dict[str, list[RentBilling]] = {}
     for rb in (await db.execute(q)).scalars():
-        latest[rb.shop_id] = rb  # oxirgi (eng katta sana) qoladi
+        all_rows.setdefault(rb.shop_id, []).append(rb)
+
+    latest: dict[str, RentBilling] = {}
+    for shop_id, rows in all_rows.items():
+        # Eng kam qarzli yozuvni tanlaymiz
+        # (debt=0 bo'lsa — to'liq to'langan, u ustunlik qiladi)
+        best = min(rows, key=lambda r: (float(r.debt or 0), -float(r.paid or 0)))
+        latest[shop_id] = best
     return latest
 
 
