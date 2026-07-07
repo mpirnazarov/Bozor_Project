@@ -242,7 +242,6 @@ async def import_rent_billing_excel(
 
     # Shop.inn ni fayldagi (yangi) INN bilan yangilaymiz — modal/mobile to'g'ri
     # INN ko'rsatishi uchun (rent_billing'ga yozish Shop.inn ni o'zgartirmaydi).
-    from app.models import Shop
     from sqlalchemy import update as _update
     inn_updates = 0
     for rec in records:
