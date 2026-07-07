@@ -19,7 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Counterparty, RentBilling
+from app.models import RentBilling
 
 
 # Ustun aliaslari (normalizatsiya bilan solishtiriladi)
@@ -166,8 +166,15 @@ async def import_rent_billing_excel(
         seen.add(shop_id)
 
         amount = _to_decimal(get("amount"))
-        debt = _to_decimal(get("debt"))
-        paid = _to_decimal(get("paid"))
+        debt   = _to_decimal(get("debt"))
+        paid   = _to_decimal(get("paid"))
+
+        # Agar paid = 0 (yoki yo'q) lekin amount va debt bor bo'lsa —
+        # paid = amount - debt formulasidan hisoblaymiz.
+        # Bu Авансы ustuniga ishonmaslik uchun (u 1C da yig'ilgan kredit
+        # balans bo'lib, nafaqat shu oyni o'z ichiga oladi).
+        if paid <= 0 and amount > 0:
+            paid = max(Decimal(0), amount - debt)
         inn = _clean_inn(get("inn"))
         name = str(get("name") or "").strip() or None
         contract = str(get("contract") or "").strip() or None
@@ -191,26 +198,6 @@ async def import_rent_billing_excel(
 
     if not records:
         raise StructureError("Hech qanday yaroqli magazin qatori topilmadi")
-
-    # Counterparty upsert — inn bo'lsa, counterparties jadvalida bo'lishi shart
-    # (shops.inn -> counterparties.inn FK constraint bor)
-    from sqlalchemy.dialects.postgresql import insert as _cp_insert
-    cp_records = [
-        {"inn": r["inn"], "name": r["counterparty_name"] or r["inn"]}
-        for r in records if r["inn"]
-    ]
-    if cp_records:
-        # Unique INNlar bo'yicha
-        seen_inns: dict[str, dict] = {}
-        for cp in cp_records:
-            if cp["inn"] not in seen_inns:
-                seen_inns[cp["inn"]] = cp
-        cp_stmt = _cp_insert(Counterparty.__table__).values(list(seen_inns.values()))
-        cp_stmt = cp_stmt.on_conflict_do_update(
-            index_elements=["inn"],
-            set_={"name": cp_stmt.excluded.name},
-        )
-        await db.execute(cp_stmt)
 
     # Upsert (shu sana + magazin bo'yicha)
     CHUNK = 1000
@@ -244,47 +231,6 @@ async def import_rent_billing_excel(
             )
             inn_updates += 1
     res.inn_updates = inn_updates
-
-    # monthly_balances ga ham yozamiz (arenda kategoriyasi, INN bo'yicha yig'ilgan)
-    # Bu APK va web app uchun bir xil manba bo'lishini ta'minlaydi.
-    from app.models import MonthlyBalance
-    year = bill_date.year
-    month = bill_date.month
-
-    # INN bo'yicha yig'amiz: due=monthly_amount, paid=paid, debt=debt (eng yaxshi)
-    inn_agg: dict[str, dict] = {}
-    for rec in records:
-        if not rec["inn"]:
-            continue
-        inn = rec["inn"]
-        if inn not in inn_agg:
-            inn_agg[inn] = {"due": Decimal(0), "paid": Decimal(0)}
-        inn_agg[inn]["due"] += Decimal(str(rec["monthly_amount"] or 0))
-        inn_agg[inn]["paid"] += Decimal(str(rec["paid"] or 0))
-
-    if inn_agg:
-        mb_records = [
-            {
-                "inn": inn,
-                "market_id": market_id,
-                "year": year,
-                "month": month,
-                "category": "rent",
-                "due_amount": v["due"] - v["paid"] if v["due"] > v["paid"] else Decimal(0),
-                "paid_amount": v["paid"],
-            }
-            for inn, v in inn_agg.items()
-        ]
-        mb_stmt = pg_insert(MonthlyBalance.__table__).values(mb_records)
-        mb_stmt = mb_stmt.on_conflict_do_update(
-            index_elements=["inn", "year", "month", "category"],
-            set_={
-                "due_amount": mb_stmt.excluded.due_amount,
-                "paid_amount": mb_stmt.excluded.paid_amount,
-                "market_id": mb_stmt.excluded.market_id,
-            },
-        )
-        await db.execute(mb_stmt)
 
     res.upserted = len(records)
     return res

@@ -196,9 +196,6 @@ async def owner_list_markets(
         admin = await db.scalar(
             select(User).where(User.market_id == m.id, User.role == UserRole.MARKET_ADMIN.value)
         )
-        viewer = await db.scalar(
-            select(User).where(User.market_id == m.id, User.role == UserRole.MARKET_VIEWER.value)
-        )
         out.append({
             "id": m.id,
             "slug": m.slug,
@@ -208,7 +205,6 @@ async def owner_list_markets(
             "created_at": m.created_at.isoformat(),
             "shop_count": shop_count or 0,
             "admin_username": admin.username if admin else None,
-            "viewer_username": viewer.username if viewer else None,
             "support": status_info,
         })
     return out
@@ -251,22 +247,6 @@ async def owner_create_market(
         is_active=True,
     )
     db.add(admin_user)
-
-    # Viewer user — admin sahifasiga kirish huquqi yo'q
-    viewer_username = f"{username}-view"
-    v_exists = await db.scalar(select(User).where(User.username == viewer_username))
-    if v_exists:
-        viewer_username = f"{username}-view-{market.id}"
-    viewer_password = _gen_password()
-    viewer_user = User(
-        username=viewer_username,
-        password_hash=hash_password(viewer_password),
-        role=UserRole.MARKET_VIEWER.value,
-        market_id=market.id,
-        full_name=f"{body.name} viewer",
-        is_active=True,
-    )
-    db.add(viewer_user)
     await db.commit()
     await db.refresh(market)
 
@@ -274,9 +254,8 @@ async def owner_create_market(
         "id": market.id,
         "slug": market.slug,
         "name": market.name,
-        # Parollar FAQAT shu javobda ko'rsatiladi — keyinroq hash bo'ladi
+        # Parol FAQAT shu javobda ko'rsatiladi — keyin saqlanmaydi (hash bo'ladi)
         "credentials": {"username": username, "password": password},
-        "viewer_credentials": {"username": viewer_username, "password": viewer_password},
     }
 
 
@@ -754,91 +733,3 @@ async def owner_invoice_doc(
         media_type=inv.doc_mime or "application/octet-stream",
         headers={"Content-Disposition": f'inline; filename="{inv.doc_name or "document"}"'},
     )
-
-
-# ===== Viewer user parolini o'zgartirish =====
-@router.put("/markets/{market_id}/viewer-password")
-async def owner_change_viewer_password(
-    market_id: int,
-    body: PasswordBody,
-    _owner: OwnerUser,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> dict:
-    """Market viewer userining parolini o'zgartiradi."""
-    viewer = await db.scalar(
-        select(User).where(User.market_id == market_id, User.role == UserRole.MARKET_VIEWER.value)
-    )
-    if viewer is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Viewer user topilmadi")
-    if len(body.new_password) < 6:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Parol kamida 6 ta belgi bo'lishi kerak")
-    viewer.password_hash = hash_password(body.new_password)
-    await db.commit()
-    return {"ok": True}
-
-
-# ===== Bozor credentials ko'rish (admin + viewer) =====
-@router.get("/markets/{market_id}/credentials")
-async def owner_get_credentials(
-    market_id: int,
-    _owner: OwnerUser,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> dict:
-    """Bozor admin va viewer userlarining loginlarini qaytaradi (parolsiz)."""
-    admin = await db.scalar(
-        select(User).where(User.market_id == market_id, User.role == UserRole.MARKET_ADMIN.value)
-    )
-    viewer = await db.scalar(
-        select(User).where(User.market_id == market_id, User.role == UserRole.MARKET_VIEWER.value)
-    )
-    return {
-        "admin_username": admin.username if admin else None,
-        "viewer_username": viewer.username if viewer else None,
-    }
-
-
-# ===== Mavjud bozorga viewer user qo'shish =====
-@router.post("/markets/{market_id}/create-viewer")
-async def owner_create_viewer(
-    market_id: int,
-    _owner: OwnerUser,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> dict:
-    """Agar bozorda viewer user bo'lmasa — yangi yaratadi."""
-    market = await db.get(Market, market_id)
-    if market is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Bozor topilmadi")
-
-    existing = await db.scalar(
-        select(User).where(User.market_id == market_id, User.role == UserRole.MARKET_VIEWER.value)
-    )
-    if existing:
-        return {"ok": True, "username": existing.username, "already_exists": True}
-
-    admin = await db.scalar(
-        select(User).where(User.market_id == market_id, User.role == UserRole.MARKET_ADMIN.value)
-    )
-    base = admin.username if admin else market.slug
-    viewer_username = f"{base}-view"
-    v_exists = await db.scalar(select(User).where(User.username == viewer_username))
-    if v_exists:
-        viewer_username = f"{base}-view-{market_id}"
-
-    viewer_password = _gen_password()
-    viewer_user = User(
-        username=viewer_username,
-        password_hash=hash_password(viewer_password),
-        role=UserRole.MARKET_VIEWER.value,
-        market_id=market_id,
-        full_name=f"{market.name} viewer",
-        is_active=True,
-    )
-    db.add(viewer_user)
-    await db.commit()
-
-    return {
-        "ok": True,
-        "username": viewer_username,
-        "password": viewer_password,
-        "already_exists": False,
-    }

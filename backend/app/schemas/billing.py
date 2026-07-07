@@ -54,12 +54,8 @@ class ShopOut(BaseModel):
     inn: str | None = None
     shop_type: str | None = None
     purpose: str | None = None
-    contract_no: str | None = None  # dogovor raqami (Excel importdan)
     monthly_rent: Decimal
     is_active: bool
-    billing_due: float | None = None   # shu oy hisoblangan
-    billing_paid: float | None = None  # to'langan
-    billing_debt: float | None = None  # qarz
 
 
 class CounterpartyOut(BaseModel):
@@ -96,8 +92,3 @@ class InnSearchResult(BaseModel):
 class InnDetailOut(BaseModel):
     counterparty: CounterpartyOut
     shops: list[ShopOut]
-    total_due: float = 0.0
-    total_paid: float = 0.0
-    total_debt: float = 0.0
-    year: int | None = None
-    month: int | None = None

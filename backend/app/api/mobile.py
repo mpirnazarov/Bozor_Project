@@ -184,26 +184,18 @@ async def mobile_counterparty(
         )
         if use_market_filter:
             rb_q = rb_q.where(RentBilling.market_id == market_id)
-        # Har magazin uchun ENG KAM QARZLI yozuvni tanlaymiz
-        # (bir oyda bir necha marta import bo'lsa, to'liq to'langan yozuv ustunlik qiladi)
-        _rb_all: dict[str, list] = {}
+        rb_latest: dict[str, RentBilling] = {}
         for rb in (await db.execute(rb_q)).scalars():
-            _rb_all.setdefault(rb.shop_id, []).append(rb)
-        rb_latest: dict[str, RentBilling] = {
-            sid: min(rows, key=lambda r: (float(r.debt or 0), -float(r.paid or 0)))
-            for sid, rows in _rb_all.items()
-        }
+            rb_latest[rb.shop_id] = rb  # shu oy ichidagi oxirgi sana qoladi
         if rb_latest:
-            # JAMI = rent_billing.monthly_amount yig'indisi (fayl bilan har oy yangilanadi).
-            # Shop.monthly_rent eski/static — faylga mos kelmasligi mumkin.
-            # TO'LANGAN = rent_billing.paid.
-            # QARZ = JAMI - TO'LANGAN.
-            rb_due = sum((_f(r.monthly_amount) for r in rb_latest.values()), 0.0)
-            if rb_due <= 0:
-                # Fallback: shop.monthly_rent
-                rb_due = sum((_f(s.monthly_rent) for s in shops_db), 0.0)
-            rb_paid = sum((max(0.0, _f(r.paid)) for r in rb_latest.values()), 0.0)
-            rb_debt = max(0.0, rb_due - rb_paid)
+            # JAMI = Shop.monthly_rent yig'indisi (barqaror; fayldagi xato
+            # Ойлик сумма Jami'ni buzmasligi uchun). Qarz/to'langan rent_billing'dan.
+            rb_due = sum((_f(s.monthly_rent) for s in shops_db), 0.0)
+            rb_debt = sum((max(0.0, _f(r.debt)) for r in rb_latest.values()), 0.0)
+            rb_paid = sum((_f(r.paid) for r in rb_latest.values()), 0.0)
+            # To'langan berilmagan bo'lsa: jami − qarz
+            if rb_paid <= 0 and rb_due > 0:
+                rb_paid = max(0.0, rb_due - rb_debt)
             rent = {"due": rb_due, "paid": rb_paid, "debt": rb_debt}
 
     # 4. Har magazin uchun arenda holati (rent kategoriyasidagi balansdan).

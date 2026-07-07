@@ -74,7 +74,7 @@ async def _build_shop_detail(
                 phone=cp_obj.phone,
             )
 
-    billing = await compute_shop_status(db, shop_id, shop.inn, year, month, market_id=market.id)
+    billing = await compute_shop_status(db, shop_id, shop.inn, year, month)
     return ShopDetailOut(
         shop=ShopOut.model_validate(shop),
         counterparty=cp,
@@ -97,43 +97,6 @@ async def get_shop_by_query(
     ishlatiladi (masalan "01-1-1-026А/012").
     """
     return await _build_shop_detail(shop_id, market, db, year, month)
-
-
-@router.get("/history-by-id", response_model=list[dict])
-async def get_shop_history_by_id(
-    _user: CurrentUser,
-    market: CurrentMarket,
-    db: Annotated[AsyncSession, Depends(get_db)],
-    shop_id: str = Query(...),
-) -> list[dict]:
-    """Do'kon egalik tarixi — qachon kim egalik qilgani (query param orqali)."""
-    from sqlalchemy import select as _sel
-    shop = (await db.execute(
-        _sel(Shop).where(Shop.shop_id == shop_id, Shop.market_id == market.id)
-    )).scalar_one_or_none()
-    if shop is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Do'kon topilmadi")
-
-    rows = (await db.execute(
-        _sel(ShopHistory)
-        .where(ShopHistory.shop_id == shop.id)
-        .order_by(ShopHistory.changed_at.desc())
-        .limit(50)
-    )).scalars().all()
-
-    return [
-        {
-            "id": r.id,
-            "old_inn": r.old_inn,
-            "old_name": r.old_name,
-            "new_inn": r.new_inn,
-            "new_name": r.new_name,
-            "changed_by": r.changed_by,
-            "reason": r.reason,
-            "changed_at": r.changed_at.isoformat() if r.changed_at else None,
-        }
-        for r in rows
-    ]
 
 
 @router.get("/{shop_id}", response_model=ShopDetailOut)

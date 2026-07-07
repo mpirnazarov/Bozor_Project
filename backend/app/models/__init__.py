@@ -18,8 +18,6 @@ from app.models.invoice import Invoice
 from app.models.invoice_payment import InvoicePayment
 from app.models.settings import DASHBOARD_SETTINGS_KEY, HIDE_UNMATCHED_KEY, THEME_SETTINGS_KEY, Setting
 from app.models.shop import Shop
-from app.models.shop_history import ShopHistory
-from app.models.manager_pavilion import ManagerPavilion
 from app.models.user import User, UserRole
 
 __all__ = [
@@ -34,8 +32,6 @@ __all__ = [
     "Counterparty",
     "Pavilion",
     "Shop",
-    "ShopHistory",
-    "ManagerPavilion",
     "MonthlyBalance",
     "BillingCategory",
     "RU_TYPE_TO_CATEGORY",

@@ -77,24 +77,15 @@ async def _latest_rent_billing(
     if year is not None and month is not None:
         import calendar as _cal
         from datetime import date as _d
-        month_start = _d(year, month, 1)
-        month_end   = _d(year, month, _cal.monthrange(year, month)[1])
         q = q.where(
-            RentBilling.bill_date >= month_start,
-            RentBilling.bill_date <= month_end,
+            RentBilling.bill_date >= _d(year, month, 1),
+            RentBilling.bill_date <= _d(year, month, _cal.monthrange(year, month)[1]),
         )
-    # Har magazin uchun ENG KAM QARZLI yozuvni tanlaymiz.
-    # Bir oyda yoki oldingi 45 kunda bir necha marta import bo'lsa,
-    # debt=0 bo'lgan yozuv ustunlik qiladi.
+    # Sana bo'yicha o'sish tartibida — keyin lug'atda oxirgisi qoladi
     q = q.order_by(RentBilling.bill_date.asc())
-    all_rows: dict[str, list[RentBilling]] = {}
-    for rb in (await db.execute(q)).scalars():
-        all_rows.setdefault(rb.shop_id, []).append(rb)
-
     latest: dict[str, RentBilling] = {}
-    for shop_id, rows in all_rows.items():
-        best = min(rows, key=lambda r: (float(r.debt or 0), -float(r.paid or 0)))
-        latest[shop_id] = best
+    for rb in (await db.execute(q)).scalars():
+        latest[rb.shop_id] = rb  # oxirgi (eng katta sana) qoladi
     return latest
 
 
@@ -111,27 +102,20 @@ def _status_from_rent(
     QARZ va TO'LANGAN — rent_billing'dan (eng oxirgi sana).
     Elektr/suv esa eski monthly_balances'dan.
     """
-    # JAMI — rent_billing.monthly_amount (fayl bilan har oy yangilanadi, to'g'ri manba).
-    # Shop.monthly_rent eski/static qiymat bo'lib, faylga mos kelmasligi mumkin.
-    # Fallback: shop_rent (agar rent_billing.monthly_amount 0 bo'lsa).
-    rb_amount = Decimal(str(rb.monthly_amount or 0))
-    if rb_amount > 0:
-        jami = rb_amount
-    elif shop_rent is not None and shop_rent > 0:
-        jami = shop_rent
-    else:
-        jami = Decimal(0)
-
-    # TO'LANGAN — rent_billing.paid (haqiqiy to'lov, to'g'ri manba).
-    tolangan = Decimal(str(rb.paid or 0))
-    if tolangan < 0:
-        tolangan = Decimal(0)
-
-    # QARZ = JAMI − TO'LANGAN (hisoblanadi).
-    qarz = jami - tolangan
+    qarz = Decimal(str(rb.debt or 0))
     if qarz < 0:
         qarz = Decimal(0)
-        tolangan = jami  # to'langan jamidan ko'p bo'lishi mumkin emas
+    tolangan = Decimal(str(rb.paid or 0))
+
+    # JAMI — Shop.monthly_rent (berilgan bo'lsa). Aks holda rent_billing summasi.
+    if shop_rent is not None and shop_rent > 0:
+        jami = shop_rent
+    else:
+        jami = Decimal(str(rb.monthly_amount or 0))
+
+    # To'langan berilmagan bo'lsa: jami − qarz
+    if tolangan <= 0 and jami > 0:
+        tolangan = max(Decimal(0), jami - qarz)
 
     cats = [CategoryBalance(category="rent", due=jami, paid=tolangan, debt=qarz)]
 
@@ -259,15 +243,13 @@ async def compute_batch_status(
     # taqsimlaymiz. Boshqa bozor/demo magazinlari hisobga olinmaydi, aks holda
     # qarz keraksiz ko'p bo'lakka bo'linib, ulush juda kichrayib ketadi.
     inn_shop_count: dict[str, int] = {}
-    # Shu so'rovdagi magazinlar qaysi market(lar)ga tegishli? (har doim hisoblanadi —
-    # rent_billing filtri uchun ham kerak, boshqa bozordagi bir xil shop_id
-    # aralashib ketmasligi uchun)
-    market_ids = list({
-        mid for (mid,) in (await db.execute(
-            select(Shop.market_id).where(Shop.shop_id.in_(shop_ids)).distinct()
-        )).all() if mid is not None
-    })
     if inns:
+        # Shu so'rovdagi magazinlar qaysi market(lar)ga tegishli?
+        market_ids = list({
+            mid for (mid,) in (await db.execute(
+                select(Shop.market_id).where(Shop.shop_id.in_(shop_ids)).distinct()
+            )).all() if mid is not None
+        })
         cnt_q = (
             select(Shop.inn, func.count(Shop.shop_id))
             .where(Shop.inn.in_(list(set(inns))), Shop.is_active.is_(True))
@@ -280,10 +262,7 @@ async def compute_batch_status(
 
     out: dict[str, BillingStatusOut] = {}
     # rent_billing (eng oxirgi sana) bo'lsa — qarz shundan olinadi (blok uchun bayroq)
-    rent_latest = (
-        await _latest_rent_billing(db, shop_ids, market_ids=market_ids or None, year=year, month=month)
-        if USE_RENT_BILLING_BATCH else {}
-    )
+    rent_latest = await _latest_rent_billing(db, shop_ids, year=year, month=month) if USE_RENT_BILLING_BATCH else {}
     for sid in shop_ids:
         inn = shop_inn.get(sid)
         rb = rent_latest.get(sid)
@@ -306,8 +285,7 @@ async def compute_batch_status(
 
 
 async def compute_shop_status(
-    db: AsyncSession, shop_id: str, inn: str | None, year: int, month: int,
-    market_id: int | None = None,
+    db: AsyncSession, shop_id: str, inn: str | None, year: int, month: int
 ) -> BillingStatusOut:
     """Bitta magazin uchun billing statusi."""
     # Eski balanslar (elektr/suv uchun ham kerak)
@@ -320,11 +298,10 @@ async def compute_shop_status(
             (b.due_amount for b in balances if b.due_amount and b.due_amount > 0),
             Decimal(0),
         )
-        # INN ning aktiv magazinlari soni bo'yicha taqsimlash (shu bozorda)
-        cnt_q = select(func.count(Shop.shop_id)).where(Shop.inn == inn, Shop.is_active.is_(True))
-        if market_id is not None:
-            cnt_q = cnt_q.where(Shop.market_id == market_id)
-        cnt = await db.scalar(cnt_q)
+        # INN ning aktiv magazinlari soni bo'yicha taqsimlash
+        cnt = await db.scalar(
+            select(func.count(Shop.shop_id)).where(Shop.inn == inn, Shop.is_active.is_(True))
+        )
         debt_share = inn_debt / max(int(cnt or 1), 1)
 
     # Magazinning belgilangan summasi (JAMI uchun — barqaror manba)
@@ -334,8 +311,7 @@ async def compute_shop_status(
     # rent_billing (eng oxirgi sana) bo'lsa — qarz/to'langan shundan,
     # JAMI esa monthly_rent'dan (fayldagi xato summalardan himoya). Elektr/suv eskidan.
     if USE_RENT_BILLING_SHOP:
-        m_ids = [market_id] if market_id is not None else None
-        rent_latest = await _latest_rent_billing(db, [shop_id], market_ids=m_ids, year=year, month=month)
+        rent_latest = await _latest_rent_billing(db, [shop_id], year=year, month=month)
         rb = rent_latest.get(shop_id)
         if rb is not None:
             return _status_from_rent(

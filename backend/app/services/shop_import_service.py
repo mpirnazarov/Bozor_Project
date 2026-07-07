@@ -14,9 +14,7 @@ from decimal import Decimal, InvalidOperation
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Counterparty, Shop, MonthlyBalance
-from app.models.shop_history import ShopHistory
-from sqlalchemy import update as _update
+from app.models import Counterparty, Shop
 
 # Ustun nomlarini moslashtirish — turli sarlavhalarni qabul qilamiz
 _COL_ALIASES = {
@@ -27,6 +25,9 @@ _COL_ALIASES = {
     "phone": ["phone", "telefon", "тел", "телефон"],
     "purpose": ["purpose", "maqsad", "faoliyat", "shop_type", "tur", "вид"],
 }
+
+# shop_id formati: NN-N-N-NNN (masalan 04-1-1-001). Moslashuvchan: raqam-tire bo'limlar
+_SHOP_ID_RE = re.compile(r"^\d{2}-\d+-\d+-\d+$")
 
 
 def _norm_header(h: str) -> str:
@@ -117,6 +118,10 @@ async def import_shops_csv(
         if not shop_id:
             not_found.append({"row": idx, "reason": "shop_id yo'q", "raw": ",".join(row[:3])})
             continue
+        if not _SHOP_ID_RE.match(shop_id):
+            # format mos kelmasa ham qabul qilamiz, lekin belgilab qo'yamiz
+            errors.append(f"Qator {idx}: shop_id formati g'alati ({shop_id})")
+
         name = get("name")
         inn = _clean_inn(get("inn"))
         rent = _parse_decimal(get("rent"))
@@ -130,7 +135,12 @@ async def import_shops_csv(
                 existing_inns.add(inn)
                 cp_created += 1
             linked += 1
-        # INN yo'q — bu bo'sh do'kon, not_found emas (normal holat)
+        else:
+            not_found.append({
+                "row": idx, "shop_id": shop_id,
+                "reason": "INN yo'q — kontragentga bog'lanmadi",
+                "name": name,
+            })
 
         # Magazin upsert — shop_id VA market_id bo'yicha qidiramiz, shunda
         # turli bozorlarda bir xil shop_id bo'lsa ham aralashmaydi.
@@ -144,69 +154,19 @@ async def import_shops_csv(
         ).scalar_one_or_none()
 
         if existing:
-            old_inn = existing.inn  # DB dagi hozirgi INN (None bo'lishi mumkin)
-            new_inn = inn           # CSV dagi yangi INN (None = bo'sh do'kon)
-            # INN o'zgargan bo'lsa — tarixga yozamiz
-            if old_inn != new_inn:
-                old_cp = (await db.execute(
-                    select(Counterparty).where(Counterparty.inn == old_inn)
-                )).scalar_one_or_none() if old_inn else None
-                new_cp_name = name if inn else None
-                db.add(ShopHistory(
-                    shop_id=existing.id,
-                    old_inn=old_inn,
-                    old_name=old_cp.name if old_cp else None,
-                    new_inn=new_inn,
-                    new_name=new_cp_name,
-                    changed_by="csv_import",
-                    reason="shop_import_csv",
-                ))
-            existing.inn = new_inn
-            # purpose/shop_type ustunidan kelsa yangilaymiz
-            if purpose:
-                existing.purpose = purpose
+            existing.inn = inn or existing.inn
+            existing.shop_type = name or existing.shop_type
+            existing.purpose = purpose or existing.purpose
             if rent:
                 existing.monthly_rent = rent
             existing.source_sheet = source
-
-            # Bo'sh do'kon bo'lganda (new_inn=None):
-            # 1. shop_type ni tozalaymiz (kontragent nomi qolib ketmasin)
-            # 2. qarzni 0 qilamiz — kim bo'lishidan qat'iy nazar
-            if new_inn is None:
-                existing.shop_type = None
-                # Eski egasi bo'lsa — uning qarzini 0 qilamiz
-                if old_inn is not None:
-                    await db.execute(
-                        _update(MonthlyBalance)
-                        .where(MonthlyBalance.inn == old_inn,
-                               MonthlyBalance.market_id == market_id)
-                        .values(due_amount=0, paid_amount=0)
-                    )
-                # Do'kon allaqachon bo'sh edi — shop_history dan yoki
-                # barcha yillar monthly_balances ni shu shop bilan bog'liq INNlar orqali 0 qilamiz
-                else:
-                    from app.models.shop_history import ShopHistory as _SH
-                    # shop_history dan barcha eski INNlarni topamiz
-                    hist_rows = (await db.execute(
-                        select(_SH.old_inn)
-                        .where(_SH.shop_id == existing.id, _SH.old_inn.isnot(None))
-                        .distinct()
-                    )).scalars().all()
-                    for h_inn in hist_rows:
-                        await db.execute(
-                            _update(MonthlyBalance)
-                            .where(MonthlyBalance.inn == h_inn,
-                                   MonthlyBalance.market_id == market_id)
-                            .values(due_amount=0, paid_amount=0)
-                        )
             updated += 1
         else:
             db.add(Shop(
                 shop_id=shop_id,
                 market_id=market_id,
                 inn=inn,
-                # shop_type = name emas! name = kontragent nomi
-                shop_type=purpose or None,
+                shop_type=name or None,
                 purpose=purpose,
                 monthly_rent=rent,
                 source_sheet=source,

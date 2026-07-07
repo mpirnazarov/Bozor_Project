@@ -19,7 +19,7 @@ from app.models.pavilion import Pavilion
 
 router = APIRouter()
 
-MAX_IMAGE_BYTES = 50 * 1024 * 1024  # 50 MB — xarita rasmlari katta bo'lishi mumkin
+MAX_IMAGE_BYTES = 8 * 1024 * 1024  # 8 MB
 
 
 class MapLayerOut(BaseModel):
@@ -55,27 +55,6 @@ def _to_out(m: MapLayer) -> MapLayerOut:
     )
 
 
-@router.get("/legacy-map")
-async def get_legacy_map(
-    _user: CurrentUser,
-    market: CurrentMarket,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> Response:
-    """Eski /map.jpg URL uchun — shu bozorning birinchi faol layer rasmini qaytaradi."""
-    from fastapi.responses import Response as FastAPIResponse
-    result = await db.execute(
-        select(MapLayer)
-        .where(MapLayer.market_id == market.id, MapLayer.image_data.isnot(None))
-        .order_by(MapLayer.display_order)
-        .limit(1)
-    )
-    layer = result.scalar_one_or_none()
-    if layer is None or not layer.image_data:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Xarita topilmadi")
-    raw = base64.b64decode(layer.image_data)
-    return FastAPIResponse(content=raw, media_type="image/jpeg")
-
-
 @router.get("", response_model=list[MapLayerOut])
 async def list_map_layers(
     _user: CurrentUser,
@@ -97,10 +76,30 @@ async def list_map_layers(
     layers = list(rows.scalars())
 
     if not layers:
-        # Yangi bozor — xarita yo'q, bo'sh list qaytaramiz.
-        # Frontend "Xarita hali yuklanmagan" xabarini ko'rsatadi.
-        # O'rikzor uchun eski /map.jpg ga fallback frontend tomonida ham o'chirilgan.
-        return []
+        # Default "1-etaj" — rasmsiz (image yo'q => frontend /map.jpg ga tushadi)
+        default_layer = MapLayer(
+            market_id=market.id,
+            name="1-etaj",
+            display_order=0,
+            is_active=True,
+        )
+        db.add(default_layer)
+        await db.commit()
+        await db.refresh(default_layer)
+
+        # Eski (xaritaga biriktirilmagan) regionlarni shu 1-etajga bog'laymiz,
+        # aks holda ular hech qaysi xaritada ko'rinmaydi ("Pavilionlar topilmadi").
+        await db.execute(
+            update(Pavilion)
+            .where(
+                Pavilion.market_id == market.id,
+                Pavilion.map_layer_id.is_(None),
+            )
+            .values(map_layer_id=default_layer.id)
+        )
+        await db.commit()
+
+        layers = [default_layer]
     else:
         # Migratsiya: agar xaritaga biriktirilmagan eski regionlar bo'lsa,
         # ularni BIRINCHI xaritaga (1-etaj) bog'laymiz. Bu, default 1-etaj
@@ -123,10 +122,6 @@ async def list_map_layers(
             )
             await db.commit()
 
-    # O'rikzor uchun: image_data=None layer (map.jpg, 1-etaj) ni har doim birinchiga
-    # DB da display_order noto'g'ri bo'lishi mumkin — backend da ham sort qilamiz
-    if market.slug == "orikzor":
-        layers.sort(key=lambda m: (0 if m.image_data is None else 1, m.display_order))
     return [_to_out(m) for m in layers]
 
 
@@ -211,7 +206,7 @@ async def upload_map_image(
 
     content = await file.read()
     if len(content) > MAX_IMAGE_BYTES:
-        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Fayl juda katta (50 MB chegarasi)")
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Fayl juda katta (8 MB chegarasi)")
 
     if is_pdf:
         # PDF birinchi sahifasini yuqori sifatли PNG ga aylantiramiz.

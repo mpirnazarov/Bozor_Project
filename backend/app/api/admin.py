@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
-from sqlalchemy import desc, func, select, update as _update
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -17,7 +17,6 @@ from app.models import (
     THEME_SETTINGS_KEY,
     HIDE_UNMATCHED_KEY,
     AuditLog,
-    Counterparty,
     MapLayer,
     MonthlyBalance,
     Pavilion,
@@ -46,7 +45,7 @@ from app.services.rollback_service import (
 from app.models.change_snapshot import ChangeSnapshot
 from app.models.import_log import ImportLog
 from app.utils.safe_fetch import UnsafeUrlError, fetch_url_safely
-from app.services.dashboard_service import get_dashboard_from_settings, get_dashboard_from_market
+from app.services.dashboard_service import get_dashboard_from_settings
 from app.services.import_service import import_balances_xlsx
 from app.services.shop_import_service import import_shops_csv
 
@@ -107,44 +106,28 @@ async def update_theme(
 async def update_dashboard(
     payload: DashboardUpdate,
     admin: AdminUser,
-    market: CurrentMarket,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> DashboardOut:
-    """Dashboard summalarini yangilaydi.
-
-    - O'rikzor: global settings.dashboard_stats (eski xatti-harakat saqlanadi)
-    - Boshqa bozorlar: market.dashboard_stats (har bozor o'z statsiga ega)
-    """
+    """Dashboard summalarini yangilaydi — barcha userlarda ko'rinadi (DB'da)."""
     value = {
         "total": payload.total,
         "paid": payload.paid,
         "services": payload.services.model_dump(),
         "period": payload.period.model_dump() if payload.period else {"year": 2026, "month": 5},
     }
-
-    if market.slug == "orikzor":
-        # Eski yo'l — global settings jadvali
-        setting = await db.get(Setting, DASHBOARD_SETTINGS_KEY)
-        if setting is None:
-            setting = Setting(key=DASHBOARD_SETTINGS_KEY, value=value, updated_by=admin.id)
-            db.add(setting)
-        else:
-            setting.value = value
-            setting.updated_by = admin.id
-        await write_audit(
-            db, admin.id, "update_dashboard", "settings", DASHBOARD_SETTINGS_KEY, value
-        )
-        await db.commit()
-        return await get_dashboard_from_settings(db)
+    setting = await db.get(Setting, DASHBOARD_SETTINGS_KEY)
+    if setting is None:
+        setting = Setting(key=DASHBOARD_SETTINGS_KEY, value=value, updated_by=admin.id)
+        db.add(setting)
     else:
-        # Yangi bozorlar — market.dashboard_stats ga saqlaymiz
-        market.dashboard_stats = value
-        await write_audit(
-            db, admin.id, "update_dashboard", "market", str(market.id), value
-        )
-        await db.commit()
-        await db.refresh(market)
-        return get_dashboard_from_market(market)
+        setting.value = value
+        setting.updated_by = admin.id
+
+    await write_audit(
+        db, admin.id, "update_dashboard", "settings", DASHBOARD_SETTINGS_KEY, value
+    )
+    await db.commit()
+    return await get_dashboard_from_settings(db)
 
 
 @router.put("/shops/{shop_id}")
@@ -1162,344 +1145,4 @@ async def import_electricity(
         skipped_count=len(result.skipped),
         detected_columns=result.detected_columns,
         snapshot_id=snap.id,
-    )
-
-
-# ── INN va dogovor import ────────────────────────────────────────────────────
-from app.services.inn_contract_import_service import import_inn_from_excel
-
-
-class InnImportOut(BaseModel):
-    ok: bool
-    rows_read: int
-    shops_updated: int
-    shops_created: int
-    counterparties_created: int
-    counterparties_updated: int
-    skipped: int
-    not_found: list[str]
-    errors: list[str]
-
-
-@router.post("/import/inn-contract", response_model=InnImportOut)
-async def import_inn_contract(
-    _admin: AdminUser,
-    market: CurrentMarket,
-    db: Annotated[AsyncSession, Depends(get_db)],
-    file: UploadFile = File(...),
-) -> InnImportOut:
-    """Excel'dan do'konlarning INN, dogovor raqami, arenda turi va maqsadini yangilaydi.
-
-    Excel format (Nach_iyun_2026 ko'rinishi):
-    - B ustun: Arenda joyi ID (shop_id)
-    - D ustun: Arenda turi (shop_type)
-    - E ustun: Maqsad (purpose)
-    - F ustun: Kontragent nomi
-    - G ustun: INN
-    - H ustun: Dogovor raqami (contract_no)
-    - I ustun: Dogovor sanasi
-    """
-    content = await file.read()
-    try:
-        result = await import_inn_from_excel(db, content, market_id=market.id)
-        # Audit log
-        await write_audit(
-            db, _admin.id, "import_inn_contract", "shops", file.filename or "excel",
-            {
-                "shops_updated": result.shops_updated,
-                "shops_created": result.shops_created,
-                "counterparties_created": result.counterparties_created,
-                "counterparties_updated": result.counterparties_updated,
-                "not_found_count": len(result.not_found),
-                "not_found": result.not_found,   # to'liq ro'yxat — audit da ko'rinadi
-                "skipped": result.skipped,
-                "rows_read": result.rows_read,
-                "market_id": market.id,
-            },
-        )
-        await db.commit()
-    except Exception as exc:  # noqa: BLE001
-        await db.rollback()
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
-            f"Import xatoligi: {type(exc).__name__}: {exc}",
-        ) from exc
-
-    return InnImportOut(
-        ok=True,
-        rows_read=result.rows_read,
-        shops_updated=result.shops_updated,
-        shops_created=result.shops_created,
-        counterparties_created=result.counterparties_created,
-        counterparties_updated=result.counterparties_updated,
-        skipped=result.skipped,
-        not_found=result.not_found,
-        errors=result.errors[:100],
-    )
-
-
-# ===== SUV TO'LOVLARI IMPORT (monthly_balances, water) =====
-
-class WaterImportOut(BaseModel):
-    ok: bool = True
-    rows_read: int = 0
-    inns: int = 0
-    with_debt: int = 0
-    with_prepaid: int = 0
-    total_debt: float = 0
-    total_prepaid: float = 0
-    year: int = 0
-    month: int = 0
-    errors: list[str] = []
-    skipped: list[dict] = []
-    skipped_count: int = 0
-    detected_columns: dict = {}
-    snapshot_id: int | None = None
-
-
-@router.post("/import/water", response_model=WaterImportOut)
-async def import_water(
-    admin: AdminUser,
-    market: CurrentMarket,
-    db: Annotated[AsyncSession, Depends(get_db)],
-    file: UploadFile = File(...),
-    year: int = Query(...),
-    month: int = Query(..., ge=1, le=12),
-) -> WaterImportOut:
-    """Suv to'lovlarini import qiladi (К оплате=qarz, Предоплата=oldindan).
-
-    INN bo'yicha yig'ib monthly_balances ga (water) yoziladi. Tanlangan
-    yil/oy uchun. Snapshot olinadi — 24 soat ichida ortga qaytarish mumkin.
-
-    Excel format (Остаток задолженности):
-      B: Контрагент | C: Договор | D: Основное арендное место (shop_id) |
-      E: ИНН | F: К оплате (qarz) | G: Предоплата (oldindan to'lov)
-    """
-    from app.services.water_import_service import (
-        import_water_excel, StructureError,
-    )
-    from sqlalchemy import select as _select
-
-    if not file.filename or not file.filename.lower().endswith((".xlsx", ".xlsm")):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Faqat .xlsx fayl")
-    content = await file.read()
-    if len(content) > MAX_UPLOAD_BYTES:
-        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Fayl juda katta (10 MB)")
-
-    try:
-        result = await import_water_excel(db, content, year, month, market.id)
-    except StructureError as exc:
-        await db.rollback()
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
-    except Exception as exc:  # noqa: BLE001
-        await db.rollback()
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
-            f"Import xatosi: {type(exc).__name__}: {exc}",
-        ) from exc
-
-    # Snapshot
-    touched_inns = list(result.agg.keys())
-    snapshot_rows: list[dict] = []
-    if touched_inns:
-        existing = list((await db.execute(
-            _select(MonthlyBalance).where(
-                MonthlyBalance.year == year,
-                MonthlyBalance.month == month,
-                MonthlyBalance.category == "water",
-                MonthlyBalance.inn.in_(touched_inns),
-            )
-        )).scalars())
-        existing_map = {b.inn: b for b in existing}
-        for inn in touched_inns:
-            prev = existing_map.get(inn)
-            key = {"inn": inn, "year": year, "month": month, "category": "water"}
-            snapshot_rows.append({
-                "key": key,
-                "before": None if prev is None else {
-                    "inn": inn, "year": year, "month": month, "category": "water",
-                    "market_id": prev.market_id,
-                    "due_amount": str(prev.due_amount),
-                    "paid_amount": str(prev.paid_amount),
-                },
-            })
-
-    try:
-        audit = await write_audit(
-            db, admin.id, "import_water", "monthly_balances", f"{file.filename} ({year}-{month})",
-            {"inns": result.inns, "with_debt": result.with_debt, "year": year, "month": month},
-        )
-        snap = await save_snapshot(
-            db,
-            action="import_water",
-            table_name="monthly_balances",
-            before_rows=snapshot_rows,
-            user_id=admin.id,
-            market_id=market.id,
-            summary=f"Suv import: {year}-{month:02d} — {result.inns} INN, "
-                    f"{result.with_debt} qarzli",
-            audit_id=audit.id,
-        )
-
-        from sqlalchemy.dialects.postgresql import insert as _pg_insert
-        records = [{
-            "inn": inn, "market_id": market.id, "year": year, "month": month,
-            "category": "water", "due_amount": v["due"], "paid_amount": v["paid"],
-        } for inn, v in result.agg.items()]
-        for i in range(0, len(records), 1000):
-            chunk = records[i:i + 1000]
-            stmt = _pg_insert(MonthlyBalance.__table__).values(chunk)
-            stmt = stmt.on_conflict_do_update(
-                index_elements=["inn", "year", "month", "category"],
-                set_={
-                    "due_amount": stmt.excluded.due_amount,
-                    "paid_amount": stmt.excluded.paid_amount,
-                    "market_id": stmt.excluded.market_id,
-                },
-            )
-            await db.execute(stmt)
-
-        await db.commit()
-    except Exception as exc:  # noqa: BLE001
-        await db.rollback()
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
-            f"Bazaga saqlashda xatolik: {type(exc).__name__}: {exc}",
-        ) from exc
-
-    return WaterImportOut(
-        ok=True,
-        rows_read=result.rows_read,
-        inns=result.inns,
-        with_debt=result.with_debt,
-        with_prepaid=result.with_prepaid,
-        total_debt=float(result.total_debt),
-        total_prepaid=float(result.total_prepaid),
-        year=result.year,
-        month=result.month,
-        errors=result.errors[:100],
-        skipped=result.skipped[:200],
-        skipped_count=len(result.skipped),
-        detected_columns=result.detected_columns,
-        snapshot_id=snap.id,
-    )
-
-
-# ===== BO'SH DO'KONLAR QARZINI 0 QILISH =====
-
-class ClearVacantDebtsOut(BaseModel):
-    ok: bool = True
-    shops_checked: int = 0
-    debts_cleared: int = 0
-    inns_cleared: list[str] = []
-
-class ClearVacantDebtsIn(BaseModel):
-    extra_inns: list[str] = []  # qo'shimcha INNlar (manual kiritish)
-
-
-@router.post("/clear-vacant-debts", response_model=ClearVacantDebtsOut)
-async def clear_vacant_debts(
-    admin: AdminUser,
-    market: CurrentMarket,
-    db: Annotated[AsyncSession, Depends(get_db)],
-    body: ClearVacantDebtsIn = ClearVacantDebtsIn(),
-) -> ClearVacantDebtsOut:
-    """Bo'sh do'konlar (inn=None) bilan bog'liq barcha qarzlarni 0 qiladi.
-
-    1. Barcha bo'sh do'konlarni topadi
-    2. Ularning shop_type ni tozalaydi
-    3. shop_history dan eski INNlarini topadi
-    4. monthly_balances da o'sha INNlar uchun due_amount=0, paid_amount=0 qiladi
-    """
-    from sqlalchemy import select as _sel
-
-    # 1. Barcha bo'sh do'konlar
-    vacant_shops = (await db.execute(
-        _sel(Shop).where(Shop.market_id == market.id, Shop.inn.is_(None))
-    )).scalars().all()
-
-    shops_checked = len(vacant_shops)
-    inns_cleared = []
-
-    from app.models.shop_history import ShopHistory as _SH
-
-    # Bo'sh do'konlarning barcha eski INNlarini shop_history dan topamiz
-    vacant_ids = [s.id for s in vacant_shops]
-
-    # shop_type tozalash
-    for shop in vacant_shops:
-        if shop.shop_type:
-            shop.shop_type = None
-
-    if vacant_ids:
-        # 1. shop_history dan eski INNlar
-        hist_inns = set((await db.execute(
-            _sel(_SH.old_inn)
-            .where(_SH.shop_id.in_(vacant_ids), _SH.old_inn.isnot(None))
-            .distinct()
-        )).scalars().all())
-
-        # 2. Bo'sh do'konlar contract_no si orqali Counterparty topamiz
-        #    (shop_history yo'q bo'lsa ham INN topish uchun)
-        contract_inns: set[str] = set()
-        for shop in vacant_shops:
-            if shop.contract_no:
-                cp = (await db.execute(
-                    _sel(Counterparty)
-                    .where(Counterparty.contract_no == shop.contract_no)
-                    .limit(1)
-                )).scalar_one_or_none()
-                if cp:
-                    contract_inns.add(cp.inn)
-
-        # 3. Bo'sh do'konlarning INN (avval bor edi, keyin None bo'ldi) —
-        #    monthly_balances da shu market dagi qarzlar bilan solishtirish:
-        #    market dagi BARCHA monthly_balances INNlarini olamiz
-        #    va bo'sh do'konlar bilan bog'liq bo'lganlari topamiz
-        all_market_inns = set((await db.execute(
-            _sel(MonthlyBalance.inn)
-            .where(
-                MonthlyBalance.market_id == market.id,
-                MonthlyBalance.due_amount > 0,
-            )
-            .distinct()
-        )).scalars().all())
-
-        # Faqat shop_history + contract_no orqali topilganlarni tozalaymiz
-        all_inns_to_clear = hist_inns | contract_inns
-
-        # Agar yuqoridagilar bo'sh bo'lsa — bu market INNlari ichidan
-        # bo'sh do'konlar bilan mos keladiganini topishga urinamiz
-        # (oxirgi fallback — barcha market qarzlarini emas, faqat topilganlarini)
-        if not all_inns_to_clear:
-            # Hech narsa topilmadi — bu market uchun qarz bo'lgan INNlarni
-            # Counterparty da qidiramiz (contract_no orqali)
-            pass
-
-        # body.extra_inns — manual kiritilgan INNlar
-        all_inns_to_clear |= set(body.extra_inns)
-
-        for h_inn in all_inns_to_clear:
-            await db.execute(
-                _update(MonthlyBalance)
-                .where(
-                    MonthlyBalance.inn == h_inn,
-                    MonthlyBalance.market_id == market.id,
-                )
-                .values(due_amount=0, paid_amount=0)
-            )
-            if h_inn not in inns_cleared:
-                inns_cleared.append(h_inn)
-
-    await write_audit(
-        db, admin.id, "clear_vacant_debts", "monthly_balances", f"market={market.id}",
-        {"shops_checked": shops_checked, "inns_cleared": len(inns_cleared)},
-    )
-    await db.commit()
-
-    return ClearVacantDebtsOut(
-        ok=True,
-        shops_checked=shops_checked,
-        debts_cleared=len(inns_cleared),
-        inns_cleared=inns_cleared,
     )
