@@ -19,7 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import RentBilling
+from app.models import RentBilling, Shop
 
 
 # Ustun aliaslari (normalizatsiya bilan solishtiriladi)
@@ -191,6 +191,36 @@ async def import_rent_billing_excel(
 
     if not records:
         raise StructureError("Hech qanday yaroqli magazin qatori topilmadi")
+
+    # monthly_amount ni Shop.monthly_rent bilan solishtirish va normallashtirish
+    # Agar monthly_amount >> Shop.monthly_rent bo'lsa — bu bitta shop uchun
+    # ko'p do'konning yig'indisi kelgan (1C da asosiy shop). Nisbat bo'yicha tuzatamiz.
+    shop_ids = [r["shop_id"] for r in records]
+    shops_q = await db.execute(
+        select(Shop.shop_id, Shop.monthly_rent)
+        .where(Shop.shop_id.in_(shop_ids), Shop.market_id == market_id)
+    )
+    shop_rent_map: dict[str, Decimal] = {
+        sid: Decimal(str(rent or 0))
+        for sid, rent in shops_q.all()
+    }
+
+    for rec in records:
+        shop_rent = shop_rent_map.get(rec["shop_id"], Decimal(0))
+        file_amount = rec["monthly_amount"]
+
+        # Agar fayldagi summa do'kon ijarasidan sezilarli farq qilsa
+        # (masalan 2x yoki ko'proq) — nisbat bo'yicha tuzatamiz
+        if shop_rent > 0 and file_amount > 0 and file_amount > shop_rent * Decimal("1.5"):
+            ratio = shop_rent / file_amount
+            new_paid = (rec["paid"] * ratio).quantize(Decimal("0.01"))
+            new_debt = max(Decimal(0), shop_rent - new_paid)
+            rec["monthly_amount"] = shop_rent
+            rec["paid"] = new_paid
+            rec["debt"] = new_debt
+        elif shop_rent > 0 and rec["paid"] <= 0:
+            # paid=0 kelsa — amount - debt formulasi
+            rec["paid"] = max(Decimal(0), rec["monthly_amount"] - rec["debt"])
 
     # Upsert (shu sana + magazin bo'yicha)
     CHUNK = 1000
