@@ -6,7 +6,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.deps import CurrentUser
+from app.deps import CurrentMarket, CurrentUser
 from app.models import Counterparty, Shop
 from app.schemas.billing import (
     CounterpartyOut,
@@ -78,17 +78,74 @@ async def debug_inn_debt(
 async def get_inn(
     inn: str,
     _user: CurrentUser,
+    market: CurrentMarket,
     db: Annotated[AsyncSession, Depends(get_db)],
+    year: int | None = Query(None),
+    month: int | None = Query(None, ge=1, le=12),
 ) -> InnDetailOut:
-    """INN bo'yicha kontragent + uning barcha magazinlari."""
+    """INN bo'yicha kontragent + magazinlar + har biriga billing (rent_billing dan)."""
+    from datetime import date as _d, timedelta as _td
+    from app.models import RentBilling, MonthlyBalance
+    from decimal import Decimal
+    import calendar as _cal
+
+    today = _d.today()
+    yr = year or today.year
+    mo = month or today.month
+
     cp = await db.get(Counterparty, inn)
     if cp is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Kontragent topilmadi")
 
-    result = await db.execute(
-        select(Shop).where(Shop.inn == inn).order_by(Shop.shop_id)
-    )
-    shops = [ShopOut.model_validate(s) for s in result.scalars()]
+    shops_db = list((await db.execute(
+        select(Shop).where(Shop.inn == inn, Shop.market_id == market.id)
+        .order_by(Shop.shop_id)
+    )).scalars())
+
+    shop_ids = [s.shop_id for s in shops_db]
+
+    # Rent billing dan har magazin uchun eng yaxshi yozuv (min debt)
+    mstart = _d(yr, mo, 1)
+    mend   = _d(yr, mo, _cal.monthrange(yr, mo)[1])
+    rb_rows = list((await db.execute(
+        select(RentBilling).where(
+            RentBilling.shop_id.in_(shop_ids),
+            RentBilling.market_id == market.id,
+            RentBilling.bill_date >= mstart,
+            RentBilling.bill_date <= mend,
+        ).order_by(RentBilling.bill_date.asc())
+    )).scalars())
+
+    rb_map: dict[str, RentBilling] = {}
+    for rb in rb_rows:
+        prev = rb_map.get(rb.shop_id)
+        if prev is None or float(rb.debt or 0) < float(prev.debt or 0):
+            rb_map[rb.shop_id] = rb
+
+    shops_out = []
+    total_due  = Decimal(0)
+    total_paid = Decimal(0)
+    total_debt = Decimal(0)
+
+    for s in shops_db:
+        so = ShopOut.model_validate(s)
+        rb = rb_map.get(s.shop_id)
+        if rb:
+            amount = Decimal(str(rb.monthly_amount or 0))
+            paid   = Decimal(str(rb.paid or 0))
+            if paid < 0: paid = Decimal(0)
+            debt   = max(Decimal(0), amount - paid)
+            due    = amount
+        else:
+            due = paid = debt = Decimal(0)
+
+        so.__dict__["billing_due"]  = float(due)
+        so.__dict__["billing_paid"] = float(paid)
+        so.__dict__["billing_debt"] = float(debt)
+        shops_out.append(so)
+        total_due  += due
+        total_paid += paid
+        total_debt += debt
 
     return InnDetailOut(
         counterparty=CounterpartyOut(
@@ -98,5 +155,10 @@ async def get_inn(
             contract_date=cp.contract_date.isoformat() if cp.contract_date else None,
             phone=cp.phone,
         ),
-        shops=shops,
+        shops=shops_out,
+        total_due=float(total_due),
+        total_paid=float(total_paid),
+        total_debt=float(total_debt),
+        year=yr,
+        month=mo,
     )

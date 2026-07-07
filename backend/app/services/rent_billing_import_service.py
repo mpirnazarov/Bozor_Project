@@ -166,15 +166,8 @@ async def import_rent_billing_excel(
         seen.add(shop_id)
 
         amount = _to_decimal(get("amount"))
-        debt   = _to_decimal(get("debt"))
-        paid   = _to_decimal(get("paid"))
-
-        # Agar paid = 0 (yoki yo'q) lekin amount va debt bor bo'lsa —
-        # paid = amount - debt formulasidan hisoblaymiz.
-        # Bu Авансы ustuniga ishonmaslik uchun (u 1C da yig'ilgan kredit
-        # balans bo'lib, nafaqat shu oyni o'z ichiga oladi).
-        if paid <= 0 and amount > 0:
-            paid = max(Decimal(0), amount - debt)
+        debt = _to_decimal(get("debt"))
+        paid = _to_decimal(get("paid"))
         inn = _clean_inn(get("inn"))
         name = str(get("name") or "").strip() or None
         contract = str(get("contract") or "").strip() or None
