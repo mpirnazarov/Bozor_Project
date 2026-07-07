@@ -161,11 +161,7 @@ export function HomePage() {
         maxWidth="max-w-2xl"
       >
         {innDetail && (() => {
-          // uchinchi qismi "0" bo'lgan do'konlarni yashiramiz (masalan 01-3-0-093)
-          const visibleShops = innDetail.shops.filter((s) => {
-            const parts = s.shop_id.split("-");
-            return parts.length < 3 || parts[2] !== "0";
-          });
+          const visibleShops = innDetail.shops;
           const visTotal = visibleShops.reduce((acc, s) => ({
             due:  acc.due  + (s.billing_due  ?? 0),
             paid: acc.paid + (s.billing_paid ?? 0),
