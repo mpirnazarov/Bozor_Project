@@ -245,5 +245,46 @@ async def import_rent_billing_excel(
             inn_updates += 1
     res.inn_updates = inn_updates
 
+    # monthly_balances ga ham yozamiz (arenda kategoriyasi, INN bo'yicha yig'ilgan)
+    # Bu APK va web app uchun bir xil manba bo'lishini ta'minlaydi.
+    from app.models import MonthlyBalance
+    year = bill_date.year
+    month = bill_date.month
+
+    # INN bo'yicha yig'amiz: due=monthly_amount, paid=paid, debt=debt (eng yaxshi)
+    inn_agg: dict[str, dict] = {}
+    for rec in records:
+        if not rec["inn"]:
+            continue
+        inn = rec["inn"]
+        if inn not in inn_agg:
+            inn_agg[inn] = {"due": Decimal(0), "paid": Decimal(0)}
+        inn_agg[inn]["due"] += Decimal(str(rec["monthly_amount"] or 0))
+        inn_agg[inn]["paid"] += Decimal(str(rec["paid"] or 0))
+
+    if inn_agg:
+        mb_records = [
+            {
+                "inn": inn,
+                "market_id": market_id,
+                "year": year,
+                "month": month,
+                "category": "rent",
+                "due_amount": v["due"] - v["paid"] if v["due"] > v["paid"] else Decimal(0),
+                "paid_amount": v["paid"],
+            }
+            for inn, v in inn_agg.items()
+        ]
+        mb_stmt = pg_insert(MonthlyBalance.__table__).values(mb_records)
+        mb_stmt = mb_stmt.on_conflict_do_update(
+            index_elements=["inn", "year", "month", "category"],
+            set_={
+                "due_amount": mb_stmt.excluded.due_amount,
+                "paid_amount": mb_stmt.excluded.paid_amount,
+                "market_id": mb_stmt.excluded.market_id,
+            },
+        )
+        await db.execute(mb_stmt)
+
     res.upserted = len(records)
     return res

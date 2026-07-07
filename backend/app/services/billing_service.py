@@ -77,13 +77,15 @@ async def _latest_rent_billing(
     if year is not None and month is not None:
         import calendar as _cal
         from datetime import date as _d
+        month_start = _d(year, month, 1)
+        month_end   = _d(year, month, _cal.monthrange(year, month)[1])
         q = q.where(
-            RentBilling.bill_date >= _d(year, month, 1),
-            RentBilling.bill_date <= _d(year, month, _cal.monthrange(year, month)[1]),
+            RentBilling.bill_date >= month_start,
+            RentBilling.bill_date <= month_end,
         )
-    # Sana bo'yicha o'sish tartibida yuklaymiz, keyin har magazin uchun
-    # ENG KAM QARZLI yozuvni tanlaymiz (bir oyda bir necha marta import
-    # bo'lsa, to'liq to'langan yozuv ham bo'lishi mumkin).
+    # Har magazin uchun ENG KAM QARZLI yozuvni tanlaymiz.
+    # Bir oyda yoki oldingi 45 kunda bir necha marta import bo'lsa,
+    # debt=0 bo'lgan yozuv ustunlik qiladi.
     q = q.order_by(RentBilling.bill_date.asc())
     all_rows: dict[str, list[RentBilling]] = {}
     for rb in (await db.execute(q)).scalars():
@@ -91,8 +93,6 @@ async def _latest_rent_billing(
 
     latest: dict[str, RentBilling] = {}
     for shop_id, rows in all_rows.items():
-        # Eng kam qarzli yozuvni tanlaymiz
-        # (debt=0 bo'lsa — to'liq to'langan, u ustunlik qiladi)
         best = min(rows, key=lambda r: (float(r.debt or 0), -float(r.paid or 0)))
         latest[shop_id] = best
     return latest
