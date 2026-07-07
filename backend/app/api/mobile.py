@@ -188,12 +188,14 @@ async def mobile_counterparty(
         for rb in (await db.execute(rb_q)).scalars():
             rb_latest[rb.shop_id] = rb  # shu oy ichidagi oxirgi sana qoladi
         if rb_latest:
-            # JAMI = Shop.monthly_rent yig'indisi (barqaror, to'g'ri manba).
-            # TO'LANGAN = rent_billing.paid (haqiqiy to'lov, to'g'ri manba).
-            # QARZ = JAMI - TO'LANGAN (hisoblanadi, rb.debt ustuniga ishonilmaydi —
-            # u faylda ba'zan noto'g'ri/eskirgan qiymat saqlaydi va due=paid+debt
-            # tengligini buzgan edi).
-            rb_due = sum((_f(s.monthly_rent) for s in shops_db), 0.0)
+            # JAMI = rent_billing.monthly_amount yig'indisi (fayl bilan har oy yangilanadi).
+            # Shop.monthly_rent eski/static — faylga mos kelmasligi mumkin.
+            # TO'LANGAN = rent_billing.paid.
+            # QARZ = JAMI - TO'LANGAN.
+            rb_due = sum((_f(r.monthly_amount) for r in rb_latest.values()), 0.0)
+            if rb_due <= 0:
+                # Fallback: shop.monthly_rent
+                rb_due = sum((_f(s.monthly_rent) for s in shops_db), 0.0)
             rb_paid = sum((max(0.0, _f(r.paid)) for r in rb_latest.values()), 0.0)
             rb_debt = max(0.0, rb_due - rb_paid)
             rent = {"due": rb_due, "paid": rb_paid, "debt": rb_debt}

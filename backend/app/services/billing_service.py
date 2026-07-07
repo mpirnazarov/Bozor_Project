@@ -102,25 +102,27 @@ def _status_from_rent(
     QARZ va TO'LANGAN — rent_billing'dan (eng oxirgi sana).
     Elektr/suv esa eski monthly_balances'dan.
     """
-    # JAMI — Shop.monthly_rent (berilgan bo'lsa, to'g'ri/barqaror manba).
-    # Aks holda rent_billing summasi.
-    if shop_rent is not None and shop_rent > 0:
+    # JAMI — rent_billing.monthly_amount (fayl bilan har oy yangilanadi, to'g'ri manba).
+    # Shop.monthly_rent eski/static qiymat bo'lib, faylga mos kelmasligi mumkin.
+    # Fallback: shop_rent (agar rent_billing.monthly_amount 0 bo'lsa).
+    rb_amount = Decimal(str(rb.monthly_amount or 0))
+    if rb_amount > 0:
+        jami = rb_amount
+    elif shop_rent is not None and shop_rent > 0:
         jami = shop_rent
     else:
-        jami = Decimal(str(rb.monthly_amount or 0))
+        jami = Decimal(0)
 
     # TO'LANGAN — rent_billing.paid (haqiqiy to'lov, to'g'ri manba).
     tolangan = Decimal(str(rb.paid or 0))
     if tolangan < 0:
         tolangan = Decimal(0)
 
-    # QARZ = JAMI − TO'LANGAN (hisoblanadi). rb.debt ustuniga ISHONILMAYDI —
-    # u faylda eskirgan/noto'g'ri qiymat saqlashi mumkin va Jami=To'langan+Qarz
-    # tengligini buzgan edi.
+    # QARZ = JAMI − TO'LANGAN (hisoblanadi).
     qarz = jami - tolangan
     if qarz < 0:
         qarz = Decimal(0)
-        tolangan = jami  # to'langan jamidan ko'p bo'lishi mumkin emas (haddan tashqari to'lov)
+        tolangan = jami  # to'langan jamidan ko'p bo'lishi mumkin emas
 
     cats = [CategoryBalance(category="rent", due=jami, paid=tolangan, debt=qarz)]
 
