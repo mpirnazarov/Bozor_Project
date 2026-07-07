@@ -25,26 +25,22 @@ apiClient.interceptors.response.use(
 );
 
 // === Multi-bozor: joriy bozor slug'i ===
-// sessionStorage da saqlanadi — sahifa yangilanganida ham qoladi.
-// O'rnatilmasa backend default 'orikzor' ishlatadi.
-const MARKET_KEY = "currentMarket";
+// O'rnatilsa, har bir so'rovga ?market=<slug> qo'shiladi. O'rnatilmasa
+// backend default 'orikzor' ishlatadi — shu sababli bitta bozorli holat
+// o'zgarishsiz ishlaydi.
+let currentMarket: string | null = null;
 
 export function setCurrentMarket(slug: string | null) {
-  if (slug) {
-    sessionStorage.setItem(MARKET_KEY, slug);
-  } else {
-    sessionStorage.removeItem(MARKET_KEY);
-  }
+  currentMarket = slug;
 }
 
 export function getCurrentMarket(): string | null {
-  return sessionStorage.getItem(MARKET_KEY);
+  return currentMarket;
 }
 
 apiClient.interceptors.request.use((config) => {
-  const market = getCurrentMarket();
-  if (market) {
-    config.params = { ...(config.params || {}), market };
+  if (currentMarket) {
+    config.params = { ...(config.params || {}), market: currentMarket };
   }
   return config;
 });

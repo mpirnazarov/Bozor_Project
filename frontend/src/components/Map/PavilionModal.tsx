@@ -18,7 +18,7 @@ interface Props {
 
 type ServiceKey = "all" | "rent" | "electricity" | "water";
 const SERVICE_FILTERS: { key: ServiceKey; tkey: string }[] = [
-  // "Barchasi" vaqtincha o'chirilgan — default arenda
+  { key: "all", tkey: "pav.service.all" },
   { key: "rent", tkey: "pav.service.rent" },
   { key: "electricity", tkey: "pav.service.electricity" },
   { key: "water", tkey: "pav.service.water" },
@@ -63,7 +63,7 @@ function demoSplit(totalDue: number, seed: number): { debt: number; paid: number
 // Yoqilgan bo'lsa, har blok modalida ham o'sha umumiy foiz (paid/total)
 // qo'llanadi: blok To'langan = blok Jami × foiz, Qarz = Jami − To'langan.
 // Keyinroq avtomatik hisobga o'tkazish uchun shu qiymatni `false` qiling.
-const USE_DASHBOARD_PROPORTION = false; // real monthly_balances ishlatiladi
+const USE_DASHBOARD_PROPORTION = true;
 
 /** partial -> unpaid (agar bayroq yoqilgan bo'lsa). Boshqa statuslar o'zgarmaydi. */
 function applyPartialOverride(status: ShopStatus): ShopStatus {
@@ -115,7 +115,7 @@ function statusForService(b: BillingStatus | undefined, service: ServiceKey): {
 }
 
 export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop }: Props) {
-  const [service, setService] = useState<ServiceKey>("rent"); // default arenda ("Barchasi" vaqtincha o'chirilgan
+  const [service, setService] = useState<ServiceKey>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const t = useT();
 

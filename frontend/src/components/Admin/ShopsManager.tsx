@@ -1,12 +1,10 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Upload, Link2, Loader2, CheckCircle2, AlertTriangle, Filter, Store, RefreshCw, Trash2,
+  Upload, Link2, Loader2, CheckCircle2, AlertTriangle, Filter, Store,
 } from "lucide-react";
 import {
   importShopsCsv, importShopsGsheet, type ShopImportResult,
-  importInnContract, type InnContractImportResult,
-  clearVacantDebts, type ClearVacantDebtsResult,
 } from "@/api/admin";
 import { listShops } from "@/api/shops";
 import { useT } from "@/i18n/useT";
@@ -19,16 +17,6 @@ export function ShopsManager() {
   const [result, setResult] = useState<ShopImportResult | null>(null);
   const [err, setErr] = useState("");
   const [onlyNotFound, setOnlyNotFound] = useState(false);
-
-  // INN va dogovor import
-  const [innResult, setInnResult] = useState<InnContractImportResult | null>(null);
-  const [innErr, setInnErr] = useState("");
-  const [innBusy, setInnBusy] = useState(false);
-  const [showAllNotFound, setShowAllNotFound] = useState(false);
-  const [vacantResult, setVacantResult] = useState<ClearVacantDebtsResult | null>(null);
-  const [vacantBusy, setVacantBusy] = useState(false);
-  const [vacantErr, setVacantErr] = useState("");
-  const [extraInns, setExtraInns] = useState("");
 
   // Umumiy magazin statistikasi
   const { data: shopStats } = useQuery({
@@ -62,34 +50,6 @@ export function ShopsManager() {
       setErr(e?.response?.data?.detail ?? "Import xatosi");
     } finally {
       setBusy(false);
-    }
-  }
-
-  async function runClearVacant() {
-    setVacantBusy(true); setVacantErr(""); setVacantResult(null);
-    try {
-      const inns = extraInns.split(/[\n,;\s]+/).map(s => s.trim()).filter(Boolean);
-      const r = await clearVacantDebts(inns);
-      setVacantResult(r);
-      qc.invalidateQueries({ queryKey: ["shops"] });
-    } catch (e: any) {
-      setVacantErr(e?.response?.data?.detail ?? "Xatolik yuz berdi");
-    } finally {
-      setVacantBusy(false);
-    }
-  }
-
-  async function runInnFile(file: File) {
-    setInnBusy(true); setInnErr(""); setInnResult(null);
-    try {
-      const r = await importInnContract(file);
-      setInnResult(r);
-      qc.invalidateQueries({ queryKey: ["shops-stat"] });
-      qc.invalidateQueries({ queryKey: ["shops"] });
-    } catch (e: any) {
-      setInnErr(e?.response?.data?.detail ?? "Import xatosi");
-    } finally {
-      setInnBusy(false);
     }
   }
 
@@ -225,127 +185,6 @@ export function ShopsManager() {
           )}
         </div>
       )}
-
-      {/* INN va dogovor import */}
-      <div className="card space-y-3 p-4">
-        <div className="flex items-center gap-2 text-sm font-bold text-ink">
-          <RefreshCw size={16} className="text-brand" />
-          INN va dogovor ma'lumotlarini yangilash
-        </div>
-        <p className="text-xs text-ink-faint">
-          Excel fayl (Nach_iyun format): B — shop_id, D — arenda turi, E — maqsad, F — kontragent, G — INN, H — dogovor raqami
-        </p>
-        <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 py-5 text-center transition-colors hover:border-brand hover:bg-brand-50">
-          <Upload size={20} className="text-ink-faint" />
-          <span className="text-xs font-semibold text-ink-soft">
-            Excel (.xlsx) faylni yuklang
-          </span>
-          <input
-            type="file"
-            accept=".xlsx,.xls"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) runInnFile(f);
-              e.target.value = "";
-            }}
-          />
-        </label>
-
-        {innErr && (
-          <div className="rounded-xl bg-status-unpaid/10 px-4 py-3 text-sm font-semibold text-status-unpaid">
-            {innErr}
-          </div>
-        )}
-        {innBusy && (
-          <div className="flex items-center gap-2 rounded-xl bg-brand-50 px-4 py-3 text-sm font-semibold text-brand">
-            <Loader2 size={16} className="animate-spin" /> Yangilanmoqda...
-          </div>
-        )}
-        {innResult && (
-          <div className="space-y-2">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <StatBox label="O'qildi" value={innResult.rows_read} tone="ink" icon={<Store size={16} />} />
-              <StatBox label="Yangilandi" value={innResult.shops_updated} tone="paid" icon={<CheckCircle2 size={16} />} />
-              <StatBox label="Yangi do'kon" value={innResult.shops_created} tone="brand" icon={<CheckCircle2 size={16} />} />
-              <StatBox label="Yangi kontragent" value={innResult.counterparties_created} tone="brand" icon={<CheckCircle2 size={16} />} />
-              <StatBox label="Topilmadi" value={innResult.not_found.length} tone="unpaid" icon={<AlertTriangle size={16} />} />
-            </div>
-            <div className="text-xs text-ink-soft">
-              O'tkazib yuborildi: <b>{innResult.skipped}</b> · Kontragent yangilandi: <b>{innResult.counterparties_updated}</b>
-            </div>
-            {innResult.not_found.length > 0 && (
-              <div className="card p-3">
-                <div className="mb-2 flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-status-unpaid">
-                    <AlertTriangle size={13} />
-                    DB da topilmagan shop_id lar ({innResult.not_found.length} ta)
-                  </div>
-                  <button
-                    className={showAllNotFound ? "btn-primary px-3 py-1 text-xs" : "btn-ghost px-3 py-1 text-xs"}
-                    onClick={() => setShowAllNotFound(v => !v)}
-                  >
-                    {showAllNotFound ? "Yig'ish" : "Batafsil (hammasi)"}
-                  </button>
-                </div>
-                <div className={`space-y-1 overflow-y-auto font-mono text-xs text-ink-soft ${showAllNotFound ? "max-h-96" : "max-h-32"}`}>
-                  {(showAllNotFound ? innResult.not_found : innResult.not_found.slice(0, 10)).map((s, i) => (
-                    <div key={i} className="rounded bg-slate-50 px-2 py-0.5">{s}</div>
-                  ))}
-                  {!showAllNotFound && innResult.not_found.length > 10 && (
-                    <button
-                      className="w-full py-1 text-center text-xs font-semibold text-brand"
-                      onClick={() => setShowAllNotFound(true)}
-                    >
-                      Yana {innResult.not_found.length - 10} ta ko'rsatish →
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Bo'sh do'konlar qarzini 0 qilish */}
-      <div className="card space-y-3 p-4">
-        <div className="flex items-center gap-2 text-sm font-bold text-ink">
-          <Trash2 size={16} className="text-status-unpaid" />
-          Bo'sh do'konlar qarzini tozalash
-        </div>
-        <p className="text-xs text-ink-faint">
-          Egasi yo'q (bo'sh) do'konlarning barcha qarzlarini 0 qiladi va turini tozalaydi.
-          CSV importdan keyin ishlatilishi tavsiya etiladi.
-        </p>
-        <textarea
-          className="input w-full font-mono text-xs"
-          rows={3}
-          placeholder="Qo'shimcha INNlar (ixtiyoriy): har birini yangi qatorga yoki vergul bilan\nMasalan: 307123456\n504987654"
-          value={extraInns}
-          onChange={(e) => setExtraInns(e.target.value)}
-        />
-        <button
-          className="btn-primary w-full py-2 text-sm disabled:opacity-50"
-          disabled={vacantBusy}
-          onClick={runClearVacant}
-        >
-          {vacantBusy ? <><Loader2 size={15} className="animate-spin" /> Tozalanmoqda...</> : "Bo'sh do'konlar qarzini 0 qilish"}
-        </button>
-        {vacantErr && (
-          <div className="rounded-xl bg-status-unpaid/10 px-4 py-2 text-sm text-status-unpaid">{vacantErr}</div>
-        )}
-        {vacantResult && (
-          <div className="rounded-xl bg-status-paid/8 p-3 text-sm">
-            <div className="flex items-center gap-2 font-bold text-status-paid">
-              <CheckCircle2 size={15} /> Muvaffaqiyatli
-            </div>
-            <div className="mt-1 text-ink-soft">
-              Tekshirildi: <b>{vacantResult.shops_checked}</b> ta bo'sh do'kon ·
-              Qarz 0 qilindi: <b>{vacantResult.debts_cleared}</b> ta INN
-            </div>
-          </div>
-        )}
-      </div>
 
       {/* Umumiy magazin statistikasi (DB) */}
       {!result && shopStats && (

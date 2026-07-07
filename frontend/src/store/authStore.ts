@@ -4,16 +4,13 @@ import * as authApi from "@/api/auth";
 import { setCurrentMarket } from "@/api/client";
 
 // Foydalanuvchi yuklanganda API client'ga bozorini o'rnatadi.
-// - market_admin/viewer: o'z bozorini (user.market_slug) o'rnatadi
-// - super_admin/owner: sessionStorage ni TEGHMASLIK — u ?market= orqali boshqaradi
-// - logout: tozalash logout() da amalga oshiriladi
+// super_admin uchun NULL (default orikzor yoki ?market bilan tanlaydi).
 function applyMarket(user: User | null) {
-  if (!user) return;
-  if (user.role !== "super_admin" && user.role !== "owner" && user.market_slug) {
+  if (user && user.role !== "super_admin" && user.market_slug) {
     setCurrentMarket(user.market_slug);
+  } else {
+    setCurrentMarket(null);
   }
-  // super_admin va owner uchun sessionStorage ga tegmaymiz:
-  // ular SuperDashboardPage dan bozor tanlaganda setCurrentMarket chaqiriladi
 }
 
 interface AuthState {

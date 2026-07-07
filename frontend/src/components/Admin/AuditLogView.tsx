@@ -3,7 +3,6 @@ import { useState } from "react";
 import {
   Plus, Pencil, Trash2, Upload, Palette, EyeOff, LayoutDashboard,
   Power, Activity, User as UserIcon, Clock, Undo2, RotateCcw, Download, AlertTriangle,
-  ChevronDown, ChevronUp, FileSearch,
 } from "lucide-react";
 import { getAuditLog, revertAction, importLogFileUrl } from "@/api/admin";
 import { useT } from "@/i18n/useT";
@@ -26,7 +25,6 @@ export function AuditLogView() {
   const t = useT();
   const qc = useQueryClient();
   const [revertingId, setRevertingId] = useState<number | null>(null);
-  const [expandedId, setExpandedId] = useState<number | null>(null);
   const { data, isLoading } = useQuery({
     queryKey: ["audit-log"],
     queryFn: () => getAuditLog(100),
@@ -77,62 +75,6 @@ export function AuditLogView() {
 
               {/* Tushunarli izoh */}
               <p className="mt-1 text-sm text-ink-soft">{row.summary}</p>
-
-              {/* INN import — batafsil tugma */}
-              {row.action === "import_inn_contract" && row.changes && (
-                <div className="mt-2">
-                  <button
-                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-ink-soft transition-colors hover:bg-slate-100"
-                    onClick={() => setExpandedId(expandedId === row.id ? null : row.id)}
-                  >
-                    <FileSearch size={13} />
-                    Batafsil
-                    {expandedId === row.id ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                  </button>
-
-                  {expandedId === row.id && (
-                    <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">
-                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                        {[
-                          { label: "Yangilandi",       key: "shops_updated" },
-                          { label: "Yangi do'kon",     key: "shops_created" },
-                          { label: "Yangi kontragent", key: "counterparties_created" },
-                          { label: "Topilmadi",        key: "not_found_count" },
-                          { label: "Market ID",        key: "market_id" },
-                        ].map(({ label, key }) =>
-                          row.changes![key] != null ? (
-                            <div key={key} className="rounded-lg bg-white px-3 py-2 shadow-sm">
-                              <div className="text-ink-faint">{label}</div>
-                              <div className="mt-0.5 font-bold text-ink">{String(row.changes![key])}</div>
-                            </div>
-                          ) : null
-                        )}
-                      </div>
-                      {row.resource_id && (
-                        <div className="mt-2 flex items-center gap-1.5 text-ink-faint">
-                          <Upload size={11} />
-                          Fayl: <span className="font-mono font-semibold text-ink-soft">{row.resource_id}</span>
-                        </div>
-                      )}
-
-                      {/* Topilmagan shop_id lar ro'yxati */}
-                      {Array.isArray(row.changes!.not_found) && (row.changes!.not_found as string[]).length > 0 && (
-                        <div className="mt-3">
-                          <div className="mb-1.5 flex items-center gap-1 font-semibold text-status-unpaid">
-                            <AlertTriangle size={12} />
-                            DB da topilmagan shop_id lar ({(row.changes!.not_found as string[]).length} ta):
-                          </div>
-                          <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-200 bg-white p-2">
-                            {(row.changes!.not_found as string[]).map((sid, i) => (
-                              <div key={i} className="rounded px-2 py-0.5 font-mono text-ink-soft odd:bg-slate-50">{sid}</div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
 
               {/* Resurs + foydalanuvchi */}
               <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-faint">

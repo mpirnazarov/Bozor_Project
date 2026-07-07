@@ -25,21 +25,3 @@ export async function getShop(
   const { data } = await apiClient.get<ShopDetail>(`/shops/by-id`, { params });
   return data;
 }
-
-export interface ShopHistoryEntry {
-  id: number;
-  old_inn: string | null;
-  old_name: string | null;
-  new_inn: string | null;
-  new_name: string | null;
-  changed_by: string | null;
-  reason: string | null;
-  changed_at: string;
-}
-
-export async function getShopHistory(shopId: string): Promise<ShopHistoryEntry[]> {
-  const { data } = await apiClient.get<ShopHistoryEntry[]>("/shops/history-by-id", {
-    params: { shop_id: shopId },
-  });
-  return data;
-}

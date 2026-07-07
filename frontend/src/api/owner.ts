@@ -23,7 +23,6 @@ export interface OwnerMarket {
   created_at: string;
   shop_count: number;
   admin_username: string | null;
-  viewer_username: string | null;
   support: SupportStatus;
 }
 
@@ -32,7 +31,6 @@ export interface NewMarketResult {
   slug: string;
   name: string;
   credentials: { username: string; password: string };
-  viewer_credentials: { username: string; password: string };
 }
 
 export interface SupportPaymentRow {
@@ -349,26 +347,4 @@ export async function deleteInvoice(id: number): Promise<void> {
 
 export function invoiceDocUrl(id: number): string {
   return `${apiClient.defaults.baseURL}/owner/invoices/${id}/doc`;
-}
-
-export async function ownerChangeViewerPassword(marketId: number, newPassword: string): Promise<void> {
-  await apiClient.put(`/owner/markets/${marketId}/viewer-password`, { new_password: newPassword });
-}
-
-export async function ownerGetCredentials(marketId: number): Promise<{
-  admin_username: string | null;
-  viewer_username: string | null;
-}> {
-  const { data } = await apiClient.get(`/owner/markets/${marketId}/credentials`);
-  return data;
-}
-
-export async function ownerCreateViewer(marketId: number): Promise<{
-  ok: boolean;
-  username: string;
-  password?: string;
-  already_exists: boolean;
-}> {
-  const { data } = await apiClient.post(`/owner/markets/${marketId}/create-viewer`);
-  return data;
 }

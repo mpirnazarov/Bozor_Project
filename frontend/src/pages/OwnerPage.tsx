@@ -9,8 +9,6 @@ import {
 } from "lucide-react";
 import {
   ownerListMarkets, ownerCreateMarket, ownerDeleteMarket, ownerChangePassword,
-  ownerChangeViewerPassword,
-  ownerCreateViewer,
   ownerMarkPayment, ownerBlockMarket, getOwnerRailway, getInvoices, getBackups,
   type OwnerMarket, type NewMarketResult, type RailwayOverview,
 } from "@/api/owner";
@@ -48,7 +46,6 @@ export function OwnerPage() {
   const [newContractDoc, setNewContractDoc] = useState<{ data: string; name: string; mime: string } | null>(null);
   const [created, setCreated] = useState<NewMarketResult | null>(null);
   const [pwdFor, setPwdFor] = useState<OwnerMarket | null>(null);
-  const [pwdTarget, setPwdTarget] = useState<"admin" | "viewer">("admin");
   const [newPwd, setNewPwd] = useState("");
   const [showAttention, setShowAttention] = useState(true);
 
@@ -298,23 +295,11 @@ export function OwnerPage() {
             <div className="mb-2 flex items-center gap-2 font-bold text-[#4ade80]">
               <Check size={18} /> «{created.name}» yaratildi
             </div>
-            <p className="mb-3 text-sm text-slate-300">Login va parollarni saqlab oling — parol qayta ko'rsatilmaydi:</p>
-            <div className="mb-3">
-              <div className="mb-1 text-xs font-bold text-slate-400 uppercase tracking-wide">Admin (to'liq boshqaruv)</div>
-              <div className="flex flex-wrap gap-2">
-                <CredBox label="Login" value={created.credentials.username} />
-                <CredBox label="Parol" value={created.credentials.password} />
-              </div>
+            <p className="mb-3 text-sm text-slate-300">Login va parolni saqlab oling — parol qayta ko'rsatilmaydi:</p>
+            <div className="flex flex-wrap gap-2">
+              <CredBox label="Login" value={created.credentials.username} />
+              <CredBox label="Parol" value={created.credentials.password} />
             </div>
-            {created.viewer_credentials && (
-              <div>
-                <div className="mb-1 text-xs font-bold text-slate-400 uppercase tracking-wide">Ko'ruvchi (faqat xarita va hisobot)</div>
-                <div className="flex flex-wrap gap-2">
-                  <CredBox label="Login" value={created.viewer_credentials.username} />
-                  <CredBox label="Parol" value={created.viewer_credentials.password} />
-                </div>
-              </div>
-            )}
             <button onClick={() => setCreated(null)}
               className="mt-3 inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-400 hover:text-white">
               <X size={14} /> Yopish
@@ -345,7 +330,7 @@ export function OwnerPage() {
                 onView={() => navigate(`/?market=${m.slug}`)}
                 onPay={(paid) => payMut.mutate({ id: m.id, y: curY, m: curM, paid })}
                 onBlock={(b) => blockMut.mutate({ id: m.id, b })}
-                onPwd={() => { setPwdFor(m); setPwdTarget("admin"); setNewPwd(""); }}
+                onPwd={() => setPwdFor(m)}
                 onDelete={() => { if (confirm(`«${m.name}» o'chirilsinmi? Bu amalni qaytarib bo'lmaydi.`)) delMut.mutate(m.id); }}
                 busy={payMut.isPending || blockMut.isPending}
               />
@@ -399,34 +384,12 @@ export function OwnerPage() {
       {/* ===== Parol modal ===== */}
       {pwdFor && (
         <Modal onClose={() => setPwdFor(null)} title={`«${pwdFor.name}» parolini o'zgartirish`}>
-          <div className="mb-3 flex gap-2">
-            <button
-              className={`flex-1 rounded-xl py-2 text-sm font-semibold transition-colors ${pwdTarget === "admin" ? "bg-brand text-white" : "bg-white/5 text-slate-400 hover:bg-white/10"}`}
-              onClick={() => setPwdTarget("admin")}
-            >
-              Admin
-            </button>
-            <button
-              className={`flex-1 rounded-xl py-2 text-sm font-semibold transition-colors ${pwdTarget === "viewer" ? "bg-brand text-white" : "bg-white/5 text-slate-400 hover:bg-white/10"}`}
-              onClick={() => setPwdTarget("viewer")}
-            >
-              Ko'ruvchi
-            </button>
-          </div>
-          <div className="mb-2 text-xs text-slate-500">
-            Login: {pwdTarget === "admin" ? (pwdFor.admin_username ?? "—") : (pwdFor.viewer_username ?? "—")}
-          </div>
+          <div className="mb-2 text-xs text-slate-500">Login: {pwdFor.admin_username ?? "—"}</div>
           <input autoFocus type="text" value={newPwd} onChange={(e) => setNewPwd(e.target.value)}
             placeholder="Yangi parol (kamida 6 belgi)"
             className="w-full rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm text-white outline-none transition-all placeholder:text-slate-500 focus:border-[#0066ff] focus:ring-4 focus:ring-[#0066ff]/20" />
           <div className="mt-4 flex gap-2">
-            <button onClick={() => {
-                if (pwdTarget === "admin") {
-                  pwdMut.mutate({ id: pwdFor.id, p: newPwd });
-                } else {
-                  ownerChangeViewerPassword(pwdFor.id, newPwd).then(() => { setPwdFor(null); setNewPwd(""); });
-                }
-              }} disabled={newPwd.length < 6 || pwdMut.isPending}
+            <button onClick={() => pwdMut.mutate({ id: pwdFor.id, p: newPwd })} disabled={newPwd.length < 6 || pwdMut.isPending}
               className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#0066ff] to-[#0090ff] px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">
               <KeyRound size={15} /> Saqlash
             </button>
@@ -650,23 +613,6 @@ function MarketCard({ m, curM, onView, onPay, onBlock, onPwd, onDelete, delay, b
           </div>
           <div className="mt-0.5 font-mono text-xs text-slate-500">
             /{m.slug} · {m.shop_count} magazin · {m.admin_username ?? "—"}
-          </div>
-          <div className="mt-0.5 flex items-center gap-2 font-mono text-xs text-slate-600">
-            {m.viewer_username ? (
-              <span>{m.viewer_username} <span className="text-slate-700">ko'ruvchi</span></span>
-            ) : (
-              <button
-                className="text-brand/60 hover:text-brand transition-colors"
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  const r = await ownerCreateViewer(m.id);
-                  if (!r.already_exists && r.password) {
-                    alert(`Viewer yaratildi!\nLogin: ${r.username}\nParol: ${r.password}\n\nSaqlab oling!`);
-                    window.location.reload();
-                  }
-                }}
-              >+ viewer yaratish</button>
-            )}
           </div>
           {/* status pill */}
           <div className="mt-2.5">

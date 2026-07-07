@@ -1,14 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRef, useState, useCallback, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
-import { Plus, Minus, Maximize2, ChevronLeft, ChevronRight, Layers, MapPin } from "lucide-react";
+import { Plus, Minus, Maximize2, ChevronLeft, ChevronRight, Layers } from "lucide-react";
 import { getPavilions } from "@/api/pavilions";
 import { getMapLayers, mapImageUrl } from "@/api/maps";
-import { getCurrentMarket } from "@/api/client";
 import { Spinner } from "@/components/ui/Modal";
 import type { Pavilion } from "@/types/api";
 import { useT } from "@/i18n/useT";
-import { useAuthStore } from "@/store/authStore";
 
 const VIEW_W = 1568;
 const VIEW_H = 1109;
@@ -28,52 +25,24 @@ interface ViewBox {
 
 export function MapView({ onSelectPavilion }: Props) {
   const t = useT();
-  const user = useAuthStore((s) => s.user);
-  const isMarketAdmin = ["admin", "market_admin"].includes(user?.role ?? "");
-  // URL ?market= parametri — React state, o'zgarganda qayta render bo'ladi
-  const [searchParams] = useSearchParams();
-  const marketSlug = searchParams.get("market") ?? getCurrentMarket() ?? user?.market_slug ?? "orikzor";
 
-  // Bozorning xaritalari (qavatlar). Bo'lmasa — xarita yuklanmagan xabari.
-  const { data: rawLayers } = useQuery({ queryKey: ["map-layers", marketSlug], queryFn: () => getMapLayers(), staleTime: 0, gcTime: 0 });
-
-  // O'rikzor uchun: has_image=false layer (map.jpg, 1-etaj) ni har doim birinchiga qo'yamiz
-  // Chunki DB da display_order noto'g'ri bo'lishi mumkin
-  const layers = rawLayers
-    ? marketSlug === "orikzor"
-      ? [...rawLayers].sort((a, b) => (a.has_image === b.has_image ? a.display_order - b.display_order : a.has_image ? 1 : -1))
-      : rawLayers
-    : rawLayers;
-
+  // Bozorning xaritalari (qavatlar). Bo'lmasa — eski yagona /map.jpg rejimi.
+  const { data: layers } = useQuery({ queryKey: ["map-layers"], queryFn: () => getMapLayers() });
   const [activeIdx, setActiveIdx] = useState(0);
-
-  // marketSlug o'zganda activeIdx ni 0 ga reset — boshqa bozorga o'tganda 1-etaj ko'rinsin
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { setActiveIdx(0); }, [marketSlug]);
-
   const activeLayer = layers && layers.length > 0 ? layers[Math.min(activeIdx, layers.length - 1)] : null;
 
   const { data: pavilions, isLoading, isError, error } = useQuery({
-    queryKey: ["pavilions", marketSlug, activeLayer?.id ?? "all"],
+    queryKey: ["pavilions", activeLayer?.id ?? "all"],
     queryFn: () => getPavilions(activeLayer?.id),
   });
 
   // Joriy qavat rasmi manbasi
-  // has_image bo'lsa — DB dan rasmni ol
-  // has_image yo'q + orikzor — /map.jpg fallback (xarita public/ da)
-  // has_image yo'q + boshqa bozor — undefined (xarita yo'q xabari)
-  const mapSrc = activeLayer?.has_image
-    ? mapImageUrl(activeLayer.id)
-    : marketSlug === "orikzor"
-      ? "/map.jpg"
-      : undefined;
+  const mapSrc = activeLayer?.has_image ? mapImageUrl(activeLayer.id) : "/map.jpg";
 
   // Rasm yuklanmaguncha progress. DIQQAT: hook'lar har doim early return'lardan
   // OLDIN chaqirilishi kerak (React hooks qoidasi).
-  // mapSrc null bo'lsa (xarita yo'q) — loading spinner kerak emas
-  const [imgLoading, setImgLoading] = useState(!!mapSrc);
+  const [imgLoading, setImgLoading] = useState(true);
   useEffect(() => {
-    if (!mapSrc) { setImgLoading(false); return; }
     setImgLoading(true);
     const tmr = window.setTimeout(() => setImgLoading(false), 4000);
     return () => window.clearTimeout(tmr);
@@ -109,6 +78,19 @@ export function MapView({ onSelectPavilion }: Props) {
   }
 
   // Ekran -> viewBox koordinatasi
+  function toVb(clientX: number, clientY: number): { x: number; y: number } {
+    const rect = svgRef.current!.getBoundingClientRect();
+    const px = (clientX - rect.left) / rect.width;
+    const py = (clientY - rect.top) / rect.height;
+    return { x: vb.x + px * vb.w, y: vb.y + py * vb.h };
+  }
+
+  function handleWheel(e: React.WheelEvent) {
+    e.preventDefault();
+    const { x, y } = toVb(e.clientX, e.clientY);
+    applyZoom(e.deltaY < 0 ? 1.2 : 1 / 1.2, x, y);
+  }
+
   function handlePointerDown(e: React.PointerEvent) {
     // DIQQAT: setPointerCapture'ni shu yerda chaqirmaymiz — aks holda region
     // polygonining onClick'i ishlamaydi (pointer SVG'ga qamalib qoladi).
@@ -164,27 +146,10 @@ export function MapView({ onSelectPavilion }: Props) {
   // Faqat HECH narsa bo'lmaganda (xarita ham, region ham yo'q) xabar ko'rsatamiz.
   const noPavilions = !Array.isArray(pavilions) || pavilions.length === 0;
   if (noPavilions && !hasLayer && !isLoading) {
-    // Yangi bozor admini uchun — xaritani yuklash yo'riqnomasi
-    if (isMarketAdmin) {
-      return (
-        <div className="card p-10 text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand/10">
-            <MapPin size={32} className="text-brand" />
-          </div>
-          <h3 className="font-display text-lg font-bold text-ink">Xarita hali yuklanmagan</h3>
-          <p className="mt-2 text-sm text-ink-faint">
-            Bozor xaritasini qo'shish uchun Admin panelga o'ting
-          </p>
-          <p className="mt-1 text-xs text-ink-faint">
-            Admin → Xarita bo'limida xarita rasmini yuklang va regionlarni belgilang
-          </p>
-        </div>
-      );
-    }
-    // Oddiy foydalanuvchi uchun
     return (
       <div className="card p-6 text-center text-sm text-slate-400">
-        Xarita hali tayyorlanmoqda. Iltimos, keyinroq kiring.
+        Pavilionlar topilmadi. Ma'lumotlar bazasi seed qilinmagan yoki API
+        ulanmagan bo'lishi mumkin.
       </div>
     );
   }
@@ -284,27 +249,25 @@ export function MapView({ onSelectPavilion }: Props) {
           cursor: pan.current.active ? "grabbing" : "grab",
         }}
         preserveAspectRatio="xMidYMid meet"
+        onWheel={handleWheel}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
       >
-        {/* mapSrc null bo'lsa (xarita yuklanmagan) SVG image ko'rsatmaymiz — /map.jpg fallback YO'Q */}
-        {mapSrc && (
-          <image
-            href={mapSrc}
-            x="0"
-            y="0"
-            width={VIEW_W}
-            height={VIEW_H}
-            preserveAspectRatio="xMidYMid meet"
-            onLoad={() => setImgLoading(false)}
-            onError={(e) => {
-              setImgLoading(false);
-              (e.target as SVGImageElement).style.display = "none";
-            }}
-          />
-        )}
+        <image
+          href={mapSrc}
+          x="0"
+          y="0"
+          width={VIEW_W}
+          height={VIEW_H}
+          preserveAspectRatio="xMidYMid meet"
+          onLoad={() => setImgLoading(false)}
+          onError={(e) => {
+            setImgLoading(false);
+            (e.target as SVGImageElement).style.display = "none";
+          }}
+        />
 
         {safePavilions.map((p) => {
           const meta = p.meta ?? {};

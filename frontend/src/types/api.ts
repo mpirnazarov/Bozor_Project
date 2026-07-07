@@ -14,7 +14,6 @@ export interface User {
   role: UserRole;
   market_id: number | null;
   market_slug: string | null;
-  market_name: string | null;  // bozor nomi — sarlavhada ko'rsatish uchun
   full_name: string | null;
   email: string | null;
   is_active: boolean;
@@ -130,10 +129,5 @@ export interface InnSearchResult {
 
 export interface InnDetail {
   counterparty: Counterparty;
-  shops: (Shop & { billing_due?: number; billing_paid?: number; billing_debt?: number })[];
-  total_due: number;
-  total_paid: number;
-  total_debt: number;
-  year?: number;
-  month?: number;
+  shops: Shop[];
 }
