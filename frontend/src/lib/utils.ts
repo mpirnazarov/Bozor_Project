@@ -27,3 +27,13 @@ export const STATUS_COLORS: Record<string, string> = {
   unpaid: "#dc2626",
   no_data: "#1f2937",
 };
+
+
+/** Uchinchi segment "0" bo'lgan do'konlarni yashirish kerakmi tekshiradi.
+ *  Masalan: 01-3-0-093 → true (yashirish)
+ *           01-3-1-093 → false (ko'rsatish)
+ */
+export function isZeroSegmentShop(shopId: string): boolean {
+  const parts = shopId.split("-");
+  return parts.length >= 3 && parts[2] === "0";
+}

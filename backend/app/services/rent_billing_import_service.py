@@ -157,6 +157,15 @@ async def import_rent_billing_excel(
         shop_id = str(get("shop_id") or "").strip()
         if not shop_id:
             continue
+
+        # Uchinchi segment "0" bo'lgan do'konlarni o'tkazib yuboramiz
+        # (masalan 01-3-0-093) — ular yordamchi yozuvlar, pul bo'linmasin
+        parts = shop_id.split("-")
+        if len(parts) >= 3 and parts[2] == "0":
+            res.skipped.append({"row": idx, "shop_id": shop_id,
+                                "reason": "Uchinchi segment 0 — o'tkazib yuborildi"})
+            continue
+
         res.rows_read += 1
 
         if shop_id in seen:

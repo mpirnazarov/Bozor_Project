@@ -139,7 +139,7 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
 
   const computed = useMemo(() => {
     if (!data) return [];
-    const list = data.shops.map((s) => {
+    const list = data.shops.filter((s) => !isZeroSegmentShop(s.shop_id)).map((s) => {
       const r = statusForService(data.billing[s.shop_id], service);
       return { shop: s, ...r };
     });

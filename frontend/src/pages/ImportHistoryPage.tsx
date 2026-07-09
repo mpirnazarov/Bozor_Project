@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Search, Loader2, FileDown, Copy, Check } from "lucide-react";
 import { apiClient } from "@/api/client";
-import { fmtUZS } from "@/lib/utils";
+import { fmtUZS, isZeroSegmentShop } from "@/lib/utils";
 import { useT } from "@/i18n/useT";
 
 interface ImportHistoryRow {
@@ -110,7 +110,7 @@ export function ImportHistoryPage() {
   const contragentRows: ContragentRow[] = (() => {
     if (!data) return [];
     const map = new Map<string, ContragentRow>();
-    for (const r of data.rows) {
+    for (const r of data.rows.filter(r => !r.shop_id || !isZeroSegmentShop(r.shop_id))) {
       const key = r.inn ?? "unknown";
       if (!map.has(key)) {
         map.set(key, {
@@ -262,7 +262,7 @@ export function ImportHistoryPage() {
         </div>
       )}
 
-      {viewTab === "detail" && data && data.rows.length > 0 && (
+      {viewTab === "detail" && data && data.rows.filter(r => !r.shop_id || !isZeroSegmentShop(r.shop_id)).length > 0 && (
         <div className="overflow-x-auto rounded-xl border border-slate-100">
           <table className="w-full text-sm">
             <thead>
@@ -278,7 +278,7 @@ export function ImportHistoryPage() {
               </tr>
             </thead>
             <tbody>
-              {data.rows.map((r) => (
+              {data.rows.filter(r => !r.shop_id || !isZeroSegmentShop(r.shop_id)).map((r) => (
                 <tr key={`${r.category}-${r.id}`}
                   className="border-b border-slate-50 transition-colors last:border-0 hover:bg-slate-50/60">
                   <td className="px-3 py-2.5 font-mono text-xs text-ink-soft whitespace-nowrap">
