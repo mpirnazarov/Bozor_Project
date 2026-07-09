@@ -1231,7 +1231,19 @@ async def get_import_history(
             rb_q = rb_q.where(RentBilling.shop_id.ilike(f"%{shop_id}%"))
         rb_q = rb_q.order_by(RentBilling.bill_date.desc(), RentBilling.shop_id)
 
-        for rb in (await db.execute(rb_q)).scalars():
+        rb_list = list((await db.execute(rb_q)).scalars())
+
+        # counterparty_name bo'sh bo'lsa counterparties dan olamiz
+        missing_inns = {rb.inn for rb in rb_list if rb.inn and not rb.counterparty_name}
+        cp_names: dict[str, str] = {}
+        if missing_inns:
+            cp_rows = (await db.execute(
+                _sel(Counterparty.inn, Counterparty.name)
+                .where(Counterparty.inn.in_(missing_inns))
+            )).all()
+            cp_names = {inn: name for inn, name in cp_rows}
+
+        for rb in rb_list:
             # Audit dan fayl nomini topamiz
             key = f"{rb.bill_date.isoformat()}"
             fname = None
@@ -1248,7 +1260,7 @@ async def get_import_history(
                 category="rent",
                 shop_id=rb.shop_id,
                 inn=rb.inn,
-                counterparty_name=rb.counterparty_name,
+                counterparty_name=rb.counterparty_name or cp_names.get(rb.inn or ""),
                 monthly_amount=float(rb.monthly_amount),
                 paid=float(rb.paid),
                 debt=float(rb.debt),
