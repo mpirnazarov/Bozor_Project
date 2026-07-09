@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Search, Loader2, FileDown } from "lucide-react";
+import { ArrowLeft, Search, Loader2, FileDown, Copy, Check } from "lucide-react";
 import { apiClient } from "@/api/client";
 import { fmtUZS } from "@/lib/utils";
 import { useT } from "@/i18n/useT";
@@ -38,7 +38,9 @@ interface ContragentRow {
     paid: number;
     debt: number;
     bill_date: string;
+    filename: string | null;
   }[];
+  files: string[];  // unique fayl nomlari
 }
 
 const CATS = [
@@ -54,6 +56,26 @@ function monthAgo() { const d = new Date(); d.setDate(1); return d.toISOString()
 async function fetchHistory(params: Record<string, string>) {
   const { data } = await apiClient.get<ImportHistoryOut>("/admin/import-history", { params });
   return data;
+}
+
+function CopyableFilename({ filename }: { filename: string }) {
+  const [copied, setCopied] = useState(false);
+  // Extract just filename from "filename (date)" format
+  const display = filename.replace(/\s*\([^)]+\)\s*$/, "").trim() || filename;
+  return (
+    <button
+      className="flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[11px] text-brand hover:bg-brand/10 transition-colors"
+      title="Bosib nusxalash"
+      onClick={() => {
+        navigator.clipboard.writeText(display);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }}
+    >
+      {copied ? <Check size={10} className="text-status-paid" /> : <Copy size={10} />}
+      <span className="max-w-32 truncate">{display}</span>
+    </button>
+  );
 }
 
 export function ImportHistoryPage() {
@@ -99,6 +121,7 @@ export function ImportHistoryPage() {
           total_debt: 0,
           shop_count: 0,
           shops: [],
+          files: [],
         });
       }
       const cr = map.get(key)!;
@@ -112,8 +135,12 @@ export function ImportHistoryPage() {
           paid: r.paid,
           debt: r.debt,
           bill_date: r.bill_date ?? "",
+          filename: r.filename,
         });
         cr.shop_count++;
+      }
+      if (r.filename && !cr.files.includes(r.filename)) {
+        cr.files.push(r.filename);
       }
     }
     return Array.from(map.values()).sort((a, b) => b.total_monthly - a.total_monthly);
@@ -358,6 +385,9 @@ export function ImportHistoryPage() {
                         {s.debt > 0
                           ? <span className="text-status-unpaid">{fmtUZS(s.debt)}</span>
                           : <span className="text-status-paid">✓</span>}
+                      </td>
+                      <td className="px-3 py-2">
+                        {s.filename && <CopyableFilename filename={s.filename} />}
                       </td>
                       <td></td>
                     </tr>
