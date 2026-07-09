@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Download, Filter, Search, Loader2, FileDown } from "lucide-react";
+import { ArrowLeft, Search, Loader2, FileDown } from "lucide-react";
 import { apiClient } from "@/api/client";
 import { fmtUZS } from "@/lib/utils";
 import { useT } from "@/i18n/useT";
