@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { fmtUZS } from "@/lib/utils";
 import { Link, useSearchParams } from "react-router-dom";
 import { LogOut, Settings, ArrowLeft, Info, AlertTriangle } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
@@ -158,107 +157,43 @@ export function HomePage() {
         open={!!activeInn}
         onClose={() => setActiveInn(null)}
         title={innDetail?.counterparty.name ?? "Yuklanmoqda..."}
-        maxWidth="max-w-2xl"
+        maxWidth="max-w-lg"
       >
-        {innDetail && (() => {
-          const visibleShops = innDetail.shops;
-          const visTotal = visibleShops.reduce((acc, s) => ({
-            due:  acc.due  + (s.billing_due  ?? 0),
-            paid: acc.paid + (s.billing_paid ?? 0),
-            debt: acc.debt + (s.billing_debt ?? 0),
-          }), { due: 0, paid: 0, debt: 0 });
-
-          return (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-50 p-3 text-sm sm:grid-cols-4">
-                <div>
-                  <div className="text-xs text-slate-400">INN</div>
-                  <div className="font-mono font-bold text-ink">{innDetail.counterparty.inn}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-slate-400">Shartnoma</div>
-                  <div className="font-semibold text-ink">{innDetail.counterparty.contract_no ?? "—"}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-slate-400">Jami hisoblangan</div>
-                  <div className="font-mono font-bold text-ink">{fmtUZS(visTotal.due)}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-slate-400">Jami to'langan</div>
-                  <div className="font-mono font-bold text-status-paid">{fmtUZS(visTotal.paid)}</div>
-                </div>
+        {innDetail && (
+          <div className="space-y-3">
+            <div className="card p-3 text-sm">
+              <div className="flex justify-between py-1">
+                <span className="text-slate-400">INN</span>
+                <span className="font-mono font-semibold">{innDetail.counterparty.inn}</span>
               </div>
-
-              {visTotal.debt > 0 && (
-                <div className="flex items-center justify-between rounded-xl bg-status-unpaid/10 px-4 py-2.5 text-sm font-bold text-status-unpaid">
-                  <span>Jami qarz</span>
-                  <span className="font-mono">{fmtUZS(visTotal.debt)}</span>
-                </div>
-              )}
-              {visTotal.debt <= 0 && visTotal.paid > 0 && (
-                <div className="flex items-center justify-between rounded-xl bg-status-paid/10 px-4 py-2.5 text-sm font-bold text-status-paid">
-                  <span>To'liq to'langan</span>
-                  <span className="font-mono">{fmtUZS(visTotal.paid)}</span>
-                </div>
-              )}
-
-              <div>
-                <div className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">
-                  Magazinlar ({visibleShops.length}) —{" "}
-                  {innDetail.year && innDetail.month
-                    ? `${innDetail.year}-yil ${innDetail.month}-oy`
-                    : "joriy oy"}
-                </div>
-                <div className="overflow-x-auto rounded-xl border border-slate-100">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-100 bg-slate-50 text-xs text-slate-400">
-                        <th className="px-3 py-2 text-left font-semibold">Magazin ID</th>
-                        <th className="px-3 py-2 text-right font-semibold">Hisoblangan</th>
-                        <th className="px-3 py-2 text-right font-semibold">To'langan</th>
-                        <th className="px-3 py-2 text-right font-semibold">Qarz</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {visibleShops.map((s) => {
-                        const due  = s.billing_due  ?? 0;
-                        const paid = s.billing_paid ?? 0;
-                        const debt = s.billing_debt ?? 0;
-                        return (
-                          <tr key={s.shop_id}
-                            className="cursor-pointer border-b border-slate-50 transition-colors last:border-0 hover:bg-brand-50"
-                            onClick={() => { setActiveInn(null); setActiveShop(s.shop_id); }}
-                          >
-                            <td className="px-3 py-2.5 font-mono font-semibold text-brand">{s.shop_id}</td>
-                            <td className="px-3 py-2.5 text-right font-mono text-ink-soft">
-                              {due > 0 ? fmtUZS(due) : "—"}
-                            </td>
-                            <td className="px-3 py-2.5 text-right font-mono text-status-paid">
-                              {paid > 0 ? fmtUZS(paid) : "—"}
-                            </td>
-                            <td className={`px-3 py-2.5 text-right font-mono font-bold ${debt > 0 ? "text-status-unpaid" : "text-status-paid"}`}>
-                              {debt > 0 ? fmtUZS(debt) : "✓"}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                    <tfoot className="border-t-2 border-slate-200 bg-slate-50 text-xs font-bold">
-                      <tr>
-                        <td className="px-3 py-2 text-slate-400">Jami</td>
-                        <td className="px-3 py-2 text-right font-mono text-ink">{fmtUZS(visTotal.due)}</td>
-                        <td className="px-3 py-2 text-right font-mono text-status-paid">{fmtUZS(visTotal.paid)}</td>
-                        <td className={`px-3 py-2 text-right font-mono ${visTotal.debt > 0 ? "text-status-unpaid" : "text-status-paid"}`}>
-                          {visTotal.debt > 0 ? fmtUZS(visTotal.debt) : "✓"}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
+              <div className="flex justify-between py-1">
+                <span className="text-slate-400">Shartnoma</span>
+                <span className="font-semibold">
+                  {innDetail.counterparty.contract_no ?? "—"}
+                </span>
               </div>
             </div>
-          );
-        })()}
+            <div>
+              <div className="mb-1.5 text-xs font-bold text-slate-500">
+                Magazinlar ({innDetail.shops.length})
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {innDetail.shops.map((s) => (
+                  <button
+                    key={s.shop_id}
+                    onClick={() => {
+                      setActiveInn(null);
+                      setActiveShop(s.shop_id);
+                    }}
+                    className="rounded-md bg-slate-100 px-2 py-1 font-mono text-xs font-semibold text-slate-600 hover:bg-slate-200"
+                  >
+                    {s.shop_id}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

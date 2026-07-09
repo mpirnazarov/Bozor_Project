@@ -129,10 +129,5 @@ export interface InnSearchResult {
 
 export interface InnDetail {
   counterparty: Counterparty;
-  shops: (Shop & { billing_due?: number; billing_paid?: number; billing_debt?: number })[];
-  total_due: number;
-  total_paid: number;
-  total_debt: number;
-  year?: number;
-  month?: number;
+  shops: Shop[];
 }
