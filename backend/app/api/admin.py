@@ -1287,14 +1287,26 @@ async def get_import_history(
             mb_q = mb_q.where(MonthlyBalance.inn == inn)
         mb_q = mb_q.order_by(MonthlyBalance.year.desc(), MonthlyBalance.month.desc())
 
-        for mb in (await db.execute(mb_q)).scalars():
+        mb_list = list((await db.execute(mb_q)).scalars())
+
+        # counterparties dan nom olish
+        mb_inns = {mb.inn for mb in mb_list if mb.inn}
+        mb_cp_names: dict[str, str] = {}
+        if mb_inns:
+            mb_cp_rows = (await db.execute(
+                _sel(Counterparty.inn, Counterparty.name)
+                .where(Counterparty.inn.in_(mb_inns))
+            )).all()
+            mb_cp_names = {inn: name for inn, name in mb_cp_rows}
+
+        for mb in mb_list:
             rows.append(ImportHistoryRow(
                 id=mb.id,
                 bill_date=f"{mb.year}-{mb.month:02d}-01",
                 category=mb.category,
                 shop_id=None,
                 inn=mb.inn,
-                counterparty_name=None,
+                counterparty_name=mb_cp_names.get(mb.inn or ""),
                 monthly_amount=None,
                 paid=float(mb.paid_amount),
                 debt=float(mb.due_amount),
