@@ -24,6 +24,7 @@ from app.models import (
     Shop,
     User,
 )
+from app.models.rent_billing import RentBilling as RentBilling  # import tarixi uchun
 from app.schemas.admin import (
     AuditLogOut,
     DashboardUpdate,
