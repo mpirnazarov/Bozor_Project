@@ -25,6 +25,22 @@ interface ImportHistoryOut {
   total: number;
 }
 
+interface ContragentRow {
+  inn: string;
+  counterparty_name: string | null;
+  total_monthly: number;
+  total_paid: number;
+  total_debt: number;
+  shop_count: number;
+  shops: {
+    shop_id: string;
+    monthly_amount: number;
+    paid: number;
+    debt: number;
+    bill_date: string;
+  }[];
+}
+
 const CATS = [
   { key: "all",         label: "Hammasi" },
   { key: "rent",        label: "Arenda" },
@@ -42,11 +58,13 @@ async function fetchHistory(params: Record<string, string>) {
 
 export function ImportHistoryPage() {
   const t = useT();
+  const [viewTab, setViewTab] = useState<"detail" | "contragent">("detail");
   const [dateFrom, setDateFrom] = useState(monthAgo());
   const [dateTo,   setDateTo]   = useState(today());
-  const [category, setCategory] = useState("all");
+  const [category, setCategory] = useState("rent");
   const [innFilter, setInnFilter]   = useState("");
   const [shopFilter, setShopFilter] = useState("");
+  const [expandedInn, setExpandedInn] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const PER_PAGE = 50;
 
@@ -65,6 +83,41 @@ export function ImportHistoryPage() {
   });
 
   const totalPages = data ? Math.ceil(data.total / PER_PAGE) : 1;
+
+  // Kontragent kesimi — INN bo'yicha guruhlaymiz
+  const contragentRows: ContragentRow[] = (() => {
+    if (!data) return [];
+    const map = new Map<string, ContragentRow>();
+    for (const r of data.rows) {
+      const key = r.inn ?? "unknown";
+      if (!map.has(key)) {
+        map.set(key, {
+          inn: key,
+          counterparty_name: r.counterparty_name,
+          total_monthly: 0,
+          total_paid: 0,
+          total_debt: 0,
+          shop_count: 0,
+          shops: [],
+        });
+      }
+      const cr = map.get(key)!;
+      if (r.monthly_amount != null) cr.total_monthly += r.monthly_amount;
+      cr.total_paid += r.paid;
+      cr.total_debt += r.debt;
+      if (r.shop_id) {
+        cr.shops.push({
+          shop_id: r.shop_id,
+          monthly_amount: r.monthly_amount ?? 0,
+          paid: r.paid,
+          debt: r.debt,
+          bill_date: r.bill_date ?? "",
+        });
+        cr.shop_count++;
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => b.total_monthly - a.total_monthly);
+  })();
 
   function catLabel(c: string) {
     const m: Record<string,string> = { rent: "Arenda", electricity: "Elektr", water: "Suv" };
@@ -94,6 +147,22 @@ export function ImportHistoryPage() {
         <Link to="/admin" className="btn-ghost px-3.5 py-2">
           <ArrowLeft size={16} /> {t("common.back")}
         </Link>
+      </div>
+
+      {/* Ko'rinish tanlash */}
+      <div className="mb-4 flex gap-1 rounded-xl bg-slate-100 p-1">
+        <button
+          className={`flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${viewTab === "detail" ? "bg-white text-ink shadow-sm" : "text-ink-faint hover:text-ink"}`}
+          onClick={() => setViewTab("detail")}
+        >
+          Batafsil (magazin bo'yicha)
+        </button>
+        <button
+          className={`flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${viewTab === "contragent" ? "bg-white text-ink shadow-sm" : "text-ink-faint hover:text-ink"}`}
+          onClick={() => setViewTab("contragent")}
+        >
+          Kontragent kesimi
+        </button>
       </div>
 
       {/* Filtrlar */}
@@ -160,13 +229,13 @@ export function ImportHistoryPage() {
         </div>
       )}
 
-      {data && data.rows.length === 0 && !isLoading && (
+      {viewTab === "detail" && data && data.rows.length === 0 && !isLoading && (
         <div className="card p-10 text-center text-sm text-ink-faint">
           Ma'lumot topilmadi
         </div>
       )}
 
-      {data && data.rows.length > 0 && (
+      {viewTab === "detail" && data && data.rows.length > 0 && (
         <div className="overflow-x-auto rounded-xl border border-slate-100">
           <table className="w-full text-sm">
             <thead>
@@ -231,8 +300,80 @@ export function ImportHistoryPage() {
         </div>
       )}
 
+      {/* Kontragent kesimi */}
+      {viewTab === "contragent" && !isLoading && (
+        <div className="overflow-x-auto rounded-xl border border-slate-100">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-100 bg-slate-50 text-xs text-slate-400">
+                <th className="px-3 py-2.5 text-left font-semibold">INN</th>
+                <th className="px-3 py-2.5 text-left font-semibold">Kontragent</th>
+                <th className="px-3 py-2.5 text-right font-semibold">Do'konlar</th>
+                <th className="px-3 py-2.5 text-right font-semibold">Oylik jami</th>
+                <th className="px-3 py-2.5 text-right font-semibold">To'langan</th>
+                <th className="px-3 py-2.5 text-right font-semibold">Qarz</th>
+                <th className="px-3 py-2.5 text-left font-semibold">Taqsimlash</th>
+              </tr>
+            </thead>
+            <tbody>
+              {contragentRows.map((cr) => (
+                <>
+                  <tr key={cr.inn}
+                    className="border-b border-slate-100 transition-colors hover:bg-slate-50/60">
+                    <td className="px-3 py-2.5 font-mono text-xs text-ink-soft">{cr.inn}</td>
+                    <td className="px-3 py-2.5 text-xs font-semibold text-ink">{cr.counterparty_name ?? "—"}</td>
+                    <td className="px-3 py-2.5 text-right text-xs text-ink-soft">{cr.shop_count}</td>
+                    <td className="px-3 py-2.5 text-right font-mono text-xs text-ink">{fmtUZS(cr.total_monthly)}</td>
+                    <td className="px-3 py-2.5 text-right font-mono text-xs font-semibold text-status-paid">{fmtUZS(cr.total_paid)}</td>
+                    <td className="px-3 py-2.5 text-right font-mono text-xs font-bold">
+                      {cr.total_debt > 0
+                        ? <span className="text-status-unpaid">{fmtUZS(cr.total_debt)}</span>
+                        : <span className="text-status-paid">✓</span>}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      {cr.shops.length > 0 && (
+                        <button
+                          className="text-xs font-semibold text-brand hover:underline"
+                          onClick={() => setExpandedInn(expandedInn === cr.inn ? null : cr.inn)}
+                        >
+                          {expandedInn === cr.inn ? "Yig'ish ▲" : "Ko'rsatish ▼"}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                  {expandedInn === cr.inn && cr.shops.map((s, i) => (
+                    <tr key={i} className="border-b border-slate-50 bg-brand/3 last:border-0">
+                      <td className="py-2 pl-8 pr-3 font-mono text-[11px] text-brand" colSpan={2}>
+                        └ {s.shop_id}
+                        <span className="ml-2 text-ink-faint">{formatDate(s.bill_date)}</span>
+                      </td>
+                      <td></td>
+                      <td className="px-3 py-2 text-right font-mono text-[11px] text-ink-soft">
+                        {s.monthly_amount > 0 ? fmtUZS(s.monthly_amount) : "—"}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono text-[11px] text-status-paid">
+                        {s.paid > 0 ? fmtUZS(s.paid) : "—"}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono text-[11px] font-bold">
+                        {s.debt > 0
+                          ? <span className="text-status-unpaid">{fmtUZS(s.debt)}</span>
+                          : <span className="text-status-paid">✓</span>}
+                      </td>
+                      <td></td>
+                    </tr>
+                  ))}
+                </>
+              ))}
+            </tbody>
+          </table>
+          {contragentRows.length === 0 && (
+            <div className="py-10 text-center text-sm text-ink-faint">Ma'lumot topilmadi</div>
+          )}
+        </div>
+      )}
+
       {/* Pagination */}
-      {totalPages > 1 && (
+      {viewTab === "detail" && totalPages > 1 && (
         <div className="mt-4 flex items-center justify-between text-sm">
           <span className="text-ink-faint">
             Sahifa {page} / {totalPages} ({data?.total} ta)
