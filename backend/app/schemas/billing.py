@@ -56,6 +56,9 @@ class ShopOut(BaseModel):
     purpose: str | None = None
     monthly_rent: Decimal
     is_active: bool
+    billing_due: float | None = None
+    billing_paid: float | None = None
+    billing_debt: float | None = None
 
 
 class CounterpartyOut(BaseModel):
@@ -92,3 +95,8 @@ class InnSearchResult(BaseModel):
 class InnDetailOut(BaseModel):
     counterparty: CounterpartyOut
     shops: list[ShopOut]
+    total_due: float = 0.0
+    total_paid: float = 0.0
+    total_debt: float = 0.0
+    year: int | None = None
+    month: int | None = None
