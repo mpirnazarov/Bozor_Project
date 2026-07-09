@@ -17,6 +17,7 @@ from app.models import (
     THEME_SETTINGS_KEY,
     HIDE_UNMATCHED_KEY,
     AuditLog,
+    Counterparty,
     MapLayer,
     MonthlyBalance,
     Pavilion,
