@@ -18,7 +18,6 @@ interface Props {
 
 type ServiceKey = "all" | "rent" | "electricity" | "water";
 const SERVICE_FILTERS: { key: ServiceKey; tkey: string }[] = [
-  { key: "all", tkey: "pav.service.all" },
   { key: "rent", tkey: "pav.service.rent" },
   { key: "electricity", tkey: "pav.service.electricity" },
   { key: "water", tkey: "pav.service.water" },
