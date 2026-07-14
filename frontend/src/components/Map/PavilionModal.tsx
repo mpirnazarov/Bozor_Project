@@ -115,7 +115,7 @@ function statusForService(b: BillingStatus | undefined, service: ServiceKey): {
 }
 
 export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop }: Props) {
-  const [service, setService] = useState<ServiceKey>("all");
+  const [service, setService] = useState<ServiceKey>("rent"); // default arenda
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const t = useT();
 
@@ -152,7 +152,8 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
           return { shop: s, status: "unpaid" as ShopStatus, due: 0, paid: 0, debt: 0 };
         }
         // INN bor lekin billing yo'q — to'lov qilinmagan = unpaid
-        if (s.inn && r.status === "no_data" && service === "rent") {
+        if (s.inn && r.status === "no_data") {
+          // Billing yo'q lekin INN bor — to'lov qilinmagan = unpaid
           const monthlyRent = Number(s.monthly_rent ?? 0);
           return { shop: s, status: "unpaid" as ShopStatus,
                    due: monthlyRent, paid: 0, debt: monthlyRent };
