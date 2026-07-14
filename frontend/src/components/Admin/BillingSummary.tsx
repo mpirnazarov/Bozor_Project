@@ -90,7 +90,7 @@ export function BillingSummary() {
             {MONTHS[month - 1]} {year} · {data.total.block_count} blok · {data.total.shop_count} magazin
           </div>
 
-          {/* Layoutlar (qavatlar) bo'yicha */}
+          {/* Layoutlar (qavatlar) bo'yicha — vaqtincha yashirilgan
           {data.layers.length > 1 && (
             <div className="mb-6">
               <h3 className="mb-2 text-sm font-bold uppercase tracking-wide text-ink-faint">
@@ -126,7 +126,7 @@ export function BillingSummary() {
                 </table>
               </div>
             </div>
-          )}
+          )} */}
         </>
       )}
     </div>
