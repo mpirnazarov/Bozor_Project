@@ -8,6 +8,7 @@ import {
   importRentBilling, type RentBillingImportResult,
   importInnPayments, type InnPaymentImportResult,
   importElectricity, type ElectricityImportResult,
+  importWater, type WaterImportResult,
 } from "@/api/admin";
 
 const MONTHS = [

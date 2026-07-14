@@ -27,3 +27,8 @@ export const STATUS_COLORS: Record<string, string> = {
   unpaid: "#dc2626",
   no_data: "#1f2937",
 };
+
+export function isZeroSegmentShop(shopId: string): boolean {
+  const parts = shopId.split("-");
+  return parts.length >= 3 && parts[2] === "0";
+}
