@@ -666,17 +666,18 @@ async def billing_summary(
                              "shop_count": 0, "block_count": 0}
         layer_agg[lk]["due"] += due
         layer_agg[lk]["paid"] += paid
-        layer_agg[lk]["debt"] += debt
+        # debt ni yig'maymiz — oxirida due-paid dan hisoblaymiz
         layer_agg[lk]["shop_count"] += len(shops)
         layer_agg[lk]["block_count"] += 1
 
         grand["due"] += due
         grand["paid"] += paid
-        grand["debt"] += debt
+        # grand debt ham oxirida hisoblanadi
         grand["shop_count"] += len(shops)
 
     layers_out = []
     for lk, a in layer_agg.items():
+        layer_debt = max(Decimal(0), a["due"] - a["paid"])
         layers_out.append({
             "layer_id": lk,
             "name": layer_name.get(lk) or "Asosiy xarita",
@@ -684,7 +685,7 @@ async def billing_summary(
             "shop_count": a["shop_count"],
             "total_due": float(a["due"]),
             "total_paid": float(a["paid"]),
-            "total_debt": float(a["debt"]),
+            "total_debt": float(layer_debt),
         })
     layers_out.sort(key=lambda x: (x["layer_id"] is None, x["layer_id"] or 0))
 
@@ -695,7 +696,7 @@ async def billing_summary(
         "total": {
             "total_due": float(grand["due"]),
             "total_paid": float(grand["paid"]),
-            "total_debt": float(grand["debt"]),
+            "total_debt": float(max(Decimal(0), grand["due"] - grand["paid"])),
             "shop_count": grand["shop_count"],
             "block_count": len(blocks_out),
         },

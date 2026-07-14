@@ -114,7 +114,12 @@ export function BillingSummary() {
                         <td className="tabnum p-3 text-right text-ink-soft">{l.block_count}</td>
                         <td className="tabnum p-3 text-right font-semibold text-ink">{fmtUZS(l.total_due)}</td>
                         <td className="tabnum p-3 text-right text-status-paid">{fmtUZS(l.total_paid)}</td>
-                        <td className="tabnum p-3 text-right text-status-unpaid">{fmtUZS(l.total_debt)}</td>
+                        <td className="tabnum p-3 text-right">
+                          {l.total_paid > l.total_due
+                            ? <span className="text-blue-600">+{fmtUZS(l.total_paid - l.total_due)}</span>
+                            : <span className="text-status-unpaid">{fmtUZS(Math.max(0, l.total_due - l.total_paid))}</span>
+                          }
+                        </td>
                       </tr>
                     ))}
                   </tbody>
