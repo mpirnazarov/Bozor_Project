@@ -4,7 +4,7 @@ import { Loader2 } from "lucide-react";
 import { getPavilionShops } from "@/api/pavilions";
 import { getHideUnmatched } from "@/api/admin";
 import { getDashboard } from "@/api/dashboard";
-import { STATUS_COLORS, fmtUZS, isZeroSegmentShop } from "@/lib/utils";
+import { STATUS_COLORS, fmtUZS } from "@/lib/utils";
 import { Modal, Spinner } from "@/components/ui/Modal";
 import { useT } from "@/i18n/useT";
 import type { ShopStatus, BillingStatus, CategoryBalance } from "@/types/api";
@@ -139,7 +139,7 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
 
   const computed = useMemo(() => {
     if (!data) return [];
-    const list = data.shops.filter((s) => !isZeroSegmentShop(s.shop_id)).map((s) => {
+    const list = data.shops.map((s) => {
       const r = statusForService(data.billing[s.shop_id], service);
       return { shop: s, ...r };
     });

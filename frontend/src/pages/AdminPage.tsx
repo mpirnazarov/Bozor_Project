@@ -56,9 +56,6 @@ export function AdminPage() {
         <div className="flex items-center gap-2">
           <LanguageSwitcher />
           <ThemeToggle />
-          <Link to="/import-history" className="btn-ghost px-3.5 py-2 text-sm">
-            Import tarixi
-          </Link>
           <Link to="/" className="btn-ghost px-3.5 py-2">
             <ArrowLeft size={16} /> {t("common.back")}
           </Link>
