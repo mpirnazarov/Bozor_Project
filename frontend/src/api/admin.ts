@@ -329,3 +329,47 @@ export async function importElectricity(file: File, year: number, month: number)
   );
   return data;
 }
+
+export interface WaterImportResult {
+  ok: boolean;
+  rows_read: number;
+  inns: number;
+  with_debt: number;
+  with_prepaid: number;
+  total_debt: number;
+  total_prepaid: number;
+  year: number;
+  month: number;
+  errors: string[];
+  skipped: { row: number; shop_id: string; reason: string }[];
+  skipped_count: number;
+  detected_columns: Record<string, number>;
+  snapshot_id: number | null;
+}
+
+export async function importWater(file: File, year: number, month: number): Promise<WaterImportResult> {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await apiClient.post<WaterImportResult>(
+    "/admin/import/water", form,
+    { params: { year, month }, headers: { "Content-Type": "multipart/form-data" } }
+  );
+  return data;
+}
+
+export interface VacantShopsUploadResult {
+  ok: boolean;
+  marked_vacant: number;
+  marked_not_vacant: number;
+  not_found: string[];
+}
+
+export async function uploadVacantShops(file: File): Promise<VacantShopsUploadResult> {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await apiClient.post<VacantShopsUploadResult>(
+    "/admin/vacant-shops/upload", form,
+    { headers: { "Content-Type": "multipart/form-data" } }
+  );
+  return data;
+}

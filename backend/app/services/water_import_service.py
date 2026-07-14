@@ -1,11 +1,5 @@
 """Suv to'lovlari import (monthly_balances, category=water).
 
-Fayl formati suv hisobi excelidan ("Остаток задолженности" sarlavhali):
-Ustunlar: № п.п. | Контрагент | Договор | Основное арендное место | ИНН |
-          К оплате (qarz) | Предоплата (oldindan to'lov).
-
-Faqat shop_id va INN bor qatorlar ishlanadi.
-
 Fayl ("для Лутфуллы" formati): sarlavha 4-5 qatorlarda, ma'lumot keyin.
 Ustunlar: № п.п. | Контрагент | Основное арендное место (magazin ID) | ИНН |
           К оплате (qarz) | Предоплата (oldindan to'lov).
@@ -87,7 +81,7 @@ class StructureError(Exception):
 
 
 @dataclass
-class WaterImportResult:
+class ElecImportResult:
     rows_read: int = 0
     inns: int = 0
     with_debt: int = 0
@@ -108,8 +102,8 @@ async def import_water_excel(
     year: int,
     month: int,
     market_id: int = 1,
-) -> WaterImportResult:
-    res = WaterImportResult(year=year, month=month)
+) -> ElecImportResult:
+    res = ElecImportResult(year=year, month=month)
 
     try:
         wb = load_workbook(io.BytesIO(content), data_only=True, read_only=True)
