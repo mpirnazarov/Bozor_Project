@@ -1149,3 +1149,81 @@ async def import_electricity(
         detected_columns=result.detected_columns,
         snapshot_id=snap.id,
     )
+
+
+# ===== BO'SH DO'KONLAR ROYHATI UPLOAD =====
+class VacantShopsUploadOut(BaseModel):
+    ok: bool = True
+    marked_vacant: int = 0
+    marked_not_vacant: int = 0
+    not_found: list[str] = []
+
+
+@router.post("/vacant-shops/upload", response_model=VacantShopsUploadOut)
+async def upload_vacant_shops(
+    admin: AdminUser,
+    market: CurrentMarket,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    file: UploadFile = File(...),
+) -> VacantShopsUploadOut:
+    """Bo'sh do'konlar ro'yxatini yuklaydi (CSV yoki Excel, shop_id ustuni).
+    Fayldagi shop_id lar is_vacant=True, qolganlar is_vacant=False bo'ladi.
+    """
+    from io import BytesIO
+    import openpyxl as _xl, csv as _csv
+
+    content = await file.read()
+    fname = (file.filename or "").lower()
+    shop_ids_from_file: set[str] = set()
+
+    if fname.endswith((".xlsx", ".xlsm")):
+        wb = _xl.load_workbook(BytesIO(content), read_only=True, data_only=True)
+        ws = wb.active
+        for row in ws.iter_rows(values_only=True):
+            for cell in row:
+                val = str(cell or "").strip()
+                if val and val.lower() != "shop_id":
+                    shop_ids_from_file.add(val)
+    elif fname.endswith(".csv"):
+        text = content.decode("utf-8-sig", errors="replace")
+        for row in _csv.reader(text.splitlines()):
+            for cell in row:
+                val = cell.strip()
+                if val and val.lower() != "shop_id":
+                    shop_ids_from_file.add(val)
+    else:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Faqat .xlsx yoki .csv fayl")
+
+    all_shops = (await db.execute(
+        select(Shop).where(Shop.market_id == market.id)
+    )).scalars().all()
+    shop_map = {s.shop_id: s for s in all_shops}
+
+    marked_vacant = 0
+    marked_not_vacant = 0
+    not_found: list[str] = []
+
+    for s in all_shops:
+        if s.shop_id in shop_ids_from_file:
+            if not s.is_vacant:
+                s.is_vacant = True
+                marked_vacant += 1
+        else:
+            if s.is_vacant:
+                s.is_vacant = False
+                marked_not_vacant += 1
+
+    for sid in shop_ids_from_file:
+        if sid not in shop_map:
+            not_found.append(sid)
+
+    await write_audit(
+        db, admin.id, "upload_vacant_shops", "shops", file.filename or "csv",
+        {"marked_vacant": marked_vacant, "not_found_count": len(not_found)},
+    )
+    await db.commit()
+
+    return VacantShopsUploadOut(
+        ok=True, marked_vacant=marked_vacant,
+        marked_not_vacant=marked_not_vacant, not_found=not_found[:100],
+    )

@@ -139,10 +139,20 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
 
   const computed = useMemo(() => {
     if (!data) return [];
-    const list = data.shops.map((s) => {
-      const r = statusForService(data.billing[s.shop_id], service);
-      return { shop: s, ...r };
-    });
+    const list = data.shops
+      .filter((s) => !isZeroSegmentShop(s.shop_id))
+      .map((s) => {
+        // Bo'sh do'kon (is_vacant=true) — har doim no_data
+        if (s.is_vacant) {
+          return { shop: s, status: "no_data" as ShopStatus, due: 0, paid: 0, debt: 0 };
+        }
+        // INN yo'q va bo'sh emas — "egasi topilmagan" = unpaid
+        if (!s.inn) {
+          return { shop: s, status: "unpaid" as ShopStatus, due: 0, paid: 0, debt: 0 };
+        }
+        const r = statusForService(data.billing[s.shop_id], service);
+        return { shop: s, ...r };
+      });
     // Topilmagan berkitilgan bo'lsa — no_data magazinlarni chiqarib tashlaymiz
     return hideUnmatched ? list.filter((c) => c.status !== "no_data") : list;
   }, [data, service, hideUnmatched]);
