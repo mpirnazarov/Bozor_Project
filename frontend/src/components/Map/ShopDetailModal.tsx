@@ -71,8 +71,13 @@ export function ShopDetailModal({ shopId, onClose }: Props) {
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               {(["rent", "electricity", "water"] as const).map((cat) => {
                 const c = data.billing?.categories.find((x) => x.category === cat);
-                const due = Number(c?.due ?? 0);
+                let due = Number(c?.due ?? 0);
                 const paid = Number(c?.paid ?? 0);
+                // Arenda uchun billing yo'q bo'lsa — monthly_rent dan fallback
+                // (to'lov qilinmagan = qarz = monthly_rent)
+                if (cat === "rent" && due === 0 && paid === 0 && data.shop?.inn) {
+                  due = Number(data.shop.monthly_rent ?? 0);
+                }
                 const debt = Math.max(0, due - paid);
                 const hasData = due > 0 || paid > 0;
                 return (

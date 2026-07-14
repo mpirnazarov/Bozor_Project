@@ -142,15 +142,21 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
     const list = data.shops
       .filter((s) => !isZeroSegmentShop(s.shop_id))
       .map((s) => {
-        // Bo'sh do'kon (is_vacant=true) — har doim no_data
-        if (s.is_vacant) {
+        // Bo'sh do'kon (is_vacant=true) — no_data
+        if (s.is_vacant === true) {
           return { shop: s, status: "no_data" as ShopStatus, due: 0, paid: 0, debt: 0 };
         }
-        // INN yo'q va bo'sh emas — "egasi topilmagan" = unpaid
-        if (!s.inn) {
+        const r = statusForService(data.billing[s.shop_id], service);
+        // INN yo'q — "egasi topilmagan" = unpaid
+        if (!s.inn && r.status === "no_data") {
           return { shop: s, status: "unpaid" as ShopStatus, due: 0, paid: 0, debt: 0 };
         }
-        const r = statusForService(data.billing[s.shop_id], service);
+        // INN bor lekin billing yo'q — to'lov qilinmagan = unpaid
+        if (s.inn && r.status === "no_data" && service === "rent") {
+          const monthlyRent = Number(s.monthly_rent ?? 0);
+          return { shop: s, status: "unpaid" as ShopStatus,
+                   due: monthlyRent, paid: 0, debt: monthlyRent };
+        }
         return { shop: s, ...r };
       });
     // Topilmagan berkitilgan bo'lsa — no_data magazinlarni chiqarib tashlaymiz
