@@ -5,6 +5,8 @@ import { Spinner } from "@/components/ui/Modal";
 import { LoginPage } from "@/pages/LoginPage";
 import { HomePage } from "@/pages/HomePage";
 import { AdminPage } from "@/pages/AdminPage";
+import { ManagersPage } from "@/pages/ManagersPage";
+import { ImportHistoryPage } from "@/pages/ImportHistoryPage";
 import { SuperDashboardPage } from "@/pages/SuperDashboardPage";
 import { SuperAdminPage } from "@/pages/SuperAdminPage";
 import { OwnerPage } from "@/pages/OwnerPage";
@@ -105,6 +107,22 @@ export function AppRoutes() {
         element={
           <Protected adminOnly>
             <AdminPage />
+          </Protected>
+        }
+      />
+      <Route
+        path="/managers"
+        element={
+          <Protected adminOnly>
+            <ManagersPage />
+          </Protected>
+        }
+      />
+      <Route
+        path="/import-history"
+        element={
+          <Protected adminOnly>
+            <ImportHistoryPage />
           </Protected>
         }
       />
