@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import {
   importShopsCsv, importShopsGsheet, type ShopImportResult,
+  uploadVacantShops, type VacantShopsUploadResult,
 } from "@/api/admin";
 import { listShops } from "@/api/shops";
 import { useT } from "@/i18n/useT";
@@ -186,6 +187,9 @@ export function ShopsManager() {
         </div>
       )}
 
+      {/* Bo'sh do'konlar ro'yxati upload */}
+      <VacantShopsUploader />
+
       {/* Umumiy magazin statistikasi (DB) */}
       {!result && shopStats && (
         <div className="card p-4">
@@ -194,6 +198,65 @@ export function ShopsManager() {
             {shopStats.total?.toLocaleString("uz-UZ") ?? 0}
           </div>
           <div className="text-xs text-ink-faint">{t("shopsmgr.totalShops")}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function VacantShopsUploader() {
+  const qc = useQueryClient();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<VacantShopsUploadResult | null>(null);
+  const [err, setErr] = useState("");
+
+  async function handleFile(file: File) {
+    setBusy(true); setErr(""); setResult(null);
+    try {
+      const r = await uploadVacantShops(file);
+      setResult(r);
+      qc.invalidateQueries({ queryKey: ["shops"] });
+    } catch (e: unknown) {
+      const ex = e as { response?: { data?: { detail?: string } } };
+      setErr(ex?.response?.data?.detail ?? "Xatolik yuz berdi");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card space-y-3 p-4">
+      <div className="flex items-center gap-2 text-sm font-bold text-ink">
+        <span>🏚</span> Bo'sh do'konlar ro'yxati
+      </div>
+      <p className="text-xs text-ink-faint">
+        CSV yoki Excel (.xlsx) yuklang — faqat bitta ustun: <b>shop_id</b>.<br />
+        Fayldagi do'konlar <b>bo'sh</b> deb belgilanadi, qolganlardan bo'sh belgisi olib tashlanadi.
+      </p>
+      <input ref={fileRef} type="file" accept=".csv,.xlsx" className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ""; }} />
+      <button
+        className="btn-primary w-full py-2 text-sm disabled:opacity-50"
+        disabled={busy}
+        onClick={() => fileRef.current?.click()}
+      >
+        {busy ? "Yuklanmoqda..." : "Fayl tanlash va yuklash"}
+      </button>
+      {err && <div className="rounded-xl bg-status-unpaid/10 px-3 py-2 text-sm text-status-unpaid">{err}</div>}
+      {result && (
+        <div className="rounded-xl bg-status-paid/8 px-3 py-2 text-sm">
+          <div className="font-bold text-status-paid">✓ Muvaffaqiyatli</div>
+          <div className="mt-1 text-ink-soft">
+            Bo'sh belgilandi: <b>{result.marked_vacant}</b> ta ·
+            Bo'sh belgisi olib tashlandi: <b>{result.marked_not_vacant}</b> ta
+          </div>
+          {result.not_found.length > 0 && (
+            <div className="mt-1 text-status-unpaid text-xs">
+              Topilmadi: {result.not_found.slice(0, 5).join(", ")}
+              {result.not_found.length > 5 ? ` va yana ${result.not_found.length - 5} ta` : ""}
+            </div>
+          )}
         </div>
       )}
     </div>
