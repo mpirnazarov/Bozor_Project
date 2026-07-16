@@ -159,19 +159,23 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
         if (s.is_vacant === true) {
           return { shop: s, status: "vacant" as ShopStatus, due: 0, paid: 0, debt: 0 };
         }
-        const r = statusForService(data.billing[s.shop_id], service);
-        // INN yo'q — "egasi topilmagan" = unpaid
-        if (!s.inn && r.status === "no_data") {
+        // Rang uchun DOIM uchala kategoriyani tekshiramiz (service tanlovi faqat jadval uchun)
+        const rAll = statusForService(data.billing[s.shop_id], "all");
+        // Tanlangan service uchun due/paid/debt (jadval uchun)
+        const rService = statusForService(data.billing[s.shop_id], service);
+
+        // INN yo'q — egasi topilmagan
+        if (!s.inn && rAll.status === "no_data") {
           return { shop: s, status: "unpaid" as ShopStatus, due: 0, paid: 0, debt: 0 };
         }
-        // INN bor lekin billing yo'q — to'lov qilinmagan = unpaid
-        if (s.inn && r.status === "no_data") {
-          // Billing yo'q lekin INN bor — to'lov qilinmagan = unpaid
+        // INN bor lekin billing umuman yo'q
+        if (s.inn && rAll.status === "no_data") {
           const monthlyRent = Number(s.monthly_rent ?? 0);
           return { shop: s, status: "unpaid" as ShopStatus,
                    due: monthlyRent, paid: 0, debt: monthlyRent };
         }
-        return { shop: s, ...r };
+        // Rang = uchala kategoriya bo'yicha (rAll), due/paid/debt = tanlangan service bo'yicha
+        return { shop: s, ...rService, status: rAll.status };
       });
     // Topilmagan berkitilgan bo'lsa — no_data magazinlarni chiqarib tashlaymiz
     return hideUnmatched ? list.filter((c) => c.status !== "no_data" && c.status !== "vacant") : list;
