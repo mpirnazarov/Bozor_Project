@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.deps import AdminUser, CurrentMarket
+from app.models.rent_billing import RentBilling as RentBilling  # import tarixi
 from app.models import (
     DASHBOARD_SETTINGS_KEY,
     THEME_SETTINGS_KEY,
@@ -1273,3 +1274,171 @@ async def import_water(
         skipped_count=len(result.skipped), detected_columns=result.detected_columns,
         snapshot_id=snap.id,
     )
+# ===== IMPORT TARIXI (RentBilling + MonthlyBalance) =====
+
+class ImportHistoryRow(BaseModel):
+    id: int
+    bill_date: str | None
+    category: str           # rent | electricity | water | balances
+    shop_id: str | None     # arenda uchun
+    inn: str | None
+    counterparty_name: str | None
+    monthly_amount: float | None  # arenda
+    paid: float             # to'langan
+    debt: float             # qarz
+    filename: str | None    # import fayl nomi (audit_log dan)
+    imported_at: str        # import sanasi
+
+
+class ImportHistoryOut(BaseModel):
+    rows: list[ImportHistoryRow]
+    total: int
+
+
+@router.get("/import-history", response_model=ImportHistoryOut)
+async def get_import_history(
+    _admin: AdminUser,
+    market: CurrentMarket,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    date_from: str = Query(..., description="Boshlanish sana (YYYY-MM-DD)"),
+    date_to: str = Query(..., description="Tugash sana (YYYY-MM-DD)"),
+    category: str = Query("all", description="rent | electricity | water | all"),
+    inn: str | None = Query(None),
+    shop_id: str | None = Query(None),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=200),
+) -> ImportHistoryOut:
+    """Import qilingan billing ma'lumotlari tarixi.
+
+    Arenda: rent_billing jadvalidan (shop_id + bill_date bo'yicha).
+    Elektr/Suv: monthly_balances jadvalidan (inn + oy bo'yicha).
+    """
+    from datetime import date as _d, datetime as _dt
+    from sqlalchemy import select as _sel, and_ as _and, func as _func
+
+    try:
+        df = _d.fromisoformat(date_from)
+        dt = _d.fromisoformat(date_to)
+    except ValueError:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Sana formati noto'g'ri")
+
+    # Audit log dan fayl nomlari (rent_billing import uchun)
+    audit_rows = (await db.execute(
+        _sel(AuditLog).where(
+            AuditLog.action.in_(["import_rent_billing", "import_billing",
+                                  "import_inn_payments", "import_electricity", "import_water"]),
+            AuditLog.created_at >= _dt.combine(df, _dt.min.time()),
+            AuditLog.created_at <= _dt.combine(dt, _dt.max.time()),
+        ).order_by(AuditLog.created_at.desc())
+    )).scalars().all()
+
+    # bill_date -> filename mapping (rent_billing uchun)
+    bill_date_filename: dict[str, str] = {}
+    imported_at_map: dict[str, str] = {}
+    for a in audit_rows:
+        if a.resource_id:
+            # resource_id = "filename (YYYY-MM-DD)" formatida
+            bill_date_filename[a.resource_id] = a.resource_id
+            imported_at_map[a.resource_id] = a.created_at.isoformat()
+
+    rows: list[ImportHistoryRow] = []
+
+    # === ARENDA (rent_billing) ===
+    if category in ("rent", "all"):
+        rb_q = _sel(RentBilling).where(
+            RentBilling.market_id == market.id,
+            RentBilling.bill_date >= df,
+            RentBilling.bill_date <= dt,
+        )
+        if inn:
+            rb_q = rb_q.where(RentBilling.inn == inn)
+        if shop_id:
+            rb_q = rb_q.where(RentBilling.shop_id.ilike(f"%{shop_id}%"))
+        rb_q = rb_q.order_by(RentBilling.bill_date.desc(), RentBilling.shop_id)
+
+        rb_list = list((await db.execute(rb_q)).scalars())
+
+        # counterparty_name bo'sh bo'lsa counterparties dan olamiz
+        missing_inns = {rb.inn for rb in rb_list if rb.inn and not rb.counterparty_name}
+        cp_names: dict[str, str] = {}
+        if missing_inns:
+            cp_rows = (await db.execute(
+                _sel(Counterparty.inn, Counterparty.name)
+                .where(Counterparty.inn.in_(missing_inns))
+            )).all()
+            cp_names = {_inn: _name for _inn, _name in cp_rows}
+
+        for rb in rb_list:
+            # Audit dan fayl nomini topamiz
+            key = f"{rb.bill_date.isoformat()}"
+            fname = None
+            imp_at = rb.updated_at.isoformat() if getattr(rb, "updated_at", None) else None
+            for resource_id, fn in bill_date_filename.items():
+                if key in resource_id:
+                    fname = fn
+                    imp_at = imported_at_map.get(resource_id, imp_at)
+                    break
+
+            rows.append(ImportHistoryRow(
+                id=rb.id,
+                bill_date=rb.bill_date.isoformat(),
+                category="rent",
+                shop_id=rb.shop_id,
+                inn=rb.inn,
+                counterparty_name=rb.counterparty_name or cp_names.get(rb.inn or ""),
+                monthly_amount=float(rb.monthly_amount),
+                paid=float(rb.paid),
+                debt=float(rb.debt),
+                filename=fname,
+                imported_at=imp_at or "",
+            ))
+
+    # === ELEKTR va SUV (monthly_balances) ===
+    cats = []
+    if category == "electricity": cats = ["electricity"]
+    elif category == "water":     cats = ["water"]
+    elif category == "all":       cats = ["electricity", "water"]
+
+    if cats:
+        mb_q = _sel(MonthlyBalance).where(
+            MonthlyBalance.market_id == market.id,
+            MonthlyBalance.category.in_(cats),
+            # oy filtr: df.year/month dan dt.year/month gacha
+            _func.make_date(MonthlyBalance.year, MonthlyBalance.month, 1) >= df.replace(day=1),
+            _func.make_date(MonthlyBalance.year, MonthlyBalance.month, 1) <= dt.replace(day=1),
+        )
+        if inn:
+            mb_q = mb_q.where(MonthlyBalance.inn == inn)
+        mb_q = mb_q.order_by(MonthlyBalance.year.desc(), MonthlyBalance.month.desc())
+
+        mb_list = list((await db.execute(mb_q)).scalars())
+
+        # counterparties dan nom olish
+        mb_inns = {mb.inn for mb in mb_list if mb.inn}
+        mb_cp_names: dict[str, str] = {}
+        if mb_inns:
+            mb_cp_rows = (await db.execute(
+                _sel(Counterparty.inn, Counterparty.name)
+                .where(Counterparty.inn.in_(mb_inns))
+            )).all()
+            mb_cp_names = {_inn: _name for _inn, _name in mb_cp_rows}
+
+        for mb in mb_list:
+            rows.append(ImportHistoryRow(
+                id=mb.id,
+                bill_date=f"{mb.year}-{mb.month:02d}-01",
+                category=mb.category,
+                shop_id=None,
+                inn=mb.inn,
+                counterparty_name=mb_cp_names.get(mb.inn or ""),
+                monthly_amount=None,
+                paid=float(mb.paid_amount),
+                debt=float(mb.due_amount),
+                filename=None,
+                imported_at="",
+            ))
+
+    total = len(rows)
+    start = (page - 1) * per_page
+    return ImportHistoryOut(rows=rows[start:start + per_page], total=total)
+
