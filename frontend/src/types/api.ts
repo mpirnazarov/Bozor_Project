@@ -82,7 +82,7 @@ export interface Counterparty {
   phone: string | null;
 }
 
-export type ShopStatus = "paid" | "partial" | "unpaid" | "no_data";
+export type ShopStatus = "paid" | "partial" | "unpaid" | "no_data" | "vacant";
 
 export interface CategoryBalance {
   category: string;
