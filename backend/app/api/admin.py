@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.deps import AdminUser, CurrentMarket
+from app.models.rent_billing import RentBilling as RentBilling  # import tarixi
 from app.models import (
     DASHBOARD_SETTINGS_KEY,
     THEME_SETTINGS_KEY,
@@ -1145,4 +1146,382 @@ async def import_electricity(
         skipped_count=len(result.skipped),
         detected_columns=result.detected_columns,
         snapshot_id=snap.id,
+    )
+
+
+# ===== SUV TO'LOVLARI IMPORT =====
+class WaterImportOut(BaseModel):
+    ok: bool = True
+    rows_read: int = 0
+    inns: int = 0
+    with_debt: int = 0
+    with_prepaid: int = 0
+    total_debt: float = 0
+    total_prepaid: float = 0
+    year: int = 0
+    month: int = 0
+    errors: list[str] = []
+    skipped: list[dict] = []
+    skipped_count: int = 0
+    detected_columns: dict = {}
+    snapshot_id: int | None = None
+
+
+@router.post("/import/water", response_model=WaterImportOut)
+async def import_water(
+    admin: AdminUser,
+    market: CurrentMarket,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    file: UploadFile = File(...),
+    year: int = Query(...),
+    month: int = Query(..., ge=1, le=12),
+) -> WaterImportOut:
+    """Suv to'lovlarini import qiladi (К оплате=qarz, Предоплата=oldindan)."""
+    from app.services.water_import_service import import_water_excel, StructureError
+    from sqlalchemy import select as _select
+    from sqlalchemy.dialects.postgresql import insert as _pg_insert
+
+    fname = file.filename or ""
+    if not fname.lower().endswith((".xlsx", ".xlsm")):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"Faqat .xlsx fayl qabul qilinadi. Siz yuborgan fayl: '{fname}'. "
+            "Agar .xls fayl bo'lsa — LibreOffice yoki Excel orqali .xlsx ga o'tkazib yuboring."
+        )
+    content = await file.read()
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Fayl juda katta (10 MB)")
+
+    try:
+        result = await import_water_excel(db, content, year, month, market.id)
+    except StructureError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"Excel strukturasi mos kelmadi. {exc}"
+        ) from exc
+    except Exception as exc:
+        await db.rollback()
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"Import xatosi: {type(exc).__name__}: {exc}"
+        ) from exc
+
+    touched_inns = list(result.agg.keys())
+    snapshot_rows: list[dict] = []
+    if touched_inns:
+        existing = list((await db.execute(
+            _select(MonthlyBalance).where(
+                MonthlyBalance.year == year,
+                MonthlyBalance.month == month,
+                MonthlyBalance.category == "water",
+                MonthlyBalance.inn.in_(touched_inns),
+            )
+        )).scalars())
+        existing_map = {b.inn: b for b in existing}
+        for inn in touched_inns:
+            prev = existing_map.get(inn)
+            snapshot_rows.append({
+                "key": {"inn": inn, "year": year, "month": month, "category": "water"},
+                "before": None if prev is None else {
+                    "inn": inn, "year": year, "month": month, "category": "water",
+                    "market_id": prev.market_id,
+                    "due_amount": str(prev.due_amount),
+                    "paid_amount": str(prev.paid_amount),
+                },
+            })
+
+    try:
+        audit = await write_audit(
+            db, admin.id, "import_water", "monthly_balances",
+            f"{fname} ({year}-{month})",
+            {"inns": result.inns, "with_debt": result.with_debt, "year": year, "month": month},
+        )
+        snap = await save_snapshot(
+            db, action="import_water", table_name="monthly_balances",
+            before_rows=snapshot_rows, user_id=admin.id, market_id=market.id,
+            summary=f"Suv import: {year}-{month:02d} — {result.inns} INN",
+            audit_id=audit.id,
+        )
+        records = [{
+            "inn": inn, "market_id": market.id, "year": year, "month": month,
+            "category": "water", "due_amount": v["due"], "paid_amount": v["paid"],
+        } for inn, v in result.agg.items()]
+        for i in range(0, len(records), 1000):
+            chunk = records[i:i + 1000]
+            stmt = _pg_insert(MonthlyBalance.__table__).values(chunk)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["inn", "year", "month", "category"],
+                set_={"due_amount": stmt.excluded.due_amount,
+                      "paid_amount": stmt.excluded.paid_amount,
+                      "market_id": stmt.excluded.market_id},
+            )
+            await db.execute(stmt)
+        await db.commit()
+    except Exception as exc:
+        await db.rollback()
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"Bazaga saqlashda xatolik: {type(exc).__name__}: {exc}"
+        ) from exc
+
+    return WaterImportOut(
+        ok=True, rows_read=result.rows_read, inns=result.inns,
+        with_debt=result.with_debt, with_prepaid=result.with_prepaid,
+        total_debt=float(result.total_debt), total_prepaid=float(result.total_prepaid),
+        year=result.year, month=result.month,
+        errors=result.errors[:100], skipped=result.skipped[:200],
+        skipped_count=len(result.skipped), detected_columns=result.detected_columns,
+        snapshot_id=snap.id,
+    )
+# ===== IMPORT TARIXI (RentBilling + MonthlyBalance) =====
+
+class ImportHistoryRow(BaseModel):
+    id: int
+    bill_date: str | None
+    category: str           # rent | electricity | water | balances
+    shop_id: str | None     # arenda uchun
+    inn: str | None
+    counterparty_name: str | None
+    monthly_amount: float | None  # arenda
+    paid: float             # to'langan
+    debt: float             # qarz
+    filename: str | None    # import fayl nomi (audit_log dan)
+    imported_at: str        # import sanasi
+
+
+class ImportHistoryOut(BaseModel):
+    rows: list[ImportHistoryRow]
+    total: int
+
+
+@router.get("/import-history", response_model=ImportHistoryOut)
+async def get_import_history(
+    _admin: AdminUser,
+    market: CurrentMarket,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    date_from: str = Query(..., description="Boshlanish sana (YYYY-MM-DD)"),
+    date_to: str = Query(..., description="Tugash sana (YYYY-MM-DD)"),
+    category: str = Query("all", description="rent | electricity | water | all"),
+    inn: str | None = Query(None),
+    shop_id: str | None = Query(None),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=200),
+) -> ImportHistoryOut:
+    """Import qilingan billing ma'lumotlari tarixi.
+
+    Arenda: rent_billing jadvalidan (shop_id + bill_date bo'yicha).
+    Elektr/Suv: monthly_balances jadvalidan (inn + oy bo'yicha).
+    """
+    from datetime import date as _d, datetime as _dt
+    from sqlalchemy import select as _sel, and_ as _and, func as _func
+
+    try:
+        df = _d.fromisoformat(date_from)
+        dt = _d.fromisoformat(date_to)
+    except ValueError:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Sana formati noto'g'ri")
+
+    # Audit log dan fayl nomlari (rent_billing import uchun)
+    audit_rows = (await db.execute(
+        _sel(AuditLog).where(
+            AuditLog.action.in_(["import_rent_billing", "import_billing",
+                                  "import_inn_payments", "import_electricity", "import_water"]),
+            AuditLog.created_at >= _dt.combine(df, _dt.min.time()),
+            AuditLog.created_at <= _dt.combine(dt, _dt.max.time()),
+        ).order_by(AuditLog.created_at.desc())
+    )).scalars().all()
+
+    # bill_date -> filename mapping (rent_billing uchun)
+    bill_date_filename: dict[str, str] = {}
+    imported_at_map: dict[str, str] = {}
+    for a in audit_rows:
+        if a.resource_id:
+            # resource_id = "filename (YYYY-MM-DD)" formatida
+            bill_date_filename[a.resource_id] = a.resource_id
+            imported_at_map[a.resource_id] = a.created_at.isoformat()
+
+    rows: list[ImportHistoryRow] = []
+
+    # === ARENDA (rent_billing) ===
+    if category in ("rent", "all"):
+        rb_q = _sel(RentBilling).where(
+            RentBilling.market_id == market.id,
+            RentBilling.bill_date >= df,
+            RentBilling.bill_date <= dt,
+        )
+        if inn:
+            rb_q = rb_q.where(RentBilling.inn == inn)
+        if shop_id:
+            rb_q = rb_q.where(RentBilling.shop_id.ilike(f"%{shop_id}%"))
+        rb_q = rb_q.order_by(RentBilling.bill_date.desc(), RentBilling.shop_id)
+
+        rb_list = list((await db.execute(rb_q)).scalars())
+
+        # counterparty_name bo'sh bo'lsa counterparties dan olamiz
+        missing_inns = {rb.inn for rb in rb_list if rb.inn and not rb.counterparty_name}
+        cp_names: dict[str, str] = {}
+        if missing_inns:
+            cp_rows = (await db.execute(
+                _sel(Counterparty.inn, Counterparty.name)
+                .where(Counterparty.inn.in_(missing_inns))
+            )).all()
+            cp_names = {_inn: _name for _inn, _name in cp_rows}
+
+        for rb in rb_list:
+            # Audit dan fayl nomini topamiz
+            key = f"{rb.bill_date.isoformat()}"
+            fname = None
+            imp_at = rb.updated_at.isoformat() if getattr(rb, "updated_at", None) else None
+            for resource_id, fn in bill_date_filename.items():
+                if key in resource_id:
+                    fname = fn
+                    imp_at = imported_at_map.get(resource_id, imp_at)
+                    break
+
+            rows.append(ImportHistoryRow(
+                id=rb.id,
+                bill_date=rb.bill_date.isoformat(),
+                category="rent",
+                shop_id=rb.shop_id,
+                inn=rb.inn,
+                counterparty_name=rb.counterparty_name or cp_names.get(rb.inn or ""),
+                monthly_amount=float(rb.monthly_amount),
+                paid=float(rb.paid),
+                debt=float(rb.debt),
+                filename=fname,
+                imported_at=imp_at or "",
+            ))
+
+    # === ELEKTR va SUV (monthly_balances) ===
+    cats = []
+    if category == "electricity": cats = ["electricity"]
+    elif category == "water":     cats = ["water"]
+    elif category == "all":       cats = ["electricity", "water"]
+
+    if cats:
+        mb_q = _sel(MonthlyBalance).where(
+            MonthlyBalance.market_id == market.id,
+            MonthlyBalance.category.in_(cats),
+            # oy filtr: df.year/month dan dt.year/month gacha
+            _func.make_date(MonthlyBalance.year, MonthlyBalance.month, 1) >= df.replace(day=1),
+            _func.make_date(MonthlyBalance.year, MonthlyBalance.month, 1) <= dt.replace(day=1),
+        )
+        if inn:
+            mb_q = mb_q.where(MonthlyBalance.inn == inn)
+        mb_q = mb_q.order_by(MonthlyBalance.year.desc(), MonthlyBalance.month.desc())
+
+        mb_list = list((await db.execute(mb_q)).scalars())
+
+        # counterparties dan nom olish
+        mb_inns = {mb.inn for mb in mb_list if mb.inn}
+        mb_cp_names: dict[str, str] = {}
+        if mb_inns:
+            mb_cp_rows = (await db.execute(
+                _sel(Counterparty.inn, Counterparty.name)
+                .where(Counterparty.inn.in_(mb_inns))
+            )).all()
+            mb_cp_names = {_inn: _name for _inn, _name in mb_cp_rows}
+
+        for mb in mb_list:
+            rows.append(ImportHistoryRow(
+                id=mb.id,
+                bill_date=f"{mb.year}-{mb.month:02d}-01",
+                category=mb.category,
+                shop_id=None,
+                inn=mb.inn,
+                counterparty_name=mb_cp_names.get(mb.inn or ""),
+                monthly_amount=None,
+                paid=float(mb.paid_amount),
+                debt=float(mb.due_amount),
+                filename=None,
+                imported_at="",
+            ))
+
+    total = len(rows)
+    start = (page - 1) * per_page
+    return ImportHistoryOut(rows=rows[start:start + per_page], total=total)
+
+
+
+# ===== BO'SH DO'KONLAR ROYHATI UPLOAD =====
+class VacantShopsUploadOut(BaseModel):
+    ok: bool = True
+    marked_vacant: int = 0
+    marked_not_vacant: int = 0
+    not_found: list[str] = []
+
+
+@router.post("/vacant-shops/upload", response_model=VacantShopsUploadOut)
+async def upload_vacant_shops(
+    admin: AdminUser,
+    market: CurrentMarket,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    file: UploadFile = File(...),
+) -> VacantShopsUploadOut:
+    """Bo'sh do'konlar ro'yxatini yuklaydi (CSV yoki Excel).
+    Fayldagi shop_id lar is_vacant=True, qolganlar is_vacant=False bo'ladi.
+    """
+    from io import BytesIO
+    import openpyxl as _xl, csv as _csv
+
+    content = await file.read()
+    fname = (file.filename or "").lower()
+    shop_ids_from_file: set[str] = set()
+
+    if fname.endswith((".xlsx", ".xlsm")):
+        wb = _xl.load_workbook(BytesIO(content), read_only=True, data_only=True)
+        ws = wb.active
+        for row in ws.iter_rows(values_only=True):
+            for cell in row:
+                val = str(cell or "").strip()
+                if val and val.lower() != "shop_id":
+                    shop_ids_from_file.add(val)
+    elif fname.endswith(".csv"):
+        text = content.decode("utf-8-sig", errors="replace")
+        for row in _csv.reader(text.splitlines()):
+            for cell in row:
+                val = cell.strip()
+                if val and val.lower() != "shop_id":
+                    shop_ids_from_file.add(val)
+    else:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Faqat .xlsx yoki .csv fayl qabul qilinadi"
+        )
+
+    all_shops = (await db.execute(
+        select(Shop).where(Shop.market_id == market.id)
+    )).scalars().all()
+    shop_map = {s.shop_id: s for s in all_shops}
+
+    marked_vacant = 0
+    marked_not_vacant = 0
+    not_found: list[str] = []
+
+    for s in all_shops:
+        if s.shop_id in shop_ids_from_file:
+            if not getattr(s, "is_vacant", False):
+                s.is_vacant = True
+                marked_vacant += 1
+        else:
+            if getattr(s, "is_vacant", False):
+                s.is_vacant = False
+                marked_not_vacant += 1
+
+    for sid in shop_ids_from_file:
+        if sid not in shop_map:
+            not_found.append(sid)
+
+    await write_audit(
+        db, admin.id, "upload_vacant_shops", "shops", file.filename or "file",
+        {"marked_vacant": marked_vacant, "not_found_count": len(not_found)},
+    )
+    await db.commit()
+
+    return VacantShopsUploadOut(
+        ok=True,
+        marked_vacant=marked_vacant,
+        marked_not_vacant=marked_not_vacant,
+        not_found=not_found[:100],
     )
