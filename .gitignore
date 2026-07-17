@@ -74,3 +74,4 @@ backend/alembic/versions/0021_stub.py
 backend/alembic/versions/0022_stub.py
 backend/alembic/versions/0023_stub.py
 backend/alembic/versions/*_stub.py
+backend/alembic/versions/*_stub.py
