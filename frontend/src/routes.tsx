@@ -6,6 +6,7 @@ import { LoginPage } from "@/pages/LoginPage";
 import { HomePage } from "@/pages/HomePage";
 import { AdminPage } from "@/pages/AdminPage";
 import { ManagersPage } from "@/pages/ManagersPage";
+import { ShopsListPage } from "@/pages/ShopsListPage";
 import { ImportHistoryPage } from "@/pages/ImportHistoryPage";
 import { SuperDashboardPage } from "@/pages/SuperDashboardPage";
 import { SuperAdminPage } from "@/pages/SuperAdminPage";
@@ -123,6 +124,14 @@ export function AppRoutes() {
         element={
           <Protected adminOnly>
             <ImportHistoryPage />
+          </Protected>
+        }
+      />
+      <Route
+        path="/shops-list"
+        element={
+          <Protected adminOnly>
+            <ShopsListPage />
           </Protected>
         }
       />

@@ -56,6 +56,9 @@ export function AdminPage() {
         <div className="flex items-center gap-2">
           <LanguageSwitcher />
           <ThemeToggle />
+          <Link to="/shops-list" className="btn-ghost px-3.5 py-2 text-sm">
+            Magazinlar
+          </Link>
           <Link to="/import-history" className="btn-ghost px-3.5 py-2 text-sm">
             Import tarixi
           </Link>
