@@ -4,9 +4,8 @@ Revision ID: 0023
 Revises: 0022
 """
 from collections.abc import Sequence
-
-import sqlalchemy as sa
 from alembic import op
+from sqlalchemy import text
 
 revision: str = "0023"
 down_revision: str | None = "0022"
@@ -15,14 +14,23 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.create_table(
-        "manager_pavilions",
-        sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("manager_id", sa.Integer(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True),
-        sa.Column("pavilion_id", sa.Integer(), sa.ForeignKey("pavilions.id", ondelete="CASCADE"), nullable=False, index=True),
-        sa.Column("assigned_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.UniqueConstraint("manager_id", "pavilion_id", name="uq_manager_pavilion"),
-    )
+    op.execute(text("""
+        CREATE TABLE IF NOT EXISTS manager_pavilions (
+            id SERIAL PRIMARY KEY,
+            manager_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            pavilion_id INTEGER NOT NULL REFERENCES pavilions(id) ON DELETE CASCADE,
+            assigned_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+            CONSTRAINT uq_manager_pavilion UNIQUE (manager_id, pavilion_id)
+        )
+    """))
+    op.execute(text(
+        "CREATE INDEX IF NOT EXISTS ix_manager_pavilions_manager_id "
+        "ON manager_pavilions (manager_id)"
+    ))
+    op.execute(text(
+        "CREATE INDEX IF NOT EXISTS ix_manager_pavilions_pavilion_id "
+        "ON manager_pavilions (pavilion_id)"
+    ))
 
 
 def downgrade() -> None:
