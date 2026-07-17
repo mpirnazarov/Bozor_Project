@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Search, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { apiClient } from "@/api/client";
-import { fmtUZS, isZeroSegmentShop } from "@/lib/utils";
+import { fmtUZS } from "@/lib/utils";
 import { useT } from "@/i18n/useT";
 
 interface ShopRow {
