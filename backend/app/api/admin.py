@@ -1267,12 +1267,21 @@ async def shops_list(
     elif vacant == "not_vacant":
         stmt = stmt.where(Shop.is_vacant.is_(False))
 
-    total = await db.scalar(select(_func.count()).select_from(stmt.subquery())) or 0
-    stmt = stmt.order_by(Shop.shop_id).offset((page - 1) * per_page).limit(per_page)
+    total_db = await db.scalar(select(_func.count()).select_from(stmt.subquery())) or 0
+
+    # debt_filter bo'lsa — barcha sahifalarni olib filter qilamiz
+    # Aks holda oddiy pagination
+    if debt_filter and debt_filter != "all":
+        stmt = stmt.order_by(Shop.shop_id)
+    else:
+        stmt = stmt.order_by(Shop.shop_id).offset((page - 1) * per_page).limit(per_page)
+
     shops_db = list((await db.execute(stmt)).scalars())
 
     if not shops_db:
-        return {"items": [], "total": total, "page": page, "per_page": per_page}
+        return {"items": [], "total": 0, "page": page, "per_page": per_page}
+
+    total = total_db
 
     shop_ids = [s.shop_id for s in shops_db]
     inns = list({s.inn for s in shops_db if s.inn})
@@ -1358,4 +1367,9 @@ async def shops_list(
             "water_due": water_due, "water_paid": water_paid, "water_debt": water_debt,
         })
 
+    # debt_filter bo'lsa — filterlangan natijadan paginate qilamiz
+    if debt_filter and debt_filter != "all":
+        total = len(items)
+        start = (page - 1) * per_page
+        items = items[start:start + per_page]
     return {"items": items, "total": total, "page": page, "per_page": per_page}
