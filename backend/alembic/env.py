@@ -32,24 +32,6 @@ def _sync_url() -> str:
 
 config.set_main_option("sqlalchemy.url", _sync_url())
 
-
-def _ensure_is_vacant_column() -> None:
-    """is_vacant ustuni yo'q bo'lsa qo'shadi (migration xatosidan qochish uchun)."""
-    from sqlalchemy import create_engine, text
-    try:
-        engine = create_engine(_sync_url())
-        with engine.connect() as conn:
-            conn.execute(text(
-                "ALTER TABLE shops "
-                "ADD COLUMN IF NOT EXISTS is_vacant BOOLEAN NOT NULL DEFAULT FALSE"
-            ))
-            conn.commit()
-    except Exception:
-        pass  # jadval yo'q bo'lsa yoki boshqa xato — o'tkazib yuboramiz
-
-
-_ensure_is_vacant_column()
-
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 

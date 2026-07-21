@@ -1,4 +1,3 @@
-"""Alembic o'rniga to'g'ridan migration."""
 import os
 import psycopg2
 
