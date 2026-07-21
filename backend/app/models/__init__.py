@@ -44,4 +44,3 @@ __all__ = [
     "ImportLog",
     "BackupLog",
 ]
-from app.models.manager_pavilion import ManagerPavilion
