@@ -91,3 +91,21 @@ if context.is_offline_mode():
     run_migrations_offline()
 else:
     run_migrations_online()
+
+
+def _ensure_columns() -> None:
+    """Yangi ustunlarni xavfsiz qo'shadi — migration xatosiz."""
+    from sqlalchemy import create_engine, text
+    try:
+        engine = create_engine(_sync_url())
+        with engine.connect() as conn:
+            conn.execute(text(
+                "ALTER TABLE shops ADD COLUMN IF NOT EXISTS "
+                "is_vacant BOOLEAN NOT NULL DEFAULT FALSE"
+            ))
+            conn.commit()
+    except Exception:
+        pass
+
+
+_ensure_columns()

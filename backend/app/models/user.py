@@ -17,6 +17,7 @@ class UserRole(str, Enum):
     SUPER_ADMIN = "super_admin"      # hamma bozor + super dashboard
     MARKET_ADMIN = "market_admin"    # faqat o'z bozori, to'liq boshqaruv
     MARKET_VIEWER = "market_viewer"  # faqat o'z bozori, ko'rish
+    MANAGER = "manager"               # pavilion tekshiruvchi manager
 
 
 class User(Base):

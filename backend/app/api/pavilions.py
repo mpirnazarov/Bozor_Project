@@ -8,8 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.deps import CurrentMarket, CurrentUser
-from app.models import ManagerPavilion
-from app.models.user import UserRole
 from app.models import Pavilion, Shop
 from app.schemas.billing import ShopOut
 from app.schemas.pavilion import PavilionDetailOut, PavilionOut
@@ -78,15 +76,6 @@ async def list_pavilions(
         stmt = stmt.where(Pavilion.map_layer_id == map_layer_id)
     if not include_inactive:
         stmt = stmt.where(Pavilion.is_active.is_(True))
-
-    # Manager faqat o'ziga biriktirilgan pavilionlarni ko'radi
-    if _user.role == UserRole.MANAGER.value:
-        assigned = (await db.execute(
-            select(ManagerPavilion.pavilion_id)
-            .where(ManagerPavilion.manager_id == _user.id)
-        )).scalars().all()
-        stmt = stmt.where(Pavilion.id.in_(assigned))
-
     result = await db.execute(stmt)
     return list(result.scalars())
 
