@@ -4,8 +4,9 @@ Revision ID: 0021
 Revises: 0020
 """
 from collections.abc import Sequence
+
+import sqlalchemy as sa
 from alembic import op
-from sqlalchemy import text
 
 revision: str = "0021"
 down_revision: str | None = "0020"
@@ -14,19 +15,18 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.execute(text("""
-        CREATE TABLE IF NOT EXISTS shop_history (
-            id SERIAL PRIMARY KEY,
-            shop_id INTEGER REFERENCES shops(id) ON DELETE CASCADE,
-            old_inn VARCHAR(20),
-            old_name VARCHAR(300),
-            new_inn VARCHAR(20),
-            new_name VARCHAR(300),
-            changed_by VARCHAR(100),
-            reason TEXT,
-            changed_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
-        )
-    """))
+    op.create_table(
+        "shop_history",
+        sa.Column("id", sa.Integer(), primary_key=True),
+        sa.Column("shop_id", sa.Integer(), sa.ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True),
+        sa.Column("old_inn", sa.String(20), nullable=True),
+        sa.Column("old_name", sa.String(300), nullable=True),
+        sa.Column("new_inn", sa.String(20), nullable=True),
+        sa.Column("new_name", sa.String(300), nullable=True),
+        sa.Column("changed_by", sa.String(100), nullable=True),
+        sa.Column("reason", sa.Text(), nullable=True),
+        sa.Column("changed_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False, index=True),
+    )
 
 
 def downgrade() -> None:
