@@ -71,7 +71,6 @@ export interface Shop {
   purpose: string | null;
   monthly_rent: string;
   is_active: boolean;
-  is_vacant: boolean;
 }
 
 export interface Counterparty {
@@ -82,7 +81,7 @@ export interface Counterparty {
   phone: string | null;
 }
 
-export type ShopStatus = "paid" | "partial" | "unpaid" | "no_data" | "vacant";
+export type ShopStatus = "paid" | "partial" | "unpaid" | "no_data";
 
 export interface CategoryBalance {
   category: string;

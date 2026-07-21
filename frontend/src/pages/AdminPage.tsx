@@ -56,15 +56,7 @@ export function AdminPage() {
         <div className="flex items-center gap-2">
           <LanguageSwitcher />
           <ThemeToggle />
-          <Link to="/managers" className="btn-ghost px-3.5 py-2 text-sm">
-            Managerlar
-          </Link>
-          <Link to="/shops-list" className="btn-ghost px-3.5 py-2 text-sm">
-            Magazinlar
-          </Link>
-          <Link to="/import-history" className="btn-ghost px-3.5 py-2 text-sm">
-            Import tarixi
-          </Link>
+          <Link to="/managers" className="btn-ghost px-3.5 py-2 text-sm">Managerlar</Link>
           <Link to="/" className="btn-ghost px-3.5 py-2">
             <ArrowLeft size={16} /> {t("common.back")}
           </Link>

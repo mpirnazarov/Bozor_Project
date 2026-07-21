@@ -25,11 +25,5 @@ export const STATUS_COLORS: Record<string, string> = {
   paid: "#16a34a",
   partial: "#eab308",
   unpaid: "#dc2626",
-  no_data: "#f97316",   // Ma'lumot yo'q — to'q sariq/to'q to'q
-  vacant: "#9ca3af",    // Bo'sh do'kon — kulrang
+  no_data: "#1f2937",
 };
-
-export function isZeroSegmentShop(shopId: string): boolean {
-  const parts = shopId.split("-");
-  return parts.length >= 3 && parts[2] === "0";
-}

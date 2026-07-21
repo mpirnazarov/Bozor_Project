@@ -4,10 +4,8 @@ import { useAuthStore } from "@/store/authStore";
 import { Spinner } from "@/components/ui/Modal";
 import { LoginPage } from "@/pages/LoginPage";
 import { HomePage } from "@/pages/HomePage";
-import { AdminPage } from "@/pages/AdminPage";
 import { ManagersPage } from "@/pages/ManagersPage";
-import { ShopsListPage } from "@/pages/ShopsListPage";
-import { ImportHistoryPage } from "@/pages/ImportHistoryPage";
+import { AdminPage } from "@/pages/AdminPage";
 import { SuperDashboardPage } from "@/pages/SuperDashboardPage";
 import { SuperAdminPage } from "@/pages/SuperAdminPage";
 import { OwnerPage } from "@/pages/OwnerPage";
@@ -111,30 +109,7 @@ export function AppRoutes() {
           </Protected>
         }
       />
-      <Route
-        path="/managers"
-        element={
-          <Protected adminOnly>
-            <ManagersPage />
-          </Protected>
-        }
-      />
-      <Route
-        path="/import-history"
-        element={
-          <Protected adminOnly>
-            <ImportHistoryPage />
-          </Protected>
-        }
-      />
-      <Route
-        path="/shops-list"
-        element={
-          <Protected adminOnly>
-            <ShopsListPage />
-          </Protected>
-        }
-      />
+      <Route path="/managers" element={<Protected adminOnly><ManagersPage /></Protected>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

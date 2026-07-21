@@ -29,37 +29,22 @@ export function ShopDetailModal({ shopId, onClose }: Props) {
       {isLoading && <Spinner label="Yuklanmoqda..." />}
       {data && (
         <div className="space-y-4">
-          {/* Qarz holati — kategoriyalar yig'indisidan hisoblaymiz (bitta manba) */}
-          {(() => {
-            const cats = data.billing?.categories ?? [];
-            // Arenda uchun billing yo'q bo'lsa monthly_rent dan
-            const rentCat = cats.find(x => x.category === "rent");
-            const rentDue = rentCat ? Number(rentCat.due) : Number(data.shop.monthly_rent ?? 0);
-            const rentPaid = rentCat ? Number(rentCat.paid) : 0;
-            const rentDebt = Math.max(0, rentDue - rentPaid);
-
-            const otherDebt = cats
-              .filter(x => x.category !== "rent")
-              .reduce((acc, x) => acc + Math.max(0, Number(x.due) - Number(x.paid)), 0);
-
-            const totalDebt = rentDebt + otherDebt;
-            const totalPaid = rentPaid + cats.filter(x => x.category !== "rent")
-              .reduce((acc, x) => acc + Number(x.paid), 0);
-
-            if (totalDebt <= 0) return null;
-            const isPartial = totalPaid > 0;
-            return (
-              <div
-                className="rounded-lg px-4 py-2.5 text-sm font-bold text-white"
-                style={{ background: isPartial ? STATUS_COLORS.partial : STATUS_COLORS.unpaid }}
-              >
-                {isPartial ? "Qisman to'langan" : "Qarzi bor"}
-                <span className="float-right font-mono">
-                  {t("shop.debtLabel")}: {fmtUZS(totalDebt)}
-                </span>
-              </div>
-            );
-          })()}
+          {/* Qarz holati — faqat QARZ BOR bo'lganda (sariq/qizil). rent_billing bo'yicha */}
+          {data.billing && Number(data.billing.total_debt) > 0 && (
+            <div
+              className="rounded-lg px-4 py-2.5 text-sm font-bold text-white"
+              style={{
+                background: data.billing.status === "partial"
+                  ? STATUS_COLORS.partial
+                  : STATUS_COLORS.unpaid,
+              }}
+            >
+              {data.billing.status === "partial" ? "Qisman to'langan" : "Qarzi bor"}
+              <span className="float-right font-mono">
+                {t("shop.debtLabel")}: {fmtUZS(Number(data.billing.total_debt))}
+              </span>
+            </div>
+          )}
 
           <div className="card p-3 text-sm">
             <Row label={t("shop.shopId")} value={data.shop.shop_id} mono />
@@ -86,13 +71,8 @@ export function ShopDetailModal({ shopId, onClose }: Props) {
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               {(["rent", "electricity", "water"] as const).map((cat) => {
                 const c = data.billing?.categories.find((x) => x.category === cat);
-                let due = Number(c?.due ?? 0);
+                const due = Number(c?.due ?? 0);
                 const paid = Number(c?.paid ?? 0);
-                // Arenda uchun billing yo'q bo'lsa — monthly_rent dan fallback
-                // (to'lov qilinmagan = qarz = monthly_rent)
-                if (cat === "rent" && due === 0 && paid === 0 && data.shop?.inn) {
-                  due = Number(data.shop.monthly_rent ?? 0);
-                }
                 const debt = Math.max(0, due - paid);
                 const hasData = due > 0 || paid > 0;
                 return (

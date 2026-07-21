@@ -4,7 +4,7 @@ import { Loader2 } from "lucide-react";
 import { getPavilionShops } from "@/api/pavilions";
 import { getHideUnmatched } from "@/api/admin";
 import { getDashboard } from "@/api/dashboard";
-import { STATUS_COLORS, fmtUZS, isZeroSegmentShop } from "@/lib/utils";
+import { STATUS_COLORS, fmtUZS } from "@/lib/utils";
 import { Modal, Spinner } from "@/components/ui/Modal";
 import { useT } from "@/i18n/useT";
 import type { ShopStatus, BillingStatus, CategoryBalance } from "@/types/api";
@@ -18,6 +18,7 @@ interface Props {
 
 type ServiceKey = "all" | "rent" | "electricity" | "water";
 const SERVICE_FILTERS: { key: ServiceKey; tkey: string }[] = [
+  { key: "all", tkey: "pav.service.all" },
   { key: "rent", tkey: "pav.service.rent" },
   { key: "electricity", tkey: "pav.service.electricity" },
   { key: "water", tkey: "pav.service.water" },
@@ -30,7 +31,6 @@ const STATUS_FILTERS: { key: StatusFilter; tkey: string; color?: string }[] = [
   { key: "partial", tkey: "pav.status.partial", color: STATUS_COLORS.partial },
   { key: "unpaid", tkey: "pav.status.unpaid", color: STATUS_COLORS.unpaid },
   { key: "no_data", tkey: "pav.status.no_data", color: STATUS_COLORS.no_data },
-  { key: "vacant", tkey: "pav.status.vacant", color: STATUS_COLORS.vacant },
 ];
 
 const EPS = 1;
@@ -76,35 +76,22 @@ function statusForService(b: BillingStatus | undefined, service: ServiceKey): {
 } {
   if (!b) return { status: "no_data", due: 0, paid: 0, debt: 0 };
 
-  // "Barcha" — yangi logika:
-  // Uchalasidan ham qarzsiz → yashil (paid)
-  // Uchalasida ham qarz bor → qizil (unpaid)
-  // Xotambi bittasida qarz → sariq (partial)
+  // "Barcha" (default) — status BARCHA xizmatlar (arenda + suv + elektr)
+  // bo'yicha aniqlanadi. Biror xizmatdan qarz bo'lsa magazin QIZIL bo'ladi.
   if (service === "all") {
     let due = 0, paid = 0, debt = 0;
-    const CATS = ["rent", "electricity", "water"];
-    let catsWithDebt = 0;
-    let catsWithData = 0;
-
-    for (const catKey of CATS) {
-      const cat = b.categories.find((x) => x.category === catKey);
-      if (!cat) continue;
-      const cd = Number(cat.due);
-      const cp = Number(cat.paid);
-      const cd_debt = Math.max(0, cd - cp);
+    for (const c of b.categories) {
+      const cd = Number(c.due);
+      const cp = Number(c.paid);
       due += cd;
       paid += cp;
-      debt += cd_debt;
-      if (cd > EPS || cp > EPS) catsWithData++;
-      if (cd_debt > EPS) catsWithDebt++;
+      debt += Math.max(0, cd - cp);
     }
-
     let status: ShopStatus;
-    if (catsWithData === 0) status = "no_data";
-    else if (debt <= EPS) status = "paid";                    // barcha qarzsiz → yashil
-    else if (catsWithDebt === catsWithData) status = "unpaid"; // hammasi qarzli → qizil
-    else status = "partial";                                   // bittasi qarzli → sariq
-
+    if (due <= EPS && paid <= EPS) status = "no_data";
+    else if (debt <= EPS) status = "paid";
+    else if (paid > EPS) status = "partial";
+    else status = "unpaid";
     return { status: applyPartialOverride(status), due, paid, debt };
   }
 
@@ -128,7 +115,7 @@ function statusForService(b: BillingStatus | undefined, service: ServiceKey): {
 }
 
 export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop }: Props) {
-  const [service, setService] = useState<ServiceKey>("rent"); // default arenda
+  const [service, setService] = useState<ServiceKey>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const t = useT();
 
@@ -152,33 +139,12 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
 
   const computed = useMemo(() => {
     if (!data) return [];
-    const list = data.shops
-      .filter((s) => !isZeroSegmentShop(s.shop_id))
-      .map((s) => {
-        // Bo'sh do'kon (is_vacant=true) — no_data
-        if (s.is_vacant === true) {
-          return { shop: s, status: "vacant" as ShopStatus, due: 0, paid: 0, debt: 0 };
-        }
-        // Rang uchun DOIM uchala kategoriyani tekshiramiz (service tanlovi faqat jadval uchun)
-        const rAll = statusForService(data.billing[s.shop_id], "all");
-        // Tanlangan service uchun due/paid/debt (jadval uchun)
-        const rService = statusForService(data.billing[s.shop_id], service);
-
-        // INN yo'q — egasi topilmagan
-        if (!s.inn && rAll.status === "no_data") {
-          return { shop: s, status: "unpaid" as ShopStatus, due: 0, paid: 0, debt: 0 };
-        }
-        // INN bor lekin billing umuman yo'q
-        if (s.inn && rAll.status === "no_data") {
-          const monthlyRent = Number(s.monthly_rent ?? 0);
-          return { shop: s, status: "unpaid" as ShopStatus,
-                   due: monthlyRent, paid: 0, debt: monthlyRent };
-        }
-        // Rang = uchala kategoriya bo'yicha (rAll), due/paid/debt = tanlangan service bo'yicha
-        return { shop: s, ...rService, status: rAll.status };
-      });
+    const list = data.shops.map((s) => {
+      const r = statusForService(data.billing[s.shop_id], service);
+      return { shop: s, ...r };
+    });
     // Topilmagan berkitilgan bo'lsa — no_data magazinlarni chiqarib tashlaymiz
-    return hideUnmatched ? list.filter((c) => c.status !== "no_data" && c.status !== "vacant") : list;
+    return hideUnmatched ? list.filter((c) => c.status !== "no_data") : list;
   }, [data, service, hideUnmatched]);
 
   // Tepadagi summalar HAR DOIM umumiy (barcha xizmatlar bo'yicha) bo'ladi.
@@ -213,7 +179,7 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
 
   // Har holat bo'yicha magazin soni (filtr yonida ko'rsatish uchun)
   const counts = useMemo(() => {
-    const c: Record<string, number> = { all: computed.length, paid: 0, partial: 0, unpaid: 0, no_data: 0, vacant: 0 };
+    const c: Record<string, number> = { all: computed.length, paid: 0, partial: 0, unpaid: 0, no_data: 0 };
     for (const x of computed) c[x.status] = (c[x.status] ?? 0) + 1;
     return c;
   }, [computed]);

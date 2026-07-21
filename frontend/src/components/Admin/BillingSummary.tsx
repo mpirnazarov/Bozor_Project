@@ -61,36 +61,16 @@ export function BillingSummary() {
       {data && data.has_data && (
         <>
           {/* Umumiy summalar */}
-          {(() => {
-            const due  = data.total.total_due;
-            const paid = data.total.total_paid;
-            const diff = paid - due;  // musbat = avans, manfiy = qarz
-            const isAvans = diff > 0;
-            return (
-              <div className="mb-6 grid grid-cols-3 gap-3">
-                <SummaryCard label="Jami" value={due} tone="ink" />
-                <SummaryCard label="To'langan" value={paid} tone="paid" />
-                {isAvans ? (
-                  <SummaryCard
-                    label={`Avans (+${fmtUZS(diff)} ortiqcha to'langan)`}
-                    value={diff}
-                    tone="avans"
-                  />
-                ) : (
-                  <SummaryCard
-                    label="Qarzdorlik"
-                    value={Math.abs(diff)}
-                    tone="debt"
-                  />
-                )}
-              </div>
-            );
-          })()}
+          <div className="mb-6 grid grid-cols-3 gap-3">
+            <SummaryCard label={t("common.total") || "Jami"} value={data.total.total_due} tone="ink" />
+            <SummaryCard label={t("common.paid") || "To'langan"} value={data.total.total_paid} tone="paid" />
+            <SummaryCard label={t("common.debt") || "Qarzdorlik"} value={data.total.total_debt} tone="debt" />
+          </div>
           <div className="mb-6 text-sm text-ink-soft">
             {MONTHS[month - 1]} {year} · {data.total.block_count} blok · {data.total.shop_count} magazin
           </div>
 
-          {/* Layoutlar (qavatlar) bo'yicha — vaqtincha yashirilgan
+          {/* Layoutlar (qavatlar) bo'yicha */}
           {data.layers.length > 1 && (
             <div className="mb-6">
               <h3 className="mb-2 text-sm font-bold uppercase tracking-wide text-ink-faint">
@@ -114,34 +94,23 @@ export function BillingSummary() {
                         <td className="tabnum p-3 text-right text-ink-soft">{l.block_count}</td>
                         <td className="tabnum p-3 text-right font-semibold text-ink">{fmtUZS(l.total_due)}</td>
                         <td className="tabnum p-3 text-right text-status-paid">{fmtUZS(l.total_paid)}</td>
-                        <td className="tabnum p-3 text-right">
-                          {l.total_paid > l.total_due
-                            ? <span className="text-blue-600">+{fmtUZS(l.total_paid - l.total_due)}</span>
-                            : <span className="text-status-unpaid">{fmtUZS(Math.max(0, l.total_due - l.total_paid))}</span>
-                          }
-                        </td>
+                        <td className="tabnum p-3 text-right text-status-unpaid">{fmtUZS(l.total_debt)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             </div>
-          )} */}
+          )}
         </>
       )}
     </div>
   );
 }
 
-function SummaryCard({ label, value, tone }: { label: string; value: number; tone: "ink" | "paid" | "debt" | "avans" }) {
-  const bg = tone === "paid" ? "rgba(22,163,74,0.08)"
-    : tone === "debt"  ? "rgba(220,38,38,0.08)"
-    : tone === "avans" ? "rgba(59,130,246,0.08)"
-    : "var(--surface-muted, #f1f5f9)";
-  const color = tone === "paid"  ? "text-status-paid"
-    : tone === "debt"  ? "text-status-unpaid"
-    : tone === "avans" ? "text-blue-600"
-    : "text-ink";
+function SummaryCard({ label, value, tone }: { label: string; value: number; tone: "ink" | "paid" | "debt" }) {
+  const bg = tone === "paid" ? "rgba(22,163,74,0.08)" : tone === "debt" ? "rgba(220,38,38,0.08)" : "var(--surface-muted, #f1f5f9)";
+  const color = tone === "paid" ? "text-status-paid" : tone === "debt" ? "text-status-unpaid" : "text-ink";
   return (
     <div className="rounded-2xl p-4" style={{ background: bg }}>
       <div className="text-[11px] font-semibold text-ink-faint">{label}</div>

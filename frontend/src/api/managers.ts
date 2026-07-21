@@ -7,7 +7,6 @@ export interface Manager {
   is_active: boolean;
   pavilion_count: number;
   created_at: string | null;
-  last_login_at: string | null;
 }
 
 export interface ManagerPavilionMini {
