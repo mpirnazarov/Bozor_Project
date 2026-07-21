@@ -31,5 +31,4 @@ COPY . .
 ENV PORT=8000
 EXPOSE 8000
 
-# Ishga tushganda: migration -> userlar -> SQLite data import (agar bor bo'lsa) -> server
-CMD ["sh", "-c", "python run_migrations.py && python -m app.scripts.create_admin && python -m app.scripts.startup_seed && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh", "-c", "python run_migrations.py && alembic upgrade head && python -m app.scripts.create_admin && python -m app.scripts.startup_seed && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
