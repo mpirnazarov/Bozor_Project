@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Search, Loader2, FileDown, Copy, Check } from "lucide-react";
 import { apiClient } from "@/api/client";
-import { fmtUZS, isZeroSegmentShop } from "@/lib/utils";
+import { fmtUZS } from "@/lib/utils";
 import { useT } from "@/i18n/useT";
 
 interface ImportHistoryRow {
@@ -15,8 +15,6 @@ interface ImportHistoryRow {
 interface ImportHistoryOut { rows: ImportHistoryRow[]; total: number; }
 
 const CATS = [{key:"all",label:"Hammasi"},{key:"rent",label:"Arenda"},{key:"electricity",label:"Elektr"},{key:"water",label:"Suv"}];
-const MONTHS = ["Yanvar","Fevral","Mart","Aprel","May","Iyun","Iyul","Avgust","Sentyabr","Oktyabr","Noyabr","Dekabr"];
-
 function today() { return new Date().toISOString().slice(0,10); }
 function monthAgo() { const d = new Date(); d.setDate(1); return d.toISOString().slice(0,10); }
 
@@ -58,7 +56,7 @@ export function ImportHistoryPage() {
 
   const totalPages = data ? Math.ceil(data.total / PER_PAGE) : 1;
 
-  const visibleRows = data?.rows.filter(r => !r.shop_id || !isZeroSegmentShop(r.shop_id)) ?? [];
+  const visibleRows = data?.rows.filter(r => { if (!r.shop_id) return true; const parts = r.shop_id.split("-"); return !(parts.length >= 3 && parts[2] === "0"); }) ?? [];
 
   const contragentRows = (() => {
     const map = new Map<string, { inn: string; name: string|null; total_monthly: number; total_paid: number; total_debt: number; files: string[]; shops: { shop_id: string; monthly_amount: number; paid: number; debt: number; bill_date: string; filename: string|null }[] }>();
