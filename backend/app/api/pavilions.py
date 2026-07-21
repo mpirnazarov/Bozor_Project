@@ -76,15 +76,12 @@ async def list_pavilions(
         stmt = stmt.where(Pavilion.map_layer_id == map_layer_id)
     if not include_inactive:
         stmt = stmt.where(Pavilion.is_active.is_(True))
-    # Manager faqat o'ziga biriktirilgan pavilionlarni ko'radi
     if _user.role == "manager":
         from app.models import ManagerPavilion
         assigned = (await db.execute(
-            select(ManagerPavilion.pavilion_id)
-            .where(ManagerPavilion.manager_id == _user.id)
+            select(ManagerPavilion.pavilion_id).where(ManagerPavilion.manager_id == _user.id)
         )).scalars().all()
         stmt = stmt.where(Pavilion.id.in_(assigned))
-
     result = await db.execute(stmt)
     return list(result.scalars())
 
