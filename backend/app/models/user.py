@@ -16,7 +16,8 @@ class UserRole(str, Enum):
     OWNER = "owner"                  # dastur egasi — bozorlar CRUD + tex-podderjka to'lovlari
     SUPER_ADMIN = "super_admin"      # hamma bozor + super dashboard
     MARKET_ADMIN = "market_admin"    # faqat o'z bozori, to'liq boshqaruv
-    MARKET_VIEWER = "market_viewer"  # faqat o'z bozori, ko'rish
+    MARKET_VIEWER = "market_viewer"
+    MANAGER = "manager"  # faqat o'z bozori, ko'rish
 
 
 class User(Base):
