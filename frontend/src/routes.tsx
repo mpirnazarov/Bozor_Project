@@ -4,21 +4,20 @@ import { useAuthStore } from "@/store/authStore";
 import { Spinner } from "@/components/ui/Modal";
 import { LoginPage } from "@/pages/LoginPage";
 import { HomePage } from "@/pages/HomePage";
-import { ManagersPage } from "@/pages/ManagersPage";
 import { AdminPage } from "@/pages/AdminPage";
 import { SuperDashboardPage } from "@/pages/SuperDashboardPage";
 import { SuperAdminPage } from "@/pages/SuperAdminPage";
 import { OwnerPage } from "@/pages/OwnerPage";
 import { RailwayDetailPage } from "@/pages/RailwayDetailPage";
 import { InvoicesPage } from "@/pages/InvoicesPage";
+import { ManagersPage } from "@/pages/ManagersPage";
+import { ShopsListPage } from "@/pages/ShopsListPage";
+import { ImportHistoryPage } from "@/pages/ImportHistoryPage";
 
 const ADMIN_ROLES = ["admin", "super_admin", "market_admin"];
 
 function Protected({
-  children,
-  adminOnly,
-  superOnly,
-  ownerOnly,
+  children, adminOnly, superOnly, ownerOnly,
 }: {
   children: ReactNode;
   adminOnly?: boolean;
@@ -44,72 +43,21 @@ function Protected({
 
 export function AppRoutes() {
   const user = useAuthStore((s) => s.user);
-  // Login bo'lgan foydalanuvchi uchun default sahifa roliga qarab
   const homeForUser =
     user?.role === "owner" ? "/owner" : user?.role === "super_admin" ? "/super" : "/";
   return (
     <Routes>
-      <Route
-        path="/login"
-        element={user ? <Navigate to={homeForUser} replace /> : <LoginPage />}
-      />
-      <Route
-        path="/"
-        element={
-          <Protected>
-            <HomePage />
-          </Protected>
-        }
-      />
-      <Route
-        path="/super"
-        element={
-          <Protected superOnly>
-            <SuperDashboardPage />
-          </Protected>
-        }
-      />
-      <Route
-        path="/owner"
-        element={
-          <Protected ownerOnly>
-            <OwnerPage />
-          </Protected>
-        }
-      />
-      <Route
-        path="/owner/railway"
-        element={
-          <Protected ownerOnly>
-            <RailwayDetailPage />
-          </Protected>
-        }
-      />
-      <Route
-        path="/owner/invoices"
-        element={
-          <Protected ownerOnly>
-            <InvoicesPage />
-          </Protected>
-        }
-      />
-      <Route
-        path="/super/markets"
-        element={
-          <Protected superOnly>
-            <SuperAdminPage />
-          </Protected>
-        }
-      />
-      <Route
-        path="/admin"
-        element={
-          <Protected adminOnly>
-            <AdminPage />
-          </Protected>
-        }
-      />
+      <Route path="/login" element={user ? <Navigate to={homeForUser} replace /> : <LoginPage />} />
+      <Route path="/" element={<Protected><HomePage /></Protected>} />
+      <Route path="/super" element={<Protected superOnly><SuperDashboardPage /></Protected>} />
+      <Route path="/owner" element={<Protected ownerOnly><OwnerPage /></Protected>} />
+      <Route path="/owner/railway" element={<Protected ownerOnly><RailwayDetailPage /></Protected>} />
+      <Route path="/owner/invoices" element={<Protected ownerOnly><InvoicesPage /></Protected>} />
+      <Route path="/super/markets" element={<Protected superOnly><SuperAdminPage /></Protected>} />
+      <Route path="/admin" element={<Protected adminOnly><AdminPage /></Protected>} />
       <Route path="/managers" element={<Protected adminOnly><ManagersPage /></Protected>} />
+      <Route path="/shops-list" element={<Protected adminOnly><ShopsListPage /></Protected>} />
+      <Route path="/import-history" element={<Protected adminOnly><ImportHistoryPage /></Protected>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
