@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Plus, Trash2, Save, X, MousePointer2, Maximize2, Minimize2, Pencil,
-  ZoomIn, ZoomOut, EyeOff, Layers, Upload, ImagePlus,
+  ZoomIn, ZoomOut, EyeOff, Layers, Upload, ImagePlus, ChevronUp, ChevronDown,
 } from "lucide-react";
 import { getPavilions } from "@/api/pavilions";
 import { createPavilion, updatePavilion, deletePavilion } from "@/api/admin";
@@ -347,6 +347,22 @@ export function MapEditor() {
     }
   }
 
+  async function handleReorderLayer(direction: "up" | "down") {
+    if (!layers || activeLayerId == null) return;
+    const idx = layers.findIndex((l) => l.id === activeLayerId);
+    if (idx < 0) return;
+    const targetIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= layers.length) return;
+
+    const current = layers[idx];
+    const target = layers[targetIdx];
+
+    // display_order larini almashtirish
+    await updateMapLayer(current.id, { display_order: target.display_order });
+    await updateMapLayer(target.id, { display_order: current.display_order });
+    await qc.invalidateQueries({ queryKey: ["map-layers"] });
+  }
+
   async function handleDeleteLayer() {
     if (activeLayerId == null) return;
     if (!confirm(`«${activeLayer?.name}» xaritasi va undagi BARCHA regionlar o'chiriladi. Davom etilsinmi?`)) return;
@@ -375,15 +391,36 @@ export function MapEditor() {
         {layers && layers.length > 0 ? (
           <div className="flex flex-wrap items-center gap-1.5">
             {layers.map((l) => (
-              <button
-                key={l.id}
-                onClick={() => { setActiveLayerId(l.id); startNew(); }}
-                className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
-                  l.id === activeLayerId ? "bg-brand text-white" : "bg-white text-ink-soft ring-1 ring-slate-200 hover:bg-slate-100"
-                }`}
-              >
-                {l.name}{!l.has_image && !(layers[0].id === l.id) && " ⚠️"}
-              </button>
+              <div key={l.id} className="flex items-center gap-0.5">
+                <button
+                  onClick={() => { setActiveLayerId(l.id); startNew(); }}
+                  className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
+                    l.id === activeLayerId ? "bg-brand text-white" : "bg-white text-ink-soft ring-1 ring-slate-200 hover:bg-slate-100"
+                  }`}
+                >
+                  {l.name}{!l.has_image && !(layers[0].id === l.id) && " ⚠️"}
+                </button>
+                {l.id === activeLayerId && (
+                  <div className="flex flex-col gap-0.5">
+                    <button
+                      className="rounded px-1 py-0.5 text-ink-faint hover:bg-slate-100 disabled:opacity-30"
+                      title="Yuqoriga"
+                      disabled={layers.findIndex((x) => x.id === l.id) === 0}
+                      onClick={() => handleReorderLayer("up")}
+                    >
+                      <ChevronUp size={12} />
+                    </button>
+                    <button
+                      className="rounded px-1 py-0.5 text-ink-faint hover:bg-slate-100 disabled:opacity-30"
+                      title="Pastga"
+                      disabled={layers.findIndex((x) => x.id === l.id) === layers.length - 1}
+                      onClick={() => handleReorderLayer("down")}
+                    >
+                      <ChevronDown size={12} />
+                    </button>
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         ) : (
