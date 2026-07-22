@@ -15,6 +15,10 @@ class Counterparty(Base):
     contract_no: Mapped[str | None] = mapped_column(String(100), nullable=True)
     contract_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    bank_account: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    place_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    purpose: Mapped[str | None] = mapped_column(String(200), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

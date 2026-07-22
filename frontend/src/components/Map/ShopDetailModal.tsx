@@ -60,6 +60,15 @@ export function ShopDetailModal({ shopId, onClose }: Props) {
                 {data.counterparty.phone && (
                   <Row label={t("shop.phone")} value={data.counterparty.phone} />
                 )}
+                {data.counterparty.address && (
+                  <Row label="Manzil" value={data.counterparty.address} />
+                )}
+                {data.counterparty.bank_account && (
+                  <Row label="Hisob raqami" value={data.counterparty.bank_account} mono />
+                )}
+                {data.counterparty.purpose && (
+                  <Row label="Maqsad" value={data.counterparty.purpose} />
+                )}
               </>
             )}
           </div>

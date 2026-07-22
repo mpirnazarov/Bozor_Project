@@ -7,10 +7,13 @@ def run():
     conn = psycopg2.connect(db_url)
     conn.autocommit = True
     cur = conn.cursor()
-    # alembic_version bo'sh bo'lsa 0019 ga set qilamiz
+    
     cur.execute("INSERT INTO alembic_version (version_num) SELECT '0019' WHERE NOT EXISTS (SELECT 1 FROM alembic_version)")
-    # is_vacant ustuni
     cur.execute("ALTER TABLE shops ADD COLUMN IF NOT EXISTS is_vacant BOOLEAN NOT NULL DEFAULT FALSE")
+    cur.execute("ALTER TABLE counterparties ADD COLUMN IF NOT EXISTS address TEXT")
+    cur.execute("ALTER TABLE counterparties ADD COLUMN IF NOT EXISTS bank_account VARCHAR(50)")
+    cur.execute("ALTER TABLE counterparties ADD COLUMN IF NOT EXISTS place_type VARCHAR(100)")
+    cur.execute("ALTER TABLE counterparties ADD COLUMN IF NOT EXISTS purpose VARCHAR(200)")
     print("Migrations OK")
     conn.close()
 
