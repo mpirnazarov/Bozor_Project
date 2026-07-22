@@ -79,6 +79,10 @@ export interface Counterparty {
   contract_no: string | null;
   contract_date: string | null;
   phone: string | null;
+  address: string | null;
+  bank_account: string | null;
+  place_type: string | null;
+  purpose: string | null;
 }
 
 export type ShopStatus = "paid" | "partial" | "unpaid" | "no_data";
