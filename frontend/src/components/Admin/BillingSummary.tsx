@@ -64,7 +64,10 @@ export function BillingSummary() {
           <div className="mb-6 grid grid-cols-3 gap-3">
             <SummaryCard label={t("common.total") || "Jami"} value={data.total.total_due} tone="ink" />
             <SummaryCard label={t("common.paid") || "To'langan"} value={data.total.total_paid} tone="paid" />
-            <SummaryCard label={t("common.debt") || "Qarzdorlik"} value={data.total.total_debt} tone="debt" />
+            {data.total.total_paid > data.total.total_due
+              ? <SummaryCard label="Avans" value={data.total.total_paid - data.total.total_due} tone="avans" />
+              : <SummaryCard label={t("common.debt") || "Qarzdorlik"} value={data.total.total_debt} tone="debt" />
+            }
           </div>
           <div className="mb-6 text-sm text-ink-soft">
             {MONTHS[month - 1]} {year} · {data.total.block_count} blok · {data.total.shop_count} magazin
@@ -94,7 +97,12 @@ export function BillingSummary() {
                         <td className="tabnum p-3 text-right text-ink-soft">{l.block_count}</td>
                         <td className="tabnum p-3 text-right font-semibold text-ink">{fmtUZS(l.total_due)}</td>
                         <td className="tabnum p-3 text-right text-status-paid">{fmtUZS(l.total_paid)}</td>
-                        <td className="tabnum p-3 text-right text-status-unpaid">{fmtUZS(l.total_debt)}</td>
+                        <td className="tabnum p-3 text-right">
+                          {l.total_paid > l.total_due
+                            ? <span className="text-blue-600">+{fmtUZS(l.total_paid - l.total_due)}</span>
+                            : <span className="text-status-unpaid">{fmtUZS(Math.max(0, l.total_due - l.total_paid))}</span>
+                          }
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -108,9 +116,9 @@ export function BillingSummary() {
   );
 }
 
-function SummaryCard({ label, value, tone }: { label: string; value: number; tone: "ink" | "paid" | "debt" }) {
-  const bg = tone === "paid" ? "rgba(22,163,74,0.08)" : tone === "debt" ? "rgba(220,38,38,0.08)" : "var(--surface-muted, #f1f5f9)";
-  const color = tone === "paid" ? "text-status-paid" : tone === "debt" ? "text-status-unpaid" : "text-ink";
+function SummaryCard({ label, value, tone }: { label: string; value: number; tone: "ink" | "paid" | "debt" | "avans" }) {
+  const bg = tone === "paid" ? "rgba(22,163,74,0.08)" : tone === "debt" ? "rgba(220,38,38,0.08)" : tone === "avans" ? "rgba(37,99,235,0.08)" : "var(--surface-muted, #f1f5f9)";
+  const color = tone === "paid" ? "text-status-paid" : tone === "debt" ? "text-status-unpaid" : tone === "avans" ? "text-blue-600" : "text-ink";
   return (
     <div className="rounded-2xl p-4" style={{ background: bg }}>
       <div className="text-[11px] font-semibold text-ink-faint">{label}</div>
