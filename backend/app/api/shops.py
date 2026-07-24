@@ -32,7 +32,7 @@ async def list_shops(
     per_page: int = Query(50, ge=1, le=200),
 ) -> PaginatedShops:
     """Magazinlar ro'yxati — filtrlash va sahifalash bilan (joriy bozor)."""
-    stmt = select(Shop).where(Shop.market_id == market.id, Shop.is_active.is_(True), Shop.shop_id.notlike('%%-0-%%'))
+    stmt = select(Shop).where(Shop.market_id == market.id)
     if inn:
         stmt = stmt.where(Shop.inn == inn)
     if pavilion:

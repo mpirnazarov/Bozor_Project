@@ -1,13 +1,10 @@
 """Suv to'lovlari import (monthly_balances, category=water).
 
-Fayl ("для Лутфуллы" formati): sarlavha 4-5 qatorlarda, ma'lumot keyin.
-Ustunlar: № п.п. | Контрагент | Основное арендное место (magazin ID) | ИНН |
-          К оплате (qarz) | Предоплата (oldindan to'lov).
+Fayl formati elektr bilan bir xil:
+Ustunlar: № п.п. | Контрагент | Основное арендное место | ИНН |
+          К оплате (qarz) | Предоплата (oldindan to'lov)
 
-Har magazin: yo К оплате (qarz), yo Предоплата (oldindan) to'ldirilgan.
-INN bo'yicha yig'ib monthly_balances ga (water) upsert qilamiz:
-  К оплате  -> due_amount  (qarz)
-  Предоплата -> paid_amount (oldindan to'lov / balans)
+INN bo'yicha yig'ib monthly_balances ga (water) upsert qilamiz.
 """
 from __future__ import annotations
 
@@ -16,7 +13,6 @@ from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 
 from openpyxl import load_workbook
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import MonthlyBalance
@@ -33,7 +29,7 @@ _REQUIRED = ["shop_id", "inn"]
 
 
 def _norm(h) -> str:
-    return "".join(str(h or "").lower().split()).replace("-", "").replace("_", "").replace("’", "'").replace("`", "'")
+    return "".join(str(h or "").lower().split()).replace("-", "").replace("_", "").replace("'", "'").replace("`", "'")
 
 
 def _build_col_map(headers: list) -> dict[str, int]:
@@ -81,7 +77,7 @@ class StructureError(Exception):
 
 
 @dataclass
-class ElecImportResult:
+class WaterImportResult:
     rows_read: int = 0
     inns: int = 0
     with_debt: int = 0
@@ -93,7 +89,7 @@ class ElecImportResult:
     skipped: list = field(default_factory=list)
     errors: list = field(default_factory=list)
     detected_columns: dict = field(default_factory=dict)
-    agg: dict = field(default_factory=dict)  # (inn) -> {"due","paid"}
+    agg: dict = field(default_factory=dict)
 
 
 async def import_water_excel(
@@ -102,12 +98,12 @@ async def import_water_excel(
     year: int,
     month: int,
     market_id: int = 1,
-) -> ElecImportResult:
-    res = ElecImportResult(year=year, month=month)
+) -> WaterImportResult:
+    res = WaterImportResult(year=year, month=month)
 
     try:
         wb = load_workbook(io.BytesIO(content), data_only=True, read_only=True)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise StructureError(f"Faylni ochib bo'lmadi (.xlsx kerak): {exc}") from exc
 
     ws = wb.active
@@ -115,13 +111,10 @@ async def import_water_excel(
     if not rows:
         raise StructureError("Fayl bo'sh")
 
-    # Sarlavhani topish — "К оплате"/"Предоплата" yoki shop_id+inn bor qator.
-    # Sarlavha ikki qatorga bo'lingan bo'lishi mumkin (К оплате/Предоплата pastda).
     header_idx, col = -1, {}
     for i, r in enumerate(rows[:12]):
         cm = _build_col_map(list(r))
         if "shop_id" in cm and "inn" in cm:
-            # debt/prepaid keyingi qatorda bo'lishi mumkin — birlashtiramiz
             if "debt" not in cm or "prepaid" not in cm:
                 if i + 1 < len(rows):
                     nxt = _build_col_map(list(rows[i + 1]))
@@ -162,7 +155,6 @@ async def import_water_excel(
             return row[i] if (i is not None and i < len(row)) else None
 
         shop_id = str(get("shop_id") or "").strip()
-        # Faqat haqiqiy magazin qatori (id ko'rinishi "01-1-1-001")
         if not shop_id or "-" not in shop_id:
             continue
         inn = _clean_inn(get("inn"))
@@ -188,8 +180,8 @@ async def import_water_excel(
 
         if inn not in agg:
             agg[inn] = {"due": Decimal(0), "paid": Decimal(0)}
-        agg[inn]["due"] += debt        # К оплате -> qarz
-        agg[inn]["paid"] += prepaid    # Предоплата -> oldindan to'lov
+        agg[inn]["due"] += debt
+        agg[inn]["paid"] += prepaid
 
     if not agg:
         raise StructureError("Hech qanday yaroqli magazin qatori topilmadi")
