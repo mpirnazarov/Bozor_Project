@@ -2,12 +2,13 @@ import { useState, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import {
   Upload, CalendarDays, CheckCircle2, AlertTriangle, Undo2,
-  ChevronDown, ChevronRight, Download, Info, Users, Zap,
+  ChevronDown, ChevronRight, Download, Info, Users, Zap, Droplets,
 } from "lucide-react";
 import {
   importRentBilling, type RentBillingImportResult,
   importInnPayments, type InnPaymentImportResult,
   importElectricity, type ElectricityImportResult,
+  importWater, type WaterImportResult,
 } from "@/api/admin";
 
 const MONTHS = [
@@ -30,6 +31,7 @@ export function PaymentImport() {
       <Method2 />
       {/* ELEKTR — elektr to'lovlari */}
       <Method3Electricity />
+      <Method4Water />
     </div>
   );
 }
@@ -227,6 +229,97 @@ function Method2() {
 }
 
 /* ============ ELEKTR ============ */
+function Method4Water() {
+  const now = new Date();
+  const [file, setFile] = useState<File | null>(null);
+  const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [result, setResult] = useState<WaterImportResult | null>(null);
+  const [showDetail, setShowDetail] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const mut = useMutation({
+    mutationFn: () => importWater(file!, year, month),
+    onSuccess: (d) => { setResult(d); setShowDetail(false); },
+  });
+  const errDetail = (mut.error as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+  const years = [now.getFullYear(), now.getFullYear() - 1];
+
+  return (
+    <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-soft">
+      <div className="mb-1 flex items-center gap-2">
+        <Droplets size={18} className="text-sky-500" />
+        <h3 className="text-base font-bold text-ink">Suv to'lovlari</h3>
+      </div>
+
+      <div className="mb-3 flex items-start gap-2 rounded-xl bg-sky-500/5 p-3 text-xs text-ink-soft">
+        <Info size={15} className="mt-0.5 shrink-0 text-sky-500" />
+        <div>
+          Suv qarz/to'lovlari. Har magazin uchun <b>К оплате</b> (qarzdorlik) yoki
+          <b> Предоплата</b> (oldindan to'langan) kiritiladi. Tizim INN bo'yicha yig'ib
+          suv balansini yangilaydi. Ustunlar: <b>Контрагент, Основное арендное место</b> (magazin ID),
+          <b> ИНН, К оплате, Предоплата</b>.
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-3">
+        <div>
+          <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-ink-faint">Yil</label>
+          <select className="input" value={year} onChange={(e) => setYear(Number(e.target.value))}>
+            {years.map((y) => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-ink-faint">Oy</label>
+          <select className="input" value={month} onChange={(e) => setMonth(Number(e.target.value))}>
+            {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
+          </select>
+        </div>
+        <input ref={fileRef} type="file" accept=".xlsx,.xlsm" className="hidden"
+               onChange={(e) => { setFile(e.target.files?.[0] ?? null); setResult(null); }} />
+        <button className="btn-ghost px-4 py-2 text-sm" onClick={() => fileRef.current?.click()}>
+          <Upload size={15} /> {file ? "Boshqa fayl" : "Excel tanlash"}
+        </button>
+        {file && <span className="text-sm text-ink-soft">{file.name}</span>}
+        <button className="btn-primary px-4 py-2 text-sm disabled:opacity-50"
+                disabled={!file || mut.isPending} onClick={() => mut.mutate()}>
+          {mut.isPending ? "Yuklanmoqda..." : "Import qilish"}
+        </button>
+      </div>
+
+      {mut.isError && (
+        <div className="mt-4 rounded-xl bg-status-unpaid/10 p-3 text-sm text-status-unpaid">
+          <div className="flex items-start gap-2">
+            <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+            <div>
+              <div className="font-semibold">Import bajarilmadi</div>
+              <div className="mt-1">{errDetail ?? "Noma'lum xatolik."}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {result && (
+        <ImportSummary
+          ok={result.ok}
+          rows_read={result.rows_read}
+          inns={result.inns}
+          with_debt={result.with_debt}
+          with_prepaid={result.with_prepaid}
+          total_debt={result.total_debt}
+          total_prepaid={result.total_prepaid}
+          skipped={result.skipped}
+          skipped_count={result.skipped_count}
+          errors={result.errors}
+          detected_columns={result.detected_columns}
+          showDetail={showDetail}
+          onToggleDetail={() => setShowDetail(p => !p)}
+        />
+      )}
+    </div>
+  );
+}
+
 function Method3Electricity() {
   const now = new Date();
   const [file, setFile] = useState<File | null>(null);
