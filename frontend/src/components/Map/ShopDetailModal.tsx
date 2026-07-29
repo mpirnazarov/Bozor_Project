@@ -14,9 +14,10 @@ const CATEGORY_ICON: Record<string, string> = { rent: "🏠", electricity: "⚡"
 interface Props {
   shopId: string | null;
   onClose: () => void;
+  customTitle?: string;
 }
 
-export function ShopDetailModal({ shopId, onClose }: Props) {
+export function ShopDetailModal({ shopId, onClose, customTitle }: Props) {
   const t = useT();
   const { data, isLoading } = useQuery({
     queryKey: ["shop", shopId],
@@ -25,7 +26,7 @@ export function ShopDetailModal({ shopId, onClose }: Props) {
   });
 
   return (
-    <Modal open={!!shopId} onClose={onClose} title={shopId ?? ""} maxWidth="max-w-lg" zClass="z-[60]">
+    <Modal open={!!shopId} onClose={onClose} title={customTitle ?? data?.shop.shop_id ?? shopId ?? ""} maxWidth="max-w-lg" zClass="z-[60]">
       {isLoading && <Spinner label="Yuklanmoqda..." />}
       {data && (
         <div className="space-y-4">
