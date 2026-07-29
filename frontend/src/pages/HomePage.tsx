@@ -45,6 +45,7 @@ export function HomePage() {
 
   const [activePavilion, setActivePavilion] = useState<Pavilion | null>(null);
   const [activeShop, setActiveShop] = useState<string | null>(null);
+  const [activeShopTitle, setActiveShopTitle] = useState<string | undefined>(undefined);
   const [activeInn, setActiveInn] = useState<string | null>(null);
   // Logo/i-tugma toggle: default i (Info), bosilganda logo (Store), yana bosilganda i
   const [showLogo, setShowLogo] = useState(false);
@@ -137,7 +138,14 @@ export function HomePage() {
         <HeaderStats />
         <MarketInvoicesSection />
         <InnSearch onSelectInn={setActiveInn} />
-        <MapView onSelectPavilion={setActivePavilion} />
+        <MapView onSelectPavilion={(p) => {
+          if (p.meta?.click_action === "shop_modal" && p.meta?.target_shop_id) {
+            setActiveShop(p.meta.target_shop_id as string);
+            setActiveShopTitle(p.display_name);
+          } else {
+            setActivePavilion(p);
+          }
+        }} />
       </main>
 
       <PavilionModal
@@ -148,10 +156,11 @@ export function HomePage() {
           // Pavilion modalni YOPMAYMIZ — magazin modali uning ustida ochiladi.
           // Magazin modali yopilganda pavilion modali ochiq qoladi.
           setActiveShop(id);
+          setActiveShopTitle(undefined);
         }}
       />
 
-      <ShopDetailModal shopId={activeShop} onClose={() => setActiveShop(null)} />
+      <ShopDetailModal shopId={activeShop} onClose={() => { setActiveShop(null); setActiveShopTitle(undefined); }} customTitle={activeShopTitle} />
 
       <Modal
         open={!!activeInn}

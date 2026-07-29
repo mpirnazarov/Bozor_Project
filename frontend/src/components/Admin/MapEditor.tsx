@@ -68,6 +68,8 @@ export function MapEditor() {
   const [showLabel, setShowLabel] = useState(true);
   const [labelRotation, setLabelRotation] = useState(0);
   const [isHidden, setIsHidden] = useState(false);
+  const [clickAction, setClickAction] = useState<"pavilion_list" | "shop_modal">("pavilion_list");
+  const [targetShopId, setTargetShopId] = useState("");
   const [hiddenListOpen, setHiddenListOpen] = useState(false);
   const [fillColor, setFillColor] = useState("#d4a373");
   const [strokeColor, setStrokeColor] = useState("#b45309");
@@ -93,6 +95,8 @@ export function MapEditor() {
     setShowLabel(p.meta?.show_label !== false);
     setLabelRotation(p.label_rotation ?? 0);
     setIsHidden(p.meta?.is_hidden === true);
+    setClickAction((p.meta?.click_action as "pavilion_list" | "shop_modal" | undefined) ?? "pavilion_list");
+    setTargetShopId((p.meta?.target_shop_id as string | undefined) ?? "");
     setLabelPos(
       p.label_x != null && p.label_y != null ? { x: p.label_x, y: p.label_y } : null,
     );
@@ -270,6 +274,8 @@ export function MapEditor() {
         shop_prefix: isHidden ? undefined : (shopPrefix.trim() || undefined),
         show_label: showLabel,
         is_hidden: isHidden,
+        click_action: clickAction,
+        target_shop_id: clickAction === "shop_modal" ? (targetShopId.trim() || undefined) : undefined,
       },
     };
     try {
@@ -670,6 +676,29 @@ export function MapEditor() {
                   <div className="mt-1 text-[11px] text-ink-faint">
                     {t("editor.prefixHint")}
                   </div>
+                </div>
+                <div>
+                  <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-ink-faint">Bosganda ochilsin</div>
+                  <div className="flex gap-1.5">
+                    <button type="button"
+                      className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${clickAction === "pavilion_list" ? "bg-brand text-white" : "bg-slate-100 text-ink-soft hover:bg-slate-200"}`}
+                      onClick={() => setClickAction("pavilion_list")}>
+                      Magazinlar ro'yxati
+                    </button>
+                    <button type="button"
+                      className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${clickAction === "shop_modal" ? "bg-brand text-white" : "bg-slate-100 text-ink-soft hover:bg-slate-200"}`}
+                      onClick={() => setClickAction("shop_modal")}>
+                      Magazin modali
+                    </button>
+                  </div>
+                  {clickAction === "shop_modal" && (
+                    <input
+                      className="input font-mono mt-2 w-full"
+                      placeholder="Magazin ID (masalan: 01-1-1-024)"
+                      value={targetShopId}
+                      onChange={(e) => setTargetShopId(e.target.value)}
+                    />
+                  )}
                 </div>
                 {/* Belgi ko'rsatish tick */}
                 <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-ink-soft">
