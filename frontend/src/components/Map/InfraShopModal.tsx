@@ -49,7 +49,7 @@ export function InfraShopModal({ infraShop, onClose }: Props) {
     <Modal
       open={!!infraShop}
       onClose={onClose}
-      title={infraShop?.name ?? ""}
+      title={detail?.shop.name ?? infraShop?.name ?? ""}
       maxWidth="max-w-lg"
       zClass="z-[60]"
     >
@@ -79,25 +79,28 @@ export function InfraShopModal({ infraShop, onClose }: Props) {
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               {cats.map((cat) => {
                 const b = currentBillings.find((x) => x.category === cat.key);
-                const due = b?.due_amount ?? 0;
+                // Arenda uchun monthly_rent dan fallback
+                const due = b?.due_amount ?? (cat.key === "rent" ? (detail?.shop.monthly_rent ?? 0) : 0);
                 const paid = b?.paid_amount ?? 0;
                 const debt = Math.max(0, due - paid);
-                const hasData = due > 0 || paid > 0;
+                const isPartial = paid > 0 && debt > 0;
                 return (
                   <div key={cat.key} className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs">
                     <div className="mb-1 font-bold text-ink">{cat.label}</div>
-                    {!hasData ? (
+                    {due === 0 && paid === 0 ? (
                       <div className="text-ink-faint">Ma'lumot yo'q</div>
                     ) : (
                       <>
                         <div className="text-ink-soft">Hisob: {fmtUZS(due)}</div>
                         <div className="text-ink-soft">To'langan: {fmtUZS(paid)}</div>
                         {debt > 0 ? (
-                          <div className="mt-1 font-bold text-status-unpaid">Qarz: {fmtUZS(debt)}</div>
+                          <div className="mt-1 font-bold text-status-unpaid">
+                            {isPartial ? "Qisman to'langan · " : ""}Qarz: {fmtUZS(debt)}
+                          </div>
                         ) : paid > due && paid > 0 ? (
                           <div className="mt-1 font-bold text-blue-600">Avans: +{fmtUZS(paid - due)}</div>
                         ) : (
-                          <div className="mt-1 font-bold text-status-paid">Qarzsiz</div>
+                          <div className="mt-1 font-bold text-status-paid">✓ Qarzsiz</div>
                         )}
                       </>
                     )}
