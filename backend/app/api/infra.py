@@ -1,29 +1,27 @@
 """Infra do'konlar — INN siz to'g'ridan billing."""
 from typing import Annotated
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
 from decimal import Decimal
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.database import get_db
-from app.deps import AdminUser, CurrentMarket
+from app.deps import CurrentUser, CurrentMarket
 from app.models.infra_shop import InfraShop, InfraBilling
 
 router = APIRouter()
-
-MONTHS = ["Yanvar","Fevral","Mart","Aprel","May","Iyun",
-          "Iyul","Avgust","Sentyabr","Oktyabr","Noyabr","Dekabr"]
 
 
 class InfraShopOut(BaseModel):
     id: int
     name: str
-    contract_no: str | None
-    contract_date: str | None
+    contract_no: str | None = None
+    contract_date: str | None = None
     monthly_rent: float
     is_active: bool
-    notes: str | None = None
     water_enabled: bool = True
+    notes: str | None = None
 
 
 class InfraBillingOut(BaseModel):
@@ -35,15 +33,11 @@ class InfraBillingOut(BaseModel):
     due_amount: float
     paid_amount: float
     debt: float
-    notes: str | None = None
 
 
-class InfraShopCreateIn(BaseModel):
-    name: str
-    contract_no: str | None = None
-    contract_date: str | None = None
-    monthly_rent: float = 0
-    notes: str | None = None
+class InfraShopDetail(BaseModel):
+    shop: InfraShopOut
+    billings: list[InfraBillingOut]
 
 
 class InfraBillingUpsertIn(BaseModel):
@@ -57,14 +51,9 @@ class InfraBillingUpsertIn(BaseModel):
     water_paid: float = 0
 
 
-class InfraShopDetail(BaseModel):
-    shop: InfraShopOut
-    billings: list[InfraBillingOut]
-
-
 @router.get("", response_model=list[InfraShopOut])
 async def list_infra_shops(
-    _admin: AdminUser,
+    _user: CurrentUser,
     market: CurrentMarket,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[InfraShopOut]:
@@ -76,40 +65,21 @@ async def list_infra_shops(
     return [InfraShopOut(
         id=s.id, name=s.name, contract_no=s.contract_no,
         contract_date=s.contract_date, monthly_rent=float(s.monthly_rent),
-        is_active=s.is_active, notes=s.notes,
+        is_active=s.is_active, water_enabled=bool(s.water_enabled),
+        notes=s.notes,
     ) for s in rows]
-
-
-@router.post("", response_model=InfraShopOut, status_code=201)
-async def create_infra_shop(
-    body: InfraShopCreateIn,
-    _admin: AdminUser,
-    market: CurrentMarket,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> InfraShopOut:
-    shop = InfraShop(
-        market_id=market.id, name=body.name, contract_no=body.contract_no,
-        contract_date=body.contract_date, monthly_rent=Decimal(str(body.monthly_rent)),
-        notes=body.notes,
-    )
-    db.add(shop)
-    await db.commit()
-    await db.refresh(shop)
-    return InfraShopOut(
-        id=shop.id, name=shop.name, contract_no=shop.contract_no,
-        contract_date=shop.contract_date, monthly_rent=float(shop.monthly_rent),
-        is_active=shop.is_active, notes=shop.notes,
-    )
 
 
 @router.get("/{shop_id}", response_model=InfraShopDetail)
 async def get_infra_shop(
     shop_id: int,
-    _admin: AdminUser,
+    _user: CurrentUser,
     market: CurrentMarket,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> InfraShopDetail:
-    shop = await db.scalar(select(InfraShop).where(InfraShop.id == shop_id, InfraShop.market_id == market.id))
+    shop = await db.scalar(
+        select(InfraShop).where(InfraShop.id == shop_id, InfraShop.market_id == market.id)
+    )
     if not shop:
         raise HTTPException(404, "Topilmadi")
     billings = (await db.execute(
@@ -117,15 +87,17 @@ async def get_infra_shop(
         .order_by(InfraBilling.year.desc(), InfraBilling.month.desc(), InfraBilling.category)
     )).scalars().all()
     return InfraShopDetail(
-        shop=InfraShopOut(id=shop.id, name=shop.name, contract_no=shop.contract_no,
-                          contract_date=shop.contract_date, monthly_rent=float(shop.monthly_rent),
-                          is_active=shop.is_active, notes=shop.notes),
+        shop=InfraShopOut(
+            id=shop.id, name=shop.name, contract_no=shop.contract_no,
+            contract_date=shop.contract_date, monthly_rent=float(shop.monthly_rent),
+            is_active=shop.is_active, water_enabled=bool(shop.water_enabled),
+            notes=shop.notes,
+        ),
         billings=[InfraBillingOut(
             id=b.id, shop_id=b.shop_id, year=b.year, month=b.month,
             category=b.category, due_amount=float(b.due_amount),
             paid_amount=float(b.paid_amount),
-            debt=max(0, float(b.due_amount) - float(b.paid_amount)),
-            notes=b.notes,
+            debt=max(0.0, float(b.due_amount) - float(b.paid_amount)),
         ) for b in billings],
     )
 
@@ -134,18 +106,20 @@ async def get_infra_shop(
 async def upsert_infra_billing(
     shop_id: int,
     body: InfraBillingUpsertIn,
-    _admin: AdminUser,
+    _user: CurrentUser,
     market: CurrentMarket,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[InfraBillingOut]:
-    shop = await db.scalar(select(InfraShop).where(InfraShop.id == shop_id, InfraShop.market_id == market.id))
+    shop = await db.scalar(
+        select(InfraShop).where(InfraShop.id == shop_id, InfraShop.market_id == market.id)
+    )
     if not shop:
         raise HTTPException(404, "Topilmadi")
 
     cats = {
-        "rent": (body.rent_due, body.rent_paid),
-        "electricity": (body.electricity_due, body.electricity_paid),
-        "water": (body.water_due, body.water_paid),
+        "rent":        (body.rent_due,        body.rent_paid),
+        "electricity": (body.electricity_due,  body.electricity_paid),
+        "water":       (body.water_due,        body.water_paid),
     }
     result = []
     for cat, (due, paid) in cats.items():
@@ -173,20 +147,5 @@ async def upsert_infra_billing(
         id=b.id, shop_id=b.shop_id, year=b.year, month=b.month,
         category=b.category, due_amount=float(b.due_amount),
         paid_amount=float(b.paid_amount),
-        debt=max(0, float(b.due_amount) - float(b.paid_amount)),
+        debt=max(0.0, float(b.due_amount) - float(b.paid_amount)),
     ) for b in result]
-
-
-@router.delete("/{shop_id}")
-async def delete_infra_shop(
-    shop_id: int,
-    _admin: AdminUser,
-    market: CurrentMarket,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> dict:
-    shop = await db.scalar(select(InfraShop).where(InfraShop.id == shop_id, InfraShop.market_id == market.id))
-    if not shop:
-        raise HTTPException(404, "Topilmadi")
-    shop.is_active = False
-    await db.commit()
-    return {"ok": True}
