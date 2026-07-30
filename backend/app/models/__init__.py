@@ -46,3 +46,4 @@ __all__ = [
 ]
 
 from app.models.manager_pavilion import ManagerPavilion
+from app.models.infra_shop import InfraShop, InfraBilling

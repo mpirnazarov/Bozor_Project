@@ -172,6 +172,10 @@ async def update_pavilion(
     await write_audit(
         db, admin.id, "update_pavilion", "pavilion", str(pavilion_id), changes
     )
+    # Infra do'kon sync
+    if pav.pavilion_type == "infra":
+        from app.api.pavilions import _sync_infra_shop
+        await _sync_infra_shop(db, pav.id, pav.market_id, pav.display_name, pav.pavilion_type, pav.meta)
     await db.commit()
     await db.refresh(pav)
     return pav
@@ -201,6 +205,10 @@ async def create_pavilion(
     await write_audit(
         db, admin.id, "create_pavilion", "pavilion", str(new_id), data
     )
+    # Infra do'kon sync
+    if pav.pavilion_type == "infra":
+        from app.api.pavilions import _sync_infra_shop
+        await _sync_infra_shop(db, pav.id, pav.market_id, pav.display_name, pav.pavilion_type, meta)
     await db.commit()
     await db.refresh(pav)
     return pav

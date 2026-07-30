@@ -212,3 +212,33 @@ async def get_pavilion_shops(
         "billing": billing,
     }
 
+
+
+async def _sync_infra_shop(db, pavilion_id: int, market_id: int, name: str, pavilion_type: str | None, meta: dict | None = None) -> None:
+    """Infra pavilion saqlanganda InfraShop avtomatik yaratadi/yangilaydi."""
+    from app.models.infra_shop import InfraShop as InfraShopModel
+    from sqlalchemy import select as _sel
+    from decimal import Decimal
+
+    if pavilion_type != "infra":
+        return
+
+    meta = meta or {}
+    water_enabled = meta.get("water_enabled", True)
+
+    existing = await db.scalar(
+        _sel(InfraShopModel).where(
+            InfraShopModel.market_id == market_id,
+            InfraShopModel.name == name,
+        )
+    )
+    if existing is None:
+        shop = InfraShopModel(
+            market_id=market_id, name=name,
+            monthly_rent=Decimal("0"),
+            water_enabled=water_enabled,
+        )
+        db.add(shop)
+    else:
+        existing.is_active = True
+        existing.water_enabled = water_enabled

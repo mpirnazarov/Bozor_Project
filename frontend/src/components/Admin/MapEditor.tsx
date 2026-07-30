@@ -70,6 +70,8 @@ export function MapEditor() {
   const [isHidden, setIsHidden] = useState(false);
   const [clickAction, setClickAction] = useState<"pavilion_list" | "shop_modal">("pavilion_list");
   const [targetShopId, setTargetShopId] = useState("");
+  const [isInfra, setIsInfra] = useState(false);
+  const [waterEnabled, setWaterEnabled] = useState(true);
   const [hiddenListOpen, setHiddenListOpen] = useState(false);
   const [fillColor, setFillColor] = useState("#d4a373");
   const [strokeColor, setStrokeColor] = useState("#b45309");
@@ -97,6 +99,8 @@ export function MapEditor() {
     setIsHidden(p.meta?.is_hidden === true);
     setClickAction((p.meta?.click_action as "pavilion_list" | "shop_modal" | undefined) ?? "pavilion_list");
     setTargetShopId((p.meta?.target_shop_id as string | undefined) ?? "");
+    setIsInfra(p.pavilion_type === "infra");
+    setWaterEnabled((p.meta?.water_enabled as boolean | undefined) ?? true);
     setLabelPos(
       p.label_x != null && p.label_y != null ? { x: p.label_x, y: p.label_y } : null,
     );
@@ -268,14 +272,16 @@ export function MapEditor() {
       label_x: labelPoint.x,
       label_y: labelPoint.y,
       label_rotation: labelRotation,
+      pavilion_type: isInfra ? "infra" : undefined,
       is_active: true,
       map_layer_id: activeLayerId ?? undefined,
       meta: {
         shop_prefix: isHidden ? undefined : (shopPrefix.trim() || undefined),
         show_label: showLabel,
         is_hidden: isHidden,
-        click_action: clickAction,
+        click_action: isInfra ? "shop_modal" : clickAction,
         target_shop_id: clickAction === "shop_modal" ? (targetShopId.trim() || undefined) : undefined,
+        water_enabled: isInfra ? waterEnabled : undefined,
       },
     };
     try {
@@ -698,6 +704,19 @@ export function MapEditor() {
                       value={targetShopId}
                       onChange={(e) => setTargetShopId(e.target.value)}
                     />
+                  )}
+                </div>
+                <div>
+                  <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-ink-faint">Layout turi</div>
+                  <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-ink-soft">
+                    <input type="checkbox" checked={isInfra} onChange={e => setIsInfra(e.target.checked)} className="rounded" />
+                    Infra do'kon (INN siz, qo'lda billing)
+                  </label>
+                  {isInfra && (
+                    <label className="mt-2 flex cursor-pointer items-center gap-2 text-xs font-semibold text-ink-soft">
+                      <input type="checkbox" checked={waterEnabled} onChange={e => setWaterEnabled(e.target.checked)} className="rounded" />
+                      Suv hisobi yoqilgan
+                    </label>
                   )}
                 </div>
                 {/* Belgi ko'rsatish tick */}

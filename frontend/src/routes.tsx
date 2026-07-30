@@ -10,6 +10,7 @@ import { SuperAdminPage } from "@/pages/SuperAdminPage";
 import { OwnerPage } from "@/pages/OwnerPage";
 import { RailwayDetailPage } from "@/pages/RailwayDetailPage";
 import { InvoicesPage } from "@/pages/InvoicesPage";
+import { InfraPage } from "@/pages/InfraPage";
 import { ManagersPage } from "@/pages/ManagersPage";
 import { ShopsListPage } from "@/pages/ShopsListPage";
 import { ImportHistoryPage } from "@/pages/ImportHistoryPage";
@@ -55,6 +56,7 @@ export function AppRoutes() {
       <Route path="/owner/invoices" element={<Protected ownerOnly><InvoicesPage /></Protected>} />
       <Route path="/super/markets" element={<Protected superOnly><SuperAdminPage /></Protected>} />
       <Route path="/admin" element={<Protected adminOnly><AdminPage /></Protected>} />
+      <Route path="/infra" element={<Protected adminOnly><InfraPage /></Protected>} />
       <Route path="/managers" element={<Protected adminOnly><ManagersPage /></Protected>} />
       <Route path="/shops-list" element={<Protected adminOnly><ShopsListPage /></Protected>} />
       <Route path="/import-history" element={<Protected adminOnly><ImportHistoryPage /></Protected>} />
