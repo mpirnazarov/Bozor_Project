@@ -57,6 +57,11 @@ export function InfraShopModal({ infraShop, onClose }: Props) {
 
       {!isLoading && resolvedId && detail && (
         <div className="space-y-4">
+          {/* Infra badge */}
+          <div className="mb-1 inline-flex items-center gap-1.5 rounded-full bg-brand/10 px-3 py-1 text-xs font-bold text-brand">
+            🏗 Infra do'kon
+          </div>
+
           {/* Info */}
           <div className="card p-3 text-sm">
             {detail.shop.contract_no && (
