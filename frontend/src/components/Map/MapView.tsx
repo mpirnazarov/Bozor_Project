@@ -273,6 +273,11 @@ export function MapView({ onSelectPavilion }: Props) {
           const meta = p.meta ?? {};
           const extra = (meta.extra_polygons as string[] | undefined) ?? [];
           const fontSize = (meta.label_font_size as number | undefined) ?? 20;
+          // Uzun nom uchun avtomatik font kichraytirish
+          const labelText = p.display_text ?? "";
+          const autoFontSize = labelText.length > 12
+            ? Math.max(10, fontSize - (labelText.length - 12) * 0.8)
+            : fontSize;
           const allPolys = [p.polygon_points, ...extra].filter(Boolean) as string[];
           const isHidden = meta.is_hidden === true;
           const showLabel = meta.show_label !== false; // default true
@@ -322,7 +327,7 @@ export function MapView({ onSelectPavilion }: Props) {
                 <text
                   x={p.label_x}
                   y={p.label_y}
-                  fontSize={fontSize}
+                  fontSize={autoFontSize}
                   fontWeight="700"
                   fill="#3b2c1a"
                   textAnchor="middle"
@@ -334,7 +339,7 @@ export function MapView({ onSelectPavilion }: Props) {
                   }
                   style={{ pointerEvents: "none", userSelect: "none" }}
                 >
-                  {p.display_text}
+                  {labelText}
                 </text>
               )}
             </g>
