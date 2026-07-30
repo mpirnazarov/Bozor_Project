@@ -239,6 +239,17 @@ async def _sync_infra_shop(db, pavilion_id: int, market_id: int, name: str, pavi
             water_enabled=water_enabled,
         )
         db.add(shop)
+        await db.flush()  # ID olish uchun
+        # pavilion meta ga infra_shop_id yozamiz
+        from app.models import Pavilion as PavilionModel
+        pav = await db.get(PavilionModel, pavilion_id)
+        if pav:
+            pav.meta = {**(pav.meta or {}), "infra_shop_id": shop.id}
     else:
         existing.is_active = True
         existing.water_enabled = water_enabled
+        # pavilion meta ga infra_shop_id yozamiz
+        from app.models import Pavilion as PavilionModel
+        pav = await db.get(PavilionModel, pavilion_id)
+        if pav:
+            pav.meta = {**(pav.meta or {}), "infra_shop_id": existing.id}
