@@ -72,6 +72,7 @@ export function MapEditor() {
   const [targetShopId, setTargetShopId] = useState("");
   const [isInfra, setIsInfra] = useState(false);
   const [waterEnabled, setWaterEnabled] = useState(true);
+  const [isToilet, setIsToilet] = useState(false);
   const [hiddenListOpen, setHiddenListOpen] = useState(false);
   const [fillColor, setFillColor] = useState("#d4a373");
   const [strokeColor, setStrokeColor] = useState("#b45309");
@@ -101,6 +102,7 @@ export function MapEditor() {
     setTargetShopId((p.meta?.target_shop_id as string | undefined) ?? "");
     setIsInfra(p.pavilion_type === "infra");
     setWaterEnabled((p.meta?.water_enabled as boolean | undefined) ?? true);
+    setIsToilet(p.pavilion_type === "toilet");
     setLabelPos(
       p.label_x != null && p.label_y != null ? { x: p.label_x, y: p.label_y } : null,
     );
@@ -272,7 +274,7 @@ export function MapEditor() {
       label_x: labelPoint.x,
       label_y: labelPoint.y,
       label_rotation: labelRotation,
-      pavilion_type: isInfra ? "infra" : undefined,
+      pavilion_type: isToilet ? "toilet" : isInfra ? "infra" : undefined,
       is_active: true,
       map_layer_id: activeLayerId ?? undefined,
       meta: {
@@ -718,6 +720,10 @@ export function MapEditor() {
                       Suv hisobi yoqilgan
                     </label>
                   )}
+                  <label className="mt-2 flex cursor-pointer items-center gap-2 text-xs font-semibold text-ink-soft">
+                    <input type="checkbox" checked={isToilet} onChange={e => { setIsToilet(e.target.checked); if(e.target.checked) setIsInfra(false); }} className="rounded" />
+                    🚻 Xojatxona
+                  </label>
                 </div>
                 {/* Belgi ko'rsatish tick */}
                 <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-ink-soft">

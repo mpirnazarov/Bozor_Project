@@ -253,3 +253,33 @@ async def _sync_infra_shop(db, pavilion_id: int, market_id: int, name: str, pavi
         pav = await db.get(PavilionModel, pavilion_id)
         if pav:
             pav.meta = {**(pav.meta or {}), "infra_shop_id": existing.id}
+
+
+async def _sync_toilet(db, pavilion_id: int, market_id: int, name: str, pavilion_type: str | None) -> None:
+    """Toilet pavilion saqlanganda Toilet avtomatik yaratadi/yangilaydi."""
+    from app.models.toilet import Toilet as ToiletModel
+    from sqlalchemy import select as _sel
+
+    if pavilion_type != "toilet":
+        return
+
+    existing = await db.scalar(
+        _sel(ToiletModel).where(
+            ToiletModel.market_id == market_id,
+            ToiletModel.name == name,
+        )
+    )
+    if existing is None:
+        t = ToiletModel(market_id=market_id, name=name)
+        db.add(t)
+        await db.flush()
+        from app.models import Pavilion as PavilionModel
+        pav = await db.get(PavilionModel, pavilion_id)
+        if pav:
+            pav.meta = {**(pav.meta or {}), "toilet_id": t.id}
+    else:
+        existing.is_active = True
+        from app.models import Pavilion as PavilionModel
+        pav = await db.get(PavilionModel, pavilion_id)
+        if pav:
+            pav.meta = {**(pav.meta or {}), "toilet_id": existing.id}

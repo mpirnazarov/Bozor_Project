@@ -176,6 +176,10 @@ async def update_pavilion(
     if pav.pavilion_type == "infra":
         from app.api.pavilions import _sync_infra_shop
         await _sync_infra_shop(db, pav.id, pav.market_id, pav.display_name, pav.pavilion_type, pav.meta)
+    # Xojatxona sync
+    if pav.pavilion_type == "toilet":
+        from app.api.pavilions import _sync_toilet
+        await _sync_toilet(db, pav.id, pav.market_id, pav.display_name, pav.pavilion_type)
     await db.commit()
     await db.refresh(pav)
     return pav
@@ -209,6 +213,10 @@ async def create_pavilion(
     if pav.pavilion_type == "infra":
         from app.api.pavilions import _sync_infra_shop
         await _sync_infra_shop(db, pav.id, pav.market_id, pav.display_name, pav.pavilion_type, meta)
+    # Xojatxona sync
+    if pav.pavilion_type == "toilet":
+        from app.api.pavilions import _sync_toilet
+        await _sync_toilet(db, pav.id, pav.market_id, pav.display_name, pav.pavilion_type)
     await db.commit()
     await db.refresh(pav)
     return pav

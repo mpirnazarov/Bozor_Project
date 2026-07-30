@@ -59,6 +59,27 @@ def run():
         print("3 ta infra do'kon qo'shildi")
 
     cur.execute("ALTER TABLE infra_shops ADD COLUMN IF NOT EXISTS water_enabled BOOLEAN NOT NULL DEFAULT TRUE")
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS toilets (
+            id SERIAL PRIMARY KEY,
+            market_id INTEGER NOT NULL REFERENCES markets(id) ON DELETE CASCADE,
+            name VARCHAR(200) NOT NULL,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            notes TEXT,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS toilet_revenues (
+            id SERIAL PRIMARY KEY,
+            toilet_id INTEGER NOT NULL REFERENCES toilets(id) ON DELETE CASCADE,
+            revenue_date DATE NOT NULL,
+            amount NUMERIC(18,2) NOT NULL DEFAULT 0,
+            notes TEXT,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+            CONSTRAINT uq_toilet_revenue_date UNIQUE (toilet_id, revenue_date)
+        )
+    """)
     print("Migrations OK")
     conn.close()
 

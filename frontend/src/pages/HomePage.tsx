@@ -12,6 +12,7 @@ import { InnSearch } from "@/components/INN/InnSearch";
 import { MapView } from "@/components/Map/MapView";
 import { PavilionModal } from "@/components/Map/PavilionModal";
 import { ShopDetailModal } from "@/components/Map/ShopDetailModal";
+import { ToiletModal } from "@/components/Map/ToiletModal";
 import { InfraShopModal } from "@/components/Map/InfraShopModal";
 import { useQuery } from "@tanstack/react-query";
 import { getInn } from "@/api/inn";
@@ -49,6 +50,7 @@ export function HomePage() {
   const [activeShopTitle, setActiveShopTitle] = useState<string | undefined>(undefined);
   const [noShopIdPavilion, setNoShopIdPavilion] = useState<string | null>(null);
   const [activeInfraShop, setActiveInfraShop] = useState<{ id: number; name: string } | null>(null);
+  const [activeToilet, setActiveToilet] = useState<{ id: number; name: string } | null>(null);
   const [activeInn, setActiveInn] = useState<string | null>(null);
   // Logo/i-tugma toggle: default i (Info), bosilganda logo (Store), yana bosilganda i
   const [showLogo, setShowLogo] = useState(false);
@@ -142,7 +144,10 @@ export function HomePage() {
         <MarketInvoicesSection />
         <InnSearch onSelectInn={setActiveInn} />
         <MapView onSelectPavilion={(p) => {
-          if (p.pavilion_type === "infra" || p.meta?.click_action === "shop_modal") {
+          if (p.pavilion_type === "toilet") {
+            const tid = p.meta?.toilet_id as number | undefined;
+            setActiveToilet({ id: tid ?? 0, name: p.display_name });
+          } else if (p.pavilion_type === "infra" || p.meta?.click_action === "shop_modal") {
             if (p.meta?.infra_shop_id) {
               // Infra do'kon modali
               setActiveInfraShop({ id: p.meta.infra_shop_id as number, name: p.display_name });
@@ -176,6 +181,7 @@ export function HomePage() {
 
       <ShopDetailModal shopId={activeShop} onClose={() => { setActiveShop(null); setActiveShopTitle(undefined); }} customTitle={activeShopTitle} />
       <InfraShopModal infraShop={activeInfraShop} onClose={() => setActiveInfraShop(null)} />
+      <ToiletModal toilet={activeToilet} onClose={() => setActiveToilet(null)} />
 
       {noShopIdPavilion && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4"
