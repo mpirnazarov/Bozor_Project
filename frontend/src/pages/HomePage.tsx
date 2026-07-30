@@ -46,6 +46,7 @@ export function HomePage() {
   const [activePavilion, setActivePavilion] = useState<Pavilion | null>(null);
   const [activeShop, setActiveShop] = useState<string | null>(null);
   const [activeShopTitle, setActiveShopTitle] = useState<string | undefined>(undefined);
+  const [noShopIdPavilion, setNoShopIdPavilion] = useState<string | null>(null);
   const [activeInn, setActiveInn] = useState<string | null>(null);
   // Logo/i-tugma toggle: default i (Info), bosilganda logo (Store), yana bosilganda i
   const [showLogo, setShowLogo] = useState(false);
@@ -139,9 +140,13 @@ export function HomePage() {
         <MarketInvoicesSection />
         <InnSearch onSelectInn={setActiveInn} />
         <MapView onSelectPavilion={(p) => {
-          if (p.meta?.click_action === "shop_modal" && p.meta?.target_shop_id) {
-            setActiveShop(p.meta.target_shop_id as string);
-            setActiveShopTitle(p.display_name);
+          if (p.meta?.click_action === "shop_modal") {
+            if (p.meta?.target_shop_id) {
+              setActiveShop(p.meta.target_shop_id as string);
+              setActiveShopTitle(p.display_name);
+            } else {
+              setNoShopIdPavilion(p.display_name);
+            }
           } else {
             setActivePavilion(p);
           }
@@ -161,6 +166,23 @@ export function HomePage() {
       />
 
       <ShopDetailModal shopId={activeShop} onClose={() => { setActiveShop(null); setActiveShopTitle(undefined); }} customTitle={activeShopTitle} />
+
+      {noShopIdPavilion && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4"
+             onClick={() => setNoShopIdPavilion(null)}>
+          <div className="card w-full max-w-sm p-6 text-center" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-2 text-3xl">⚠️</div>
+            <h3 className="mb-1 font-display text-lg font-bold text-ink">{noShopIdPavilion}</h3>
+            <p className="text-sm text-ink-faint">
+              Bu layout uchun magazin ID kiritilmagan.
+              Admin → Xarita muharriri → layoutni tanlang →
+              <b> "Magazin ID"</b> ni kiriting.
+            </p>
+            <button className="btn-primary mt-4 w-full py-2.5"
+                    onClick={() => setNoShopIdPavilion(null)}>Yopish</button>
+          </div>
+        </div>
+      )}
 
       <Modal
         open={!!activeInn}
