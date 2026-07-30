@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Loader2, ChevronDown, ChevronUp, Check, Droplets } from "lucide-react";
@@ -121,18 +121,22 @@ function ShopBillingPanel({
   const { data: detail } = useQuery<InfraShopDetail>({
     queryKey: ["infra-shop", shop.id],
     queryFn: () => getInfraShop(shop.id),
-    onSuccess: (d: InfraShopDetail) => {
-      const nf = emptyForm();
-      d.billings
-        .filter((b) => b.year === year && b.month === month)
-        .forEach((b) => {
-          if (b.category === "rent") { nf.rent_due = b.due_amount; nf.rent_paid = b.paid_amount; }
-          if (b.category === "electricity") { nf.electricity_due = b.due_amount; nf.electricity_paid = b.paid_amount; }
-          if (b.category === "water") { nf.water_due = b.due_amount; nf.water_paid = b.paid_amount; }
-        });
-      setForm(nf);
-    },
-  } as Parameters<typeof useQuery>[0]);
+  });
+
+  // detail kelganda formni to'ldiramiz
+  const prevDetailRef = useRef<InfraShopDetail | null>(null);
+  if (detail && detail !== prevDetailRef.current) {
+    prevDetailRef.current = detail;
+    const nf = emptyForm();
+    detail.billings
+      .filter((b) => b.year === year && b.month === month)
+      .forEach((b) => {
+        if (b.category === "rent") { nf.rent_due = b.due_amount; nf.rent_paid = b.paid_amount; }
+        if (b.category === "electricity") { nf.electricity_due = b.due_amount; nf.electricity_paid = b.paid_amount; }
+        if (b.category === "water") { nf.water_due = b.due_amount; nf.water_paid = b.paid_amount; }
+      });
+    setForm(nf);
+  }
 
   const saveMut = useMutation({
     mutationFn: () => upsertInfraBilling(shop.id, { ...form, year, month }),
@@ -250,7 +254,7 @@ function ShopBillingPanel({
         </button>
       </div>
 
-      {detail && (detail as InfraShopDetail).billings.filter((b) => !(b.year === year && b.month === month)).length > 0 && (
+      {detail && detail.billings.filter((b) => !(b.year === year && b.month === month)).length > 0 && (
         <div className="mt-4">
           <div className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-faint">Oldingi oylar</div>
           <div className="overflow-x-auto rounded-xl border border-slate-100">
@@ -265,7 +269,7 @@ function ShopBillingPanel({
                 </tr>
               </thead>
               <tbody>
-                {(detail as InfraShopDetail).billings
+                {detail.billings
                   .filter((b) => !(b.year === year && b.month === month))
                   .map((b) => (
                     <tr key={b.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60">
