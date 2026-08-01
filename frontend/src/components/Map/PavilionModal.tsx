@@ -66,53 +66,7 @@ function demoSplit(totalDue: number, seed: number): { debt: number; paid: number
 const USE_DASHBOARD_PROPORTION = true;
 
 /** partial -> unpaid (agar bayroq yoqilgan bo'lsa). Boshqa statuslar o'zgarmaydi. */
-function applyPartialOverride(status: ShopStatus): ShopStatus {
-  if (TREAT_PARTIAL_AS_UNPAID && status === "partial") return "unpaid";
-  return status;
-}
 
-function statusForService(b: BillingStatus | undefined, service: ServiceKey): {
-  status: ShopStatus; due: number; paid: number; debt: number;
-} {
-  if (!b) return { status: "no_data", due: 0, paid: 0, debt: 0 };
-
-  // "Barcha" (default) — status BARCHA xizmatlar (arenda + suv + elektr)
-  // bo'yicha aniqlanadi. Biror xizmatdan qarz bo'lsa magazin QIZIL bo'ladi.
-  if (service === "all") {
-    let due = 0, paid = 0, debt = 0;
-    for (const c of b.categories) {
-      const cd = Number(c.due);
-      const cp = Number(c.paid);
-      due += cd;
-      paid += cp;
-      debt += Math.max(0, cd - cp);
-    }
-    let status: ShopStatus;
-    if (due <= EPS && paid <= EPS) status = "no_data";
-    else if (debt <= EPS) status = "paid";
-    else if (paid > EPS) status = "partial";
-    else status = "unpaid";
-    return { status: applyPartialOverride(status), due, paid, debt };
-  }
-
-  // Aniq bir xizmat tanlangan — faqat o'sha kategoriya bo'yicha
-  const cat: CategoryBalance | undefined = b.categories.find((c) => c.category === service);
-  if (!cat) {
-    // Magazinning umumiy billing'i bor, lekin bu xizmat (masalan suv) satri yo'q.
-    // "Ma'lumot yo'q" emas — bu xizmatdan qarzi yo'q deb hisoblaymiz (yashil),
-    // shunda magazin ro'yxatda QOLADI va filtrlaganda tushib qolmaydi.
-    return { status: "paid", due: 0, paid: 0, debt: 0 };
-  }
-  const due = Number(cat.due);
-  const paid = Number(cat.paid);
-  const debt = Math.max(0, due - paid);
-  let status: ShopStatus;
-  if (due <= EPS && paid <= EPS) status = "paid";
-  else if (debt <= EPS) status = "paid";
-  else if (paid > EPS) status = "partial";
-  else status = "unpaid";
-  return { status: applyPartialOverride(status), due, paid, debt };
-}
 
 export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop }: Props) {
   const [service, setService] = useState<ServiceKey>("all");
