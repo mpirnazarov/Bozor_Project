@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Upload, Link2, Loader2, CheckCircle2, AlertTriangle, Filter, Store,
@@ -58,6 +58,8 @@ export function ShopsManager() {
 
   return (
     <div className="space-y-4">
+      <VacantShopsUploader />
+
       <p className="text-sm text-ink-soft">
         {t("shopsmgr.intro")}
       </p>
@@ -214,6 +216,75 @@ function StatBox({ label, value, tone, icon }: {
       <div className={`text-2xl font-extrabold tabnum ${color}`}>
         {value.toLocaleString("uz-UZ")}
       </div>
+    </div>
+  );
+}
+
+function VacantShopsUploader() {
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ marked_vacant: number; marked_not_vacant: number; not_found: string[] } | null>(null);
+  const [err, setErr] = useState("");
+  const [inputRef, setInputRef] = useState<HTMLInputElement | null>(null);
+
+  async function handleFile(file: File) {
+    setBusy(true); setErr(""); setResult(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const { apiClient } = await import("@/api/client");
+      const { data } = await apiClient.post("/admin/vacant-shops/upload", form, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      setResult(data);
+      qc.invalidateQueries({ queryKey: ["shops"] });
+    } catch (e: unknown) {
+      const ex = e as { response?: { data?: { detail?: string } } };
+      setErr(ex?.response?.data?.detail ?? "Xatolik yuz berdi");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card space-y-3 p-4">
+      <div className="flex items-center gap-2 text-sm font-bold text-ink">
+        <span>🏚</span> Bo'sh do'konlar ro'yxati
+      </div>
+      <p className="text-xs text-ink-faint">
+        CSV yoki Excel (.xlsx) yuklang — bitta ustun: <b>shop_id</b>.<br />
+        Fayldagi do'konlar <b>bo'sh</b> deb belgilanadi, qolganlaridan bo'sh belgisi olib tashlanadi.
+      </p>
+      <input
+        ref={setInputRef}
+        type="file"
+        accept=".csv,.xlsx"
+        className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ""; }}
+      />
+      <button
+        className="btn-primary w-full py-2 text-sm disabled:opacity-50"
+        disabled={busy}
+        onClick={() => inputRef?.click()}
+      >
+        {busy ? "Yuklanmoqda..." : "Fayl tanlash va yuklash"}
+      </button>
+      {err && <div className="rounded-xl bg-status-unpaid/10 px-3 py-2 text-sm text-status-unpaid">{err}</div>}
+      {result && (
+        <div className="rounded-xl bg-status-paid/10 px-3 py-2 text-sm">
+          <div className="font-bold text-status-paid">✓ Muvaffaqiyatli</div>
+          <div className="mt-1 text-ink-soft">
+            Bo'sh belgilandi: <b>{result.marked_vacant}</b> ta ·
+            Bo'sh belgisi olib tashlandi: <b>{result.marked_not_vacant}</b> ta
+          </div>
+          {result.not_found.length > 0 && (
+            <div className="mt-1 text-status-unpaid text-xs">
+              Topilmadi: {result.not_found.slice(0, 5).join(", ")}
+              {result.not_found.length > 5 ? ` va yana ${result.not_found.length - 5} ta` : ""}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
