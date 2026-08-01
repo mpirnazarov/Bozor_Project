@@ -140,11 +140,57 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
   const computed = useMemo(() => {
     if (!data) return [];
     const list = data.shops.map((s) => {
-      const r = statusForService(data.billing[s.shop_id], service);
+      // 1. Bo'sh do'kon — kulrang "vacant"
+      if (s.is_vacant) {
+        return { shop: s, status: "vacant" as ShopStatus, due: 0, paid: 0, debt: 0 };
+      }
+
+      // 2. INN yo'q — egasiz
+      if (!s.inn) {
+        return { shop: s, status: "unpaid" as ShopStatus, due: 0, paid: 0, debt: 0 };
+      }
+
+      const billing = data.billing[s.shop_id];
+
+      // 3. Billing umuman yo'q — monthly_rent dan qarz hisoblaymiz
+      if (!billing) {
+        const monthlyRent = Number(s.monthly_rent ?? 0);
+        if (service === "rent" || service === "all") {
+          return {
+            shop: s,
+            status: "unpaid" as ShopStatus,
+            due: monthlyRent,
+            paid: 0,
+            debt: monthlyRent,
+          };
+        }
+        return { shop: s, status: "no_data" as ShopStatus, due: 0, paid: 0, debt: 0 };
+      }
+
+      // 4. Billing bor — oddiy hisob
+      const r = statusForService(billing, service);
+
+      // 5. Arenda billing yo'q bo'lsa monthly_rent dan fallback
+      if ((service === "rent" || service === "all") && r.status === "no_data") {
+        const monthlyRent = Number(s.monthly_rent ?? 0);
+        if (monthlyRent > 0) {
+          return {
+            shop: s,
+            status: "unpaid" as ShopStatus,
+            due: monthlyRent,
+            paid: 0,
+            debt: monthlyRent,
+          };
+        }
+      }
+
       return { shop: s, ...r };
     });
-    // Topilmagan berkitilgan bo'lsa — no_data magazinlarni chiqarib tashlaymiz
-    return hideUnmatched ? list.filter((c) => c.status !== "no_data") : list;
+
+    // Bo'sh va no_data ni chiqarib tashlaymiz (faqat hideUnmatched=true bo'lsa)
+    return hideUnmatched
+      ? list.filter((c) => c.status !== "no_data" && c.status !== "vacant")
+      : list;
   }, [data, service, hideUnmatched]);
 
   // Tepadagi summalar HAR DOIM umumiy (barcha xizmatlar bo'yicha) bo'ladi.
