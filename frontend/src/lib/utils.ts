@@ -26,4 +26,5 @@ export const STATUS_COLORS: Record<string, string> = {
   partial: "#eab308",
   unpaid: "#dc2626",
   no_data: "#1f2937",
+  vacant: "#9ca3af",
 };
