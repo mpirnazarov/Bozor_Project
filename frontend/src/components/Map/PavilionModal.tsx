@@ -7,7 +7,7 @@ import { getDashboard } from "@/api/dashboard";
 import { STATUS_COLORS, fmtUZS } from "@/lib/utils";
 import { Modal, Spinner } from "@/components/ui/Modal";
 import { useT } from "@/i18n/useT";
-import type { ShopStatus, BillingStatus, CategoryBalance } from "@/types/api";
+import type { ShopStatus } from "@/types/api";
 
 interface Props {
   pavilionId: number | null;
@@ -33,11 +33,9 @@ const STATUS_FILTERS: { key: StatusFilter; tkey: string; color?: string }[] = [
   { key: "no_data", tkey: "pav.status.no_data", color: STATUS_COLORS.no_data },
 ];
 
-const EPS = 1;
 
 // VAQTINCHA: qisman to'langan (partial) magazinlarni ham QIZIL (unpaid) ko'rsatish.
 // Orqaga qaytarish uchun shu qiymatni `false` qiling — partial yana SARIQ bo'ladi.
-const TREAT_PARTIAL_AS_UNPAID = false;
 
 // ===== PREZENTATSIYA (DEMO) REJIMI =====
 // VAQTINCHA: prezentatsiya uchun har blok ochilganda Qarzdorlik/To'langan
