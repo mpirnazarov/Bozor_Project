@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { apiClient } from "@/api/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Upload, Link2, Loader2, CheckCircle2, AlertTriangle, Filter, Store,
@@ -59,6 +60,8 @@ export function ShopsManager() {
   return (
     <div className="space-y-4">
       <VacantShopsUploader />
+
+      <VacantShopsList />
 
       <p className="text-sm text-ink-soft">
         {t("shopsmgr.intro")}
@@ -283,6 +286,57 @@ function VacantShopsUploader() {
               {result.not_found.length > 5 ? ` va yana ${result.not_found.length - 5} ta` : ""}
             </div>
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function VacantShopsList() {
+  const { data, isLoading } = useQuery({
+    queryKey: ["shops-list-vacant"],
+    queryFn: async () => {
+      const { data } = await apiClient.get("/admin/shops-list", {
+        params: { vacant: "vacant", per_page: 500, page: 1 },
+      });
+      return data as { items: { shop_id: string; counterparty_name: string | null; pavilion_code: string | null; inn: string | null }[]; total: number };
+    },
+  });
+
+  return (
+    <div className="card space-y-3 p-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-sm font-bold text-ink">
+          <span>🏚</span> Bo'sh do'konlar ro'yxati
+          {data && (
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-ink-faint">
+              {data.total} ta
+            </span>
+          )}
+        </div>
+      </div>
+      {isLoading && <div className="text-xs text-ink-faint">Yuklanmoqda...</div>}
+      {data && data.items.length === 0 && (
+        <div className="text-xs text-ink-faint">Bo'sh do'konlar yo'q</div>
+      )}
+      {data && data.items.length > 0 && (
+        <div className="max-h-64 overflow-y-auto rounded-xl border border-slate-100">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-slate-100 bg-slate-50 text-slate-400">
+                <th className="px-3 py-2 text-left">Magazin ID</th>
+                <th className="px-3 py-2 text-left">Pavilyon</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.items.map((row) => (
+                <tr key={row.shop_id} className="border-b border-slate-50 last:border-0">
+                  <td className="px-3 py-1.5 font-mono font-semibold text-brand">{row.shop_id}</td>
+                  <td className="px-3 py-1.5 text-ink-faint">{row.pavilion_code ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
