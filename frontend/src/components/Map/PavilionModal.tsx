@@ -31,6 +31,7 @@ const STATUS_FILTERS: { key: StatusFilter; tkey: string; color?: string }[] = [
   { key: "partial", tkey: "pav.status.partial", color: STATUS_COLORS.partial },
   { key: "unpaid", tkey: "pav.status.unpaid", color: STATUS_COLORS.unpaid },
   { key: "no_data", tkey: "pav.status.no_data", color: STATUS_COLORS.no_data },
+  { key: "vacant", tkey: "pav.status.vacant", color: STATUS_COLORS.vacant },
 ];
 
 
