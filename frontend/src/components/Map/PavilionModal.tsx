@@ -170,10 +170,13 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
       // 4. Billing bor — oddiy hisob
       const r = statusForService(billing, service);
 
-      // 5. Arenda billing yo'q bo'lsa monthly_rent dan fallback
-      if ((service === "rent" || service === "all") && r.status === "no_data") {
+      // 5. Arenda: billing bor lekin rent kategoriyasi yo'q, yoki status paid lekin
+      //    monthly_rent bor — monthly_rent dan to'g'ri hisob
+      if (service === "rent" && s.inn) {
         const monthlyRent = Number(s.monthly_rent ?? 0);
-        if (monthlyRent > 0) {
+        const rentCat = billing.categories.find((x) => x.category === "rent");
+        if (!rentCat && monthlyRent > 0) {
+          // Rent billing kiritilmagan — monthly_rent dan qarz
           return {
             shop: s,
             status: "unpaid" as ShopStatus,
@@ -182,6 +185,13 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
             debt: monthlyRent,
           };
         }
+        if (rentCat) {
+          const due = Number(rentCat.due);
+          const paid = Number(rentCat.paid);
+          const debt = Math.max(0, due - paid);
+          const status: ShopStatus = debt <= 0 ? "paid" : paid > 0 ? "partial" : "unpaid";
+          return { shop: s, status, due, paid, debt };
+        }
       }
 
       return { shop: s, ...r };
@@ -189,7 +199,7 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
 
     // Bo'sh va no_data ni chiqarib tashlaymiz (faqat hideUnmatched=true bo'lsa)
     return hideUnmatched
-      ? list.filter((c) => c.status !== "no_data" && c.status !== "vacant")
+      ? list.filter((c) => c.status !== "no_data")
       : list;
   }, [data, service, hideUnmatched]);
 
