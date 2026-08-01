@@ -1297,3 +1297,143 @@ async def import_water(
         detected_columns=result.detected_columns,
         snapshot_id=snap.id,
     )
+
+
+# ===== MAGAZINLAR TO'LIQ RO'YXATI (admin) =====
+@router.get("/shops-list")
+async def shops_list(
+    _admin: AdminUser,
+    market: CurrentMarket,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    year: int = Query(default=None),
+    month: int = Query(default=None, ge=1, le=12),
+    q: str | None = Query(None),
+    inn: str | None = Query(None),
+    pavilion: str | None = Query(None),
+    vacant: str | None = Query(None),
+    debt_filter: str | None = Query(None),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=500),
+):
+    import calendar as _cal
+    from datetime import date as _d
+    from sqlalchemy import func as _func
+
+    today = _d.today()
+    yr = year or today.year
+    mo = month or today.month
+
+    stmt = select(Shop).where(Shop.market_id == market.id, Shop.is_active.is_(True))
+    if q:
+        stmt = stmt.where(Shop.shop_id.ilike(f"%{q}%"))
+    if inn:
+        stmt = stmt.where(Shop.inn == inn)
+    if pavilion:
+        stmt = stmt.where(Shop.pavilion_code.ilike(f"%{pavilion}%"))
+    if vacant == "vacant":
+        stmt = stmt.where(Shop.is_vacant.is_(True))
+    elif vacant == "not_vacant":
+        stmt = stmt.where(Shop.is_vacant.is_(False))
+
+    # 0-segment do'konlarni chiqarib tashlaymiz
+    from sqlalchemy import func as sqlfunc
+    stmt = stmt.where(
+        ~(sqlfunc.split_part(Shop.shop_id, '-', 3) == '0')
+    )
+
+    total_db = await db.scalar(select(_func.count()).select_from(stmt.subquery())) or 0
+
+    if debt_filter and debt_filter != "all":
+        shops_db = list((await db.execute(stmt.order_by(Shop.shop_id))).scalars())
+    else:
+        shops_db = list((await db.execute(
+            stmt.order_by(Shop.shop_id).offset((page - 1) * per_page).limit(per_page)
+        )).scalars())
+
+    if not shops_db:
+        return {"items": [], "total": total_db, "page": page, "per_page": per_page}
+
+    shop_ids = [s.shop_id for s in shops_db]
+    inns = list({s.inn for s in shops_db if s.inn})
+
+    # Rent billing
+    from app.models import RentBilling
+    mstart = _d(yr, mo, 1)
+    mend = _d(yr, mo, _cal.monthrange(yr, mo)[1])
+    rb_rows = list((await db.execute(
+        select(RentBilling).where(
+            RentBilling.shop_id.in_(shop_ids),
+            RentBilling.market_id == market.id,
+            RentBilling.bill_date >= mstart,
+            RentBilling.bill_date <= mend,
+        )
+    )).scalars())
+    rb_map: dict[str, RentBilling] = {}
+    for rb in rb_rows:
+        prev = rb_map.get(rb.shop_id)
+        if prev is None or float(rb.debt or 0) < float(prev.debt or 0):
+            rb_map[rb.shop_id] = rb
+
+    # Monthly balances
+    mb_rows = list((await db.execute(
+        select(MonthlyBalance).where(
+            MonthlyBalance.inn.in_(inns),
+            MonthlyBalance.year == yr,
+            MonthlyBalance.month == mo,
+            MonthlyBalance.category.in_(["electricity", "water"]),
+        )
+    )).scalars()) if inns else []
+    mb_map: dict[tuple, MonthlyBalance] = {}
+    for mb in mb_rows:
+        mb_map[(mb.inn, mb.category)] = mb
+
+    # Counterparties
+    cp_rows = list((await db.execute(
+        select(Counterparty).where(Counterparty.inn.in_(inns))
+    )).scalars()) if inns else []
+    cp_map = {cp.inn: cp for cp in cp_rows}
+
+    items = []
+    for s in shops_db:
+        rb = rb_map.get(s.shop_id)
+        rent_due = float(rb.monthly_amount or 0) if rb else float(s.monthly_rent or 0) if s.inn else 0.0
+        rent_paid = float(rb.paid or 0) if rb else 0.0
+        rent_debt = max(0.0, rent_due - rent_paid)
+
+        elec_mb = mb_map.get((s.inn, "electricity")) if s.inn else None
+        elec_due = float(elec_mb.due_amount or 0) if elec_mb else 0.0
+        elec_paid = float(elec_mb.paid_amount or 0) if elec_mb else 0.0
+        elec_debt = max(0.0, elec_due - elec_paid)
+
+        water_mb = mb_map.get((s.inn, "water")) if s.inn else None
+        water_due = float(water_mb.due_amount or 0) if water_mb else 0.0
+        water_paid = float(water_mb.paid_amount or 0) if water_mb else 0.0
+        water_debt = max(0.0, water_due - water_paid)
+
+        if debt_filter == "rent" and rent_debt <= 0: continue
+        if debt_filter == "electricity" and elec_debt <= 0: continue
+        if debt_filter == "water" and water_debt <= 0: continue
+        if debt_filter == "any" and rent_debt <= 0 and elec_debt <= 0 and water_debt <= 0: continue
+
+        cp = cp_map.get(s.inn or "")
+        items.append({
+            "shop_id": s.shop_id,
+            "pavilion_code": s.pavilion_code,
+            "inn": s.inn,
+            "monthly_rent": float(s.monthly_rent or 0),
+            "is_active": s.is_active,
+            "is_vacant": getattr(s, "is_vacant", False),
+            "counterparty_name": cp.name if cp else None,
+            "rent_due": rent_due, "rent_paid": rent_paid, "rent_debt": rent_debt,
+            "elec_due": elec_due, "elec_paid": elec_paid, "elec_debt": elec_debt,
+            "water_due": water_due, "water_paid": water_paid, "water_debt": water_debt,
+        })
+
+    if debt_filter and debt_filter != "all":
+        total = len(items)
+        start = (page - 1) * per_page
+        items = items[start:start + per_page]
+    else:
+        total = total_db
+
+    return {"items": items, "total": total, "page": page, "per_page": per_page}
