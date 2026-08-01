@@ -145,56 +145,54 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
         return { shop: s, status: "vacant" as ShopStatus, due: 0, paid: 0, debt: 0 };
       }
 
-      // 2. INN yo'q — egasiz
+      // 2. INN yo'q — egasiz (qizil)
       if (!s.inn) {
         return { shop: s, status: "unpaid" as ShopStatus, due: 0, paid: 0, debt: 0 };
       }
 
       const billing = data.billing[s.shop_id];
+      const monthlyRent = Number(s.monthly_rent ?? 0);
 
-      // 3. Billing umuman yo'q — monthly_rent dan qarz hisoblaymiz
-      if (!billing) {
-        const monthlyRent = Number(s.monthly_rent ?? 0);
-        if (service === "rent" || service === "all") {
-          return {
-            shop: s,
-            status: "unpaid" as ShopStatus,
-            due: monthlyRent,
-            paid: 0,
-            debt: monthlyRent,
-          };
-        }
-        return { shop: s, status: "no_data" as ShopStatus, due: 0, paid: 0, debt: 0 };
+      // Rang uchun DOIM uchala kategoriyani tekshiramiz
+      // Arenda: billing yo'q yoki rent kategoriyasi yo'q bo'lsa monthly_rent dan
+      const rentCat = billing?.categories.find((x) => x.category === "rent");
+      const rentDue = rentCat ? Number(rentCat.due) : monthlyRent;
+      const rentPaid = rentCat ? Number(rentCat.paid) : 0;
+      const rentDebt = Math.max(0, rentDue - rentPaid);
+
+      const elecCat = billing?.categories.find((x) => x.category === "electricity");
+      const elecDue = elecCat ? Number(elecCat.due) : 0;
+      const elecPaid = elecCat ? Number(elecCat.paid) : 0;
+      const elecDebt = Math.max(0, elecDue - elecPaid);
+
+      const waterCat = billing?.categories.find((x) => x.category === "water");
+      const waterDue = waterCat ? Number(waterCat.due) : 0;
+      const waterPaid = waterCat ? Number(waterCat.paid) : 0;
+      const waterDebt = Math.max(0, waterDue - waterPaid);
+
+      const totalDebt = rentDebt + elecDebt + waterDebt;
+      const totalPaid = rentPaid + elecPaid + waterPaid;
+
+      // Rang — har doim uchala kategoriya bo'yicha
+      const colorStatus: ShopStatus =
+        totalDebt <= 0 ? "paid" :
+        totalPaid > 0 ? "partial" :
+        "unpaid";
+
+      // Ko'rsatiladigan raqamlar — tanlangan service bo'yicha
+      if (service === "rent") {
+        return { shop: s, status: colorStatus, due: rentDue, paid: rentPaid, debt: rentDebt };
+      }
+      if (service === "electricity") {
+        return { shop: s, status: colorStatus, due: elecDue, paid: elecPaid, debt: elecDebt };
+      }
+      if (service === "water") {
+        return { shop: s, status: colorStatus, due: waterDue, paid: waterPaid, debt: waterDebt };
       }
 
-      // 4. Billing bor — oddiy hisob
-      const r = statusForService(billing, service);
-
-      // 5. Arenda: billing bor lekin rent kategoriyasi yo'q, yoki status paid lekin
-      //    monthly_rent bor — monthly_rent dan to'g'ri hisob
-      if (service === "rent" && s.inn) {
-        const monthlyRent = Number(s.monthly_rent ?? 0);
-        const rentCat = billing.categories.find((x) => x.category === "rent");
-        if (!rentCat && monthlyRent > 0) {
-          // Rent billing kiritilmagan — monthly_rent dan qarz
-          return {
-            shop: s,
-            status: "unpaid" as ShopStatus,
-            due: monthlyRent,
-            paid: 0,
-            debt: monthlyRent,
-          };
-        }
-        if (rentCat) {
-          const due = Number(rentCat.due);
-          const paid = Number(rentCat.paid);
-          const debt = Math.max(0, due - paid);
-          const status: ShopStatus = debt <= 0 ? "paid" : paid > 0 ? "partial" : "unpaid";
-          return { shop: s, status, due, paid, debt };
-        }
-      }
-
-      return { shop: s, ...r };
+      // "all" — jami
+      const totalDue = rentDue + elecDue + waterDue;
+      return { shop: s, status: colorStatus, due: totalDue, paid: totalPaid, debt: totalDebt };
     });
 
     // Bo'sh va no_data ni chiqarib tashlaymiz (faqat hideUnmatched=true bo'lsa)
