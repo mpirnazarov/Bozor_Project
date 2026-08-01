@@ -293,11 +293,18 @@ function VacantShopsUploader() {
 }
 
 function VacantShopsList() {
+  const now = new Date();
   const { data, isLoading } = useQuery({
     queryKey: ["shops-list-vacant"],
     queryFn: async () => {
       const { data } = await apiClient.get("/admin/shops-list", {
-        params: { vacant: "vacant", per_page: 500, page: 1 },
+        params: {
+          vacant: "vacant",
+          per_page: 500,
+          page: 1,
+          year: now.getFullYear(),
+          month: now.getMonth() + 1,
+        },
       });
       return data as { items: { shop_id: string; counterparty_name: string | null; pavilion_code: string | null; inn: string | null }[]; total: number };
     },
