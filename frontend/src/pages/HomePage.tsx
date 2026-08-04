@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { LogOut, Settings, ArrowLeft, Info, AlertTriangle } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
@@ -37,6 +37,12 @@ export function HomePage() {
     staleTime: 60_000,
   });
   const marketName = _dashData?.market_name;
+
+  useEffect(() => {
+    if (marketName) {
+      document.title = marketName;
+    }
+  }, [marketName]);
   const [searchParams] = useSearchParams();
   const isDemo = searchParams.get("demo") === "1";
   const { data: supportStatus } = useQuery({
@@ -93,7 +99,7 @@ export function HomePage() {
                   <h1 className="font-display text-base font-extrabold leading-tight text-ink">
                     {marketName || t("app.title")}
                   </h1>
-                  <p className="text-xs text-ink-faint">{t("app.subtitle")}</p>
+                  <p className="text-xs text-ink-faint">{marketName ? t("app.subtitle") : t("app.subtitle")}</p>
                 </>
               )}
             </div>
