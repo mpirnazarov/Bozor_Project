@@ -20,6 +20,7 @@ router = APIRouter()
 async def get_dashboard(
     _user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
+    market=Depends(get_current_market),
     live: bool = Query(False, description="True bo'lsa monthly_balances'dan hisoblaydi"),
     year: int | None = Query(None),
     month: int | None = Query(None, ge=1, le=12),
@@ -34,8 +35,12 @@ async def get_dashboard(
     year = year or today.year
     month = month or today.month
     if live:
-        return await get_dashboard_live(db, year, month)
-    return await get_dashboard_from_settings(db)
+        result = await get_dashboard_live(db, year, month)
+    else:
+        result = await get_dashboard_from_settings(db)
+    # market_name ni qo'shamiz
+    result.market_name = getattr(market, "name", None)
+    return result
 
 
 @router.get("/invoices")
