@@ -209,6 +209,19 @@ async def import_shop_owners_excel(
                 "before": None,  # yangi yaratildi -> revert: o'chiriladi
             })
             seen_keys.add(key)
+
+            # Kontragentni AVVAL yaratamiz (FK constraint uchun)
+            if inn:
+                cp = cp_map.get(inn)
+                if cp is None:
+                    new_cp = Counterparty(inn=inn, name=name or f"INN {inn}")
+                    db.add(new_cp)
+                    await db.flush()  # FK uchun ID kerak
+                    cp_map[inn] = new_cp
+                    res.counterparties_created += 1
+                elif name and cp.name != name:
+                    cp.name = name
+
             db.add(Shop(
                 shop_id=shop_id,
                 market_id=market_id,
@@ -220,16 +233,16 @@ async def import_shop_owners_excel(
                 is_active=True,
             ))
             res.inserted += 1
-            # Yangi magazin keyingi takrorlarda select bilan topilishi uchun flush
             await db.flush()
 
-        # Kontragent (egasi) nomini yangilash/yaratish
+        # Kontragent (mavjud do'kon uchun yangilash)
         if inn:
             cp = cp_map.get(inn)
             if cp is None:
                 new_cp = Counterparty(inn=inn, name=name or f"INN {inn}")
                 db.add(new_cp)
-                cp_map[inn] = new_cp  # saqlangan obyektni qo'yamiz
+                await db.flush()
+                cp_map[inn] = new_cp
                 res.counterparties_created += 1
             elif name and cp.name != name:
                 cp.name = name
