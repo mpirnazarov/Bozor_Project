@@ -7,7 +7,7 @@ import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 import { ClikcBazaarLogo } from "@/components/ui/ClikcBazaarLogo";
 import { HeaderStats } from "@/components/Dashboard/HeaderStats";
 import { MarketInvoicesSection } from "@/components/MarketInvoicesSection";
-import { getMarketInvoices } from "@/api/dashboard";
+import { getDashboard, getMarketInvoices } from "@/api/dashboard";
 import { InnSearch } from "@/components/INN/InnSearch";
 import { MapView } from "@/components/Map/MapView";
 import { PavilionModal } from "@/components/Map/PavilionModal";
@@ -81,7 +81,7 @@ export function HomePage() {
               ) : (
                 <>
                   <h1 className="font-display text-base font-extrabold leading-tight text-ink">
-                    {t("app.title")}
+                    {marketName || t("app.title")}
                   </h1>
                   <p className="text-xs text-ink-faint">{t("app.subtitle")}</p>
                 </>

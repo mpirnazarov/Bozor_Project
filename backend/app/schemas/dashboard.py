@@ -22,3 +22,4 @@ class DashboardOut(BaseModel):
     services: ServicesBreakdown
     period: Period
     source: str  # "settings" yoki "live"
+    market_name: str | None = None

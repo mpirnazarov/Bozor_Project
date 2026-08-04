@@ -41,6 +41,7 @@ export interface Dashboard {
   services: ServicesBreakdown;
   period: { year: number; month: number };
   source: "settings" | "live";
+  market_name?: string;
 }
 
 export interface Pavilion {
