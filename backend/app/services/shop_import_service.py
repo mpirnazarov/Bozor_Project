@@ -132,6 +132,7 @@ async def import_shops_csv(
         if inn:
             if inn not in existing_inns:
                 db.add(Counterparty(inn=inn, name=name or f"INN {inn}", phone=phone))
+                await db.flush()  # FK uchun ID olish
                 existing_inns.add(inn)
                 cp_created += 1
             linked += 1
