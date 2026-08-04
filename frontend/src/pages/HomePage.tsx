@@ -7,7 +7,7 @@ import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 import { ClikcBazaarLogo } from "@/components/ui/ClikcBazaarLogo";
 import { HeaderStats } from "@/components/Dashboard/HeaderStats";
 import { MarketInvoicesSection } from "@/components/MarketInvoicesSection";
-import { getDashboard, getMarketInvoices } from "@/api/dashboard";
+import { getMarketInvoices } from "@/api/dashboard";
 import { InnSearch } from "@/components/INN/InnSearch";
 import { MapView } from "@/components/Map/MapView";
 import { PavilionModal } from "@/components/Map/PavilionModal";
@@ -27,6 +27,16 @@ export function HomePage() {
   // Super admin bu yerda FAQAT ko'ruvchi — tahrir qila olmaydi, admin tugmasi ko'rinmaydi.
   const isMarketAdmin = ["admin", "market_admin"].includes(user?.role ?? "");
   const isSuperAdmin = user?.role === "super_admin";
+  const { data: _dashData } = useQuery({
+    queryKey: ["dashboard-market-name"],
+    queryFn: async () => {
+      const { apiClient } = await import("@/api/client");
+      const { data } = await apiClient.get("/dashboard");
+      return data as { market_name?: string };
+    },
+    staleTime: 60_000,
+  });
+  const marketName = _dashData?.market_name;
   const [searchParams] = useSearchParams();
   const isDemo = searchParams.get("demo") === "1";
   const { data: supportStatus } = useQuery({
