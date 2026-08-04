@@ -1437,3 +1437,48 @@ async def shops_list(
         total = total_db
 
     return {"items": items, "total": total, "page": page, "per_page": per_page}
+
+
+# ===== BEK TO'PI DO'KONLARI IMPORT =====
+@router.post("/import/shops/bektopi")
+async def import_bektopi_shops(
+    admin: AdminUser,
+    market: CurrentMarket,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    file: UploadFile = File(...),
+) -> dict:
+    """Excel fayldan Bek to'pi do'konlarini import qiladi (PG-24-NNN format)."""
+    from app.services.bektopi_import_service import import_bektopi_excel
+
+    if not file.filename or not file.filename.lower().endswith((".xlsx", ".xlsm")):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Faqat .xlsx fayl qabul qilinadi")
+    content = await file.read()
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Fayl juda katta (10 MB)")
+
+    try:
+        result = await import_bektopi_excel(db, content, market.id)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+    except Exception as exc:
+        await db.rollback()
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            f"Import xatosi: {type(exc).__name__}: {exc}") from exc
+
+    await write_audit(
+        db, admin.id, "import_bektopi", "shops", file.filename,
+        {"inserted": result.inserted, "updated": result.updated,
+         "counterparties": result.counterparties_created},
+    )
+    await db.commit()
+
+    return {
+        "ok": True,
+        "rows_read": result.rows_read,
+        "inserted": result.inserted,
+        "updated": result.updated,
+        "counterparties_created": result.counterparties_created,
+        "skipped": result.skipped[:50],
+        "skipped_count": len(result.skipped),
+        "errors": result.errors[:20],
+    }

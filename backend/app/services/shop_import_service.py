@@ -27,7 +27,7 @@ _COL_ALIASES = {
 }
 
 # shop_id formati: NN-N-N-NNN (masalan 04-1-1-001). Moslashuvchan: raqam-tire bo'limlar
-_SHOP_ID_RE = re.compile(r"^\d{2}-\d+-\d+-\d+$")
+_SHOP_ID_RE = re.compile(r"^[A-Za-z0-9]+-[A-Za-z0-9]+-[A-Za-z0-9]+(-[A-Za-z0-9]+)*$")
 
 
 def _norm_header(h: str) -> str:
