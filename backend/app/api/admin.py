@@ -650,23 +650,42 @@ async def billing_summary(
                 Shop.is_active.is_(True),
             )
         )).scalars())
-        # Boshqa blokda allaqachon sanalganlarni chiqarib tashlaymiz (dublikatsiz Jami)
+        # Boshqa blokda allaqachon sanalganlarni chiqarib tashlaymiz
         shops = [s for s in shops_all if s not in seen_shops]
         if not shops:
             continue
         seen_shops.update(shops)
 
-        billing = await compute_batch_status(db, shops, year, month)
-        due = Decimal(0)
-        paid = Decimal(0)
-        debt = Decimal(0)
-        for b in billing.values():
-            # Faqat rent_billing bor do'konlarni hisoblaymiz
-            if b.status == "no_data":
-                continue
-            due += b.total_due
-            paid += b.total_paid
-            debt += b.total_debt
+        # Faqat rent_billing bor do'konlarni hisoblaymiz
+        from app.models import RentBilling as RB
+        from sqlalchemy import extract as _extract
+        rb_shop_ids = set((await db.execute(
+            select(RB.shop_id).where(
+                RB.shop_id.in_(shops),
+                _extract("year", RB.bill_date) == year,
+                _extract("month", RB.bill_date) == month,
+            )
+        )).scalars())
+        shops_with_billing = [s for s in shops if s in rb_shop_ids]
+        if not shops_with_billing:
+            # billing yo'q — yagona qiymat
+            blocks_out.append({
+                "pavilion_id": pav.id,
+                "name": pav.display_name,
+                "layer_id": pav.map_layer_id,
+                "layer_name": layer_name.get(pav.map_layer_id),
+                "prefix": prefix,
+                "shop_count": len(shops),
+                "total_due": 0.0,
+                "total_paid": 0.0,
+                "total_debt": 0.0,
+            })
+            continue
+
+        billing = await compute_batch_status(db, shops_with_billing, year, month)
+        due = sum((b.total_due for b in billing.values()), Decimal(0))
+        paid = sum((b.total_paid for b in billing.values()), Decimal(0))
+        debt = max(Decimal(0), due - paid)
 
         blocks_out.append({
             "pavilion_id": pav.id,
