@@ -682,8 +682,20 @@ async def billing_summary(
             })
             continue
 
+        # JAMI = barcha do'konlarning monthly_rent yig'indisi
+        monthly_rents = dict((await db.execute(
+            select(Shop.shop_id, Shop.monthly_rent).where(
+                Shop.shop_id.in_(shops),
+                Shop.market_id == market.id,
+            )
+        )).all())
+        due = sum(
+            (Decimal(str(v or 0)) for v in monthly_rents.values()),
+            Decimal(0)
+        )
+
+        # TO'LANGAN = rent_billing.paid summasi (billing bor do'konlar)
         billing = await compute_batch_status(db, shops_with_billing, year, month)
-        due = sum((b.total_due for b in billing.values()), Decimal(0))
         paid = sum((b.total_paid for b in billing.values()), Decimal(0))
         debt = max(Decimal(0), due - paid)
 
