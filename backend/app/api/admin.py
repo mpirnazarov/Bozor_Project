@@ -657,9 +657,16 @@ async def billing_summary(
         seen_shops.update(shops)
 
         billing = await compute_batch_status(db, shops, year, month)
-        due = sum((b.total_due for b in billing.values()), Decimal(0))
-        paid = sum((b.total_paid for b in billing.values()), Decimal(0))
-        debt = sum((b.total_debt for b in billing.values()), Decimal(0))
+        due = Decimal(0)
+        paid = Decimal(0)
+        debt = Decimal(0)
+        for b in billing.values():
+            # Faqat rent_billing bor do'konlarni hisoblaymiz
+            if b.status == "no_data":
+                continue
+            due += b.total_due
+            paid += b.total_paid
+            debt += b.total_debt
 
         blocks_out.append({
             "pavilion_id": pav.id,
