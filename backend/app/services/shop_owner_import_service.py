@@ -199,6 +199,8 @@ async def import_shop_owners_excel(
                 existing.inn = inn
             if rent and rent > 0:
                 existing.monthly_rent = rent
+            if area is not None:
+                existing.area = area
             if qr:
                 existing.notes = f"QR: {qr}"
             existing.source_sheet = source
@@ -228,6 +230,7 @@ async def import_shop_owners_excel(
                 inn=inn,
                 shop_type=name,
                 monthly_rent=rent,
+                area=area,
                 notes=f"QR: {qr}" if qr else None,
                 source_sheet=source,
                 is_active=True,
