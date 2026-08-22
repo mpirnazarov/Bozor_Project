@@ -80,11 +80,10 @@ def run():
             CONSTRAINT uq_toilet_revenue_date UNIQUE (toilet_id, revenue_date)
         )
     """)
+    cur.execute("ALTER TABLE shops ADD COLUMN IF NOT EXISTS area NUMERIC(10,2)")
     print("Migrations OK")
     conn.close()
 
 if __name__ == "__main__":
     run()
 
-# area ustun
-cur.execute("ALTER TABLE shops ADD COLUMN IF NOT EXISTS area NUMERIC(10,2)")
