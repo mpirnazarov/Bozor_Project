@@ -167,6 +167,8 @@ async def import_shop_owners_excel(
 
         name = str(get("name") or "").strip() or None
         qr = str(get("qr") or "").strip() or None
+        area_val = get("area")
+        area = float(str(area_val).replace("m²","").replace("м2","").strip()) if area_val else None
         inn = _clean_inn(get("inn"))
         rent = _parse_decimal(get("rent"))
 
