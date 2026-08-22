@@ -43,6 +43,7 @@ class Shop(Base):
     purpose: Mapped[str | None] = mapped_column(Text, nullable=True)
     monthly_rent: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=0, nullable=False)
     source_sheet: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    area: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
     is_vacant: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="false")

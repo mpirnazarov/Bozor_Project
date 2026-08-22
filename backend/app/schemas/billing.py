@@ -57,6 +57,7 @@ class ShopOut(BaseModel):
     monthly_rent: Decimal
     is_active: bool
     is_vacant: bool = False
+    area: float | None = None
 
 
 class CounterpartyOut(BaseModel):

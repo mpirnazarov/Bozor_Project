@@ -85,3 +85,6 @@ def run():
 
 if __name__ == "__main__":
     run()
+
+# area ustun
+cur.execute("ALTER TABLE shops ADD COLUMN IF NOT EXISTS area NUMERIC(10,2)")
