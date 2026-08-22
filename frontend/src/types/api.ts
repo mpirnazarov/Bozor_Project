@@ -73,6 +73,7 @@ export interface Shop {
   monthly_rent: string;
   is_active: boolean;
   is_vacant?: boolean;
+  area?: number | null;
 }
 
 export interface Counterparty {
