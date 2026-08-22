@@ -70,6 +70,9 @@ export function ShopDetailModal({ shopId, onClose, customTitle }: Props) {
                 <Row label={t("shop.inn")} value={data.counterparty.inn} mono />
                 <Row label={t("shop.contract")} value={data.counterparty.contract_no ?? "—"} />
                 <Row label={t("shop.date")} value={data.counterparty.contract_date ?? "—"} />
+                {data.shop.area && (
+                  <Row label="Maydon" value={`${data.shop.area} m²`} />
+                )}
                 {data.counterparty.phone && (
                   <Row label={t("shop.phone")} value={data.counterparty.phone} />
                 )}
