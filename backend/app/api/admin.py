@@ -481,13 +481,21 @@ async def import_shops_gsheet(
 @router.get("/audit-log", response_model=list[AuditLogOut])
 async def get_audit_log(
     _admin: AdminUser,
+    market: CurrentMarket,
     db: Annotated[AsyncSession, Depends(get_db)],
     limit: int = Query(50, ge=1, le=200),
 ) -> list[AuditLogOut]:
-    """Oxirgi audit yozuvlari — odam o'qiy oladigan ko'rinishda."""
+    """Oxirgi audit yozuvlari — faqat joriy bozor foydalanuvchilari."""
+    # Faqat shu bozor foydalanuvchilari IDlari
+    from app.models import User as UserModel
+    market_user_ids = list((await db.execute(
+        select(UserModel.id).where(UserModel.market_id == market.id)
+    )).scalars())
+
     result = await db.execute(
         select(AuditLog, User)
         .join(User, AuditLog.user_id == User.id, isouter=True)
+        .where(AuditLog.user_id.in_(market_user_ids))
         .order_by(desc(AuditLog.created_at))
         .limit(limit)
     )
