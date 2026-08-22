@@ -34,8 +34,9 @@ async def get_dashboard(
     today = date.today()
     year = year or today.year
     month = month or today.month
-    if live:
-        result = await get_dashboard_live(db, year, month)
+    # O'rikzor (market_id=1) uchun settings dan, boshqalar uchun live
+    if live or market.id != 1:
+        result = await get_dashboard_live(db, year, month, market_id=market.id)
     else:
         result = await get_dashboard_from_settings(db)
     # market_name ni qo'shamiz

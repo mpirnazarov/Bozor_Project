@@ -43,7 +43,7 @@ async def get_dashboard_from_settings(db: AsyncSession) -> DashboardOut:
 
 
 async def get_dashboard_live(
-    db: AsyncSession, year: int, month: int
+    db: AsyncSession, year: int, month: int, market_id: int | None = None
 ) -> DashboardOut:
     """monthly_balances'dan jonli hisoblaydi (real ma'lumot tugmasi uchun)."""
     # Kategoriya bo'yicha due/paid yig'indisi
@@ -53,7 +53,11 @@ async def get_dashboard_live(
             func.coalesce(func.sum(MonthlyBalance.due_amount), 0),
             func.coalesce(func.sum(MonthlyBalance.paid_amount), 0),
         )
-        .where(MonthlyBalance.year == year, MonthlyBalance.month == month)
+        .where(
+            MonthlyBalance.year == year,
+            MonthlyBalance.month == month,
+            *([MonthlyBalance.market_id == market_id] if market_id else []),
+        )
         .group_by(MonthlyBalance.category)
     )
 
