@@ -29,7 +29,7 @@ _ALIASES = {
     "debt": ["коплате", "к оплате", "qarz", "карз", "задолженность"],
     "prepaid": ["предоплата", "oldindan", "avans", "аванс", "ortiqcha"],
 }
-_REQUIRED = ["shop_id", "inn"]
+_REQUIRED = ["inn"]
 
 
 def _norm(h) -> str:
@@ -131,7 +131,7 @@ async def import_electricity_excel(
             col, header_idx = cm, i
             break
 
-    if header_idx < 0 or "shop_id" not in col:
+    if header_idx < 0 or "inn" not in col:
         raise StructureError(
             "Excel strukturasi mos kelmadi. Kerakli ustunlar topilmadi: "
             "Основное арендное место (magazin ID), ИНН, К оплате, Предоплата."
