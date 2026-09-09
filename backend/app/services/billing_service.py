@@ -156,7 +156,8 @@ def _build_status(
         Google Sheets'dan kelgan statik qiymat. Billing debet/kreditga BOG'LIQ EMAS.
       - QARZDORLIK (debt) = magazin INN'ining billingdagi qarzi (Дебет),
         shu INN magazinlariga teng taqsimlangan ulush (debt_share).
-      - TO'LANGAN (paid)  = JAMI − QARZDORLIK.
+      - TO'LANGAN (paid)  = balanslardagi haqiqiy to'lov (paid_amount) yig'indisi.
+        Billing yozuvi bo'lmasa — 0, va status `no_data`.
 
     Kategoriyalar (rent/electricity/water) status ranglari uchun billingdan
     olinadi, lekin umumiy summalar yuqoridagi mantiq bo'yicha.
@@ -172,11 +173,14 @@ def _build_status(
         )
     qarz = debt_share if debt_share and debt_share > 0 else Decimal(0)
 
-    # TO'LANGAN = JAMI − QARZDORLIK. Qarz jamidan katta bo'lsa to'langan 0.
-    # (Qarz monthly_rent bilan cheklanMAYDI — bu billingdagi haqiqiy qarz ulushi.)
-    tolangan = jami - qarz
-    if tolangan < 0:
-        tolangan = Decimal(0)
+    # TO'LANGAN = balanslardagi HAQIQIY to'lov summasi.
+    # Avval `jami - qarz` edi: billing yozuvi bo'lmagan magazinda qarz=0
+    # bo'lgani uchun to'liq oylik ijara "to'langan" bo'lib chiqardi, ya'ni
+    # ma'lumot yo'qligi to'lov deb talqin qilinardi.
+    tolangan = sum(
+        (b.paid_amount for b in balances if b.paid_amount and b.paid_amount > 0),
+        Decimal(0),
+    )
 
     # Kategoriya breakdown (status ranglari uchun) — billingdan
     cats: list[CategoryBalance] = []
@@ -191,7 +195,7 @@ def _build_status(
             )
         )
 
-    has_data = jami > 0 or len(balances) > 0
+    has_data = len(balances) > 0
     status = _status_from_amounts(qarz, tolangan, has_data)
     return BillingStatusOut(
         shop_id=shop_id,
