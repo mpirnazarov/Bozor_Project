@@ -113,9 +113,7 @@ def _status_from_rent(
     else:
         jami = Decimal(str(rb.monthly_amount or 0))
 
-    # To'langan berilmagan bo'lsa: jami − qarz
-    if tolangan <= 0 and jami > 0:
-        tolangan = max(Decimal(0), jami - qarz)
+    # rb.paid = 0 bo'lsa — haqiqatda to'lanmagan, 0 qoladi (jami-qarz emas)
 
     cats = [CategoryBalance(category="rent", due=jami, paid=tolangan, debt=qarz)]
 
