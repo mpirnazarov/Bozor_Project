@@ -62,7 +62,7 @@ function demoSplit(totalDue: number, seed: number): { debt: number; paid: number
 // Yoqilgan bo'lsa, har blok modalida ham o'sha umumiy foiz (paid/total)
 // qo'llanadi: blok To'langan = blok Jami × foiz, Qarz = Jami − To'langan.
 // Keyinroq avtomatik hisobga o'tkazish uchun shu qiymatni `false` qiling.
-const USE_DASHBOARD_PROPORTION = true;
+const USE_DASHBOARD_PROPORTION = false;
 
 /** partial -> unpaid (agar bayroq yoqilgan bo'lsa). Boshqa statuslar o'zgarmaydi. */
 
