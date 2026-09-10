@@ -1,18 +1,27 @@
 """Elektr to'lovlari import (monthly_balances, category=electricity).
 
-Fayl ("для Лутфуллы" formati): sarlavha 4-5 qatorlarda, ma'lumot keyin.
-Ustunlar: № п.п. | Контрагент | Основное арендное место (magazin ID) | ИНН |
-          К оплате (qarz) | Предоплата (oldindan to'lov).
+IKKI xil fayl formati qo'llab-quvvatlanadi.
 
-Har magazin: yo К оплате (qarz), yo Предоплата (oldindan) to'ldirilgan.
-INN bo'yicha yig'ib monthly_balances ga (electricity) upsert qilamiz:
-  К оплате  -> due_amount  (qarz)
-  Предоплата -> paid_amount (oldindan to'lov / balans)
+1) "balance" — «для Лутфуллы» formati: sarlavha 4-5 qatorlarda.
+   № п.п. | Контрагент | Основное арендное место (magazin ID) | ИНН |
+   К оплате (qarz) | Предоплата (oldindan to'lov).
+   INN bo'yicha yig'ib upsert qilamiz:
+     К оплате   -> due_amount  (qarz)
+     Предоплата -> paid_amount (oldindan to'lov / balans)
+
+2) "payments" — bank to'lov reyestri («ЭЭ август.xlsx» kabi):
+   Дата | Поступило | Назначение платежа | Контрагент | ИНН | ...
+   Har qator — bitta to'lov. INN bo'yicha yig'ib paid_amount ga yozamiz.
+   Bu formatda QARZ ma'lum emas, shuning uchun due_amount ga TEGILMAYDI
+   (mavjud qarz saqlanib qoladi).
+   Дата ustuni tanlangan yil/oyga tekshiriladi — boshqa davr qatorlari
+   import qilinmaydi, aks holda avgust to'lovi sentabrga tushib ketardi.
 """
 from __future__ import annotations
 
 import io
 from dataclasses import dataclass, field
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
 from openpyxl import load_workbook
@@ -28,6 +37,9 @@ _ALIASES = {
     "name": ["контрагент", "kontragent"],
     "debt": ["коплате", "к оплате", "qarz", "карз", "задолженность"],
     "prepaid": ["предоплата", "oldindan", "avans", "аванс", "ortiqcha"],
+    # To'lov reyestri formati uchun
+    "amount": ["поступило", "поступление", "сумма", "summa", "оплачено"],
+    "date": ["дата", "sana", "датаплатежа"],
 }
 _REQUIRED = ["inn"]
 
@@ -76,6 +88,23 @@ def _clean_inn(v) -> str | None:
     return s or None
 
 
+def _to_date(v) -> date | None:
+    """Excel katakchasidan sanani oladi (datetime yoki "03.08.2026" matni)."""
+    if v is None:
+        return None
+    if isinstance(v, datetime):
+        return v.date()
+    if isinstance(v, date):
+        return v
+    s = str(v).strip()[:10]
+    for fmt in ("%d.%m.%Y", "%Y-%m-%d", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(s, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
 class StructureError(Exception):
     """Excel strukturasi kutilganidan farq qilganda."""
 
@@ -94,6 +123,10 @@ class ElecImportResult:
     errors: list = field(default_factory=list)
     detected_columns: dict = field(default_factory=dict)
     agg: dict = field(default_factory=dict)  # (inn) -> {"due","paid"}
+    # "balance" — К оплате/Предоплата fayli (due VA paid yoziladi)
+    # "payments" — bank to'lov reyestri (faqat paid yoziladi, due tegilmaydi)
+    mode: str = "balance"
+    out_of_period: int = 0  # reyestrda tanlangan oyga tegishli bo'lmagan qatorlar
 
 
 async def import_electricity_excel(
@@ -128,17 +161,23 @@ async def import_electricity_excel(
                     for k in ("debt", "prepaid"):
                         if k not in cm and k in nxt:
                             cm[k] = nxt[k]
-            col, header_idx = cm, i
+            col, header_idx, res.mode = cm, i, "balance"
+            break
+        # To'lov reyestri: Поступило + ИНН bo'lsa yetarli (magazin ID yo'q)
+        if "inn" in cm and "amount" in cm:
+            col, header_idx, res.mode = cm, i, "payments"
             break
 
     if header_idx < 0 or "inn" not in col:
         raise StructureError(
-            "Excel strukturasi mos kelmadi. Kerakli ustunlar topilmadi: "
-            "Основное арендное место (magazin ID), ИНН, К оплате, Предоплата."
+            "Excel strukturasi mos kelmadi. Ikki formatdan biri kerak: "
+            "(1) Основное арендное место + ИНН + К оплате/Предоплата, yoki "
+            "(2) to'lov reyestri: Дата + Поступило + ИНН."
         )
 
     field_labels = {"shop_id": "Magazin ID", "inn": "ИНН", "name": "Контрагент",
-                    "debt": "К оплате", "prepaid": "Предоплата"}
+                    "debt": "К оплате", "prepaid": "Предоплата",
+                    "amount": "Поступило", "date": "Дата"}
     res.detected_columns = {field_labels.get(k, k): v for k, v in col.items()}
     missing = [field_labels[f] for f in _REQUIRED if f not in col]
     if missing:
@@ -146,12 +185,53 @@ async def import_electricity_excel(
             "Topilmagan ustun(lar): " + ", ".join(missing)
             + ". Kerakli ustunlar: Основное арендное место, ИНН, К оплате, Предоплата."
         )
-    if "debt" not in col and "prepaid" not in col:
+    if res.mode == "balance" and "debt" not in col and "prepaid" not in col:
         raise StructureError("«К оплате» va «Предоплата» ustunlari topilmadi.")
 
     data_rows = rows[header_idx + 1:]
     agg: dict[str, dict[str, Decimal]] = {}
     seen_shops: set[str] = set()
+
+    if res.mode == "payments":
+        # Bank to'lov reyestri: har qator — bitta to'lov. INN bo'yicha yig'amiz.
+        for offset, row in enumerate(data_rows):
+            idx = header_idx + 2 + offset
+            row = list(row)
+
+            def cell(f: str):
+                i = col.get(f)
+                return row[i] if (i is not None and i < len(row)) else None
+
+            inn = _clean_inn(cell("inn"))
+            amount = _to_decimal(cell("amount"))
+            if not inn or amount <= 0:
+                continue
+            # Sanani tanlangan davr bilan solishtiramiz — boshqa oyning
+            # to'lovi xato oyga yozilib qolmasligi uchun.
+            d = _to_date(cell("date"))
+            if d is not None and (d.year != year or d.month != month):
+                res.out_of_period += 1
+                if len(res.skipped) < 50:
+                    res.skipped.append({
+                        "row": idx, "inn": inn,
+                        "reason": f"Sana tanlangan davrga mos emas: {d.isoformat()}",
+                    })
+                continue
+            res.rows_read += 1
+            res.total_prepaid += amount
+            if inn not in agg:
+                agg[inn] = {"due": Decimal(0), "paid": Decimal(0)}
+            agg[inn]["paid"] += amount
+
+        if not agg:
+            raise StructureError(
+                f"Tanlangan davrga ({year}-{month:02d}) tegishli to'lov topilmadi. "
+                f"Davrga mos kelmagan qatorlar: {res.out_of_period}."
+            )
+        res.with_prepaid = sum(1 for v in agg.values() if v["paid"] > 0)
+        res.inns = len(agg)
+        res.agg = agg
+        return res
 
     for offset, row in enumerate(data_rows):
         idx = header_idx + 2 + offset

@@ -115,17 +115,46 @@ async def mobile_counterparty(
     use_market_filter = has_market_bal is not None
 
     if not explicit_period:
-        period_q = (
-            select(MonthlyBalance.year, MonthlyBalance.month)
-            .where(MonthlyBalance.inn == inn)
-            .order_by(MonthlyBalance.year.desc(), MonthlyBalance.month.desc())
-            .limit(1)
+        # Avval JORIY oyda ma'lumot bor-yo'qligini tekshiramiz. Arenda
+        # rent_billing'dan, elektr/suv monthly_balances'dan keladi — shuning
+        # uchun ikkala manbani ham ko'ramiz. Faqat monthly_balances'ga
+        # qaralganda bitta kategoriya importi (masalan avgust elektri) butun
+        # kabinetni o'sha o'tgan oyga ko'chirib yuborardi va ijarachi joriy
+        # oydagi qarzini ko'rmay qolardi.
+        import calendar as _cal_p
+        from app.models import RentBilling as _RB_p
+
+        _p_start = date(year, month, 1)
+        _p_end = date(year, month, _cal_p.monthrange(year, month)[1])
+        cur_mb = await db.scalar(
+            select(MonthlyBalance.id).where(
+                MonthlyBalance.inn == inn,
+                MonthlyBalance.year == year,
+                MonthlyBalance.month == month,
+            ).limit(1)
         )
-        if use_market_filter:
-            period_q = period_q.where(bal_market_filter)
-        latest = (await db.execute(period_q)).first()
-        if latest is not None:
-            year, month = int(latest[0]), int(latest[1])
+        cur_rb = None
+        if shops_db:
+            cur_rb = await db.scalar(
+                select(_RB_p.id).where(
+                    _RB_p.shop_id.in_([s.shop_id for s in shops_db]),
+                    _RB_p.bill_date >= _p_start,
+                    _RB_p.bill_date <= _p_end,
+                ).limit(1)
+            )
+        # Joriy oy bo'sh bo'lsagina eng so'nggi mavjud oyga tushamiz.
+        if cur_mb is None and cur_rb is None:
+            period_q = (
+                select(MonthlyBalance.year, MonthlyBalance.month)
+                .where(MonthlyBalance.inn == inn)
+                .order_by(MonthlyBalance.year.desc(), MonthlyBalance.month.desc())
+                .limit(1)
+            )
+            if use_market_filter:
+                period_q = period_q.where(bal_market_filter)
+            latest = (await db.execute(period_q)).first()
+            if latest is not None:
+                year, month = int(latest[0]), int(latest[1])
 
     # 3. Billing (monthly_balances) — kategoriya bo'yicha
     # DIQQAT: due_amount (Дебет) = QARZ, paid_amount (Кредит) = TO'LANGAN.
@@ -193,9 +222,10 @@ async def mobile_counterparty(
             rb_due = sum((_f(s.monthly_rent) for s in shops_db), 0.0)
             rb_debt = sum((max(0.0, _f(r.debt)) for r in rb_latest.values()), 0.0)
             rb_paid = sum((_f(r.paid) for r in rb_latest.values()), 0.0)
-            # To'langan berilmagan bo'lsa: jami − qarz
-            if rb_paid <= 0 and rb_due > 0:
-                rb_paid = max(0.0, rb_due - rb_debt)
+            # DIQQAT: avval "to'langan berilmagan bo'lsa jami − qarz" fallback'i
+            # bor edi — u to'lov ma'lumoti yo'qligini "to'liq to'langan" deb
+            # ko'rsatardi (billing_service'dagi xato bilan bir xil). Olib tashlandi:
+            # to'lov faqat rent_billing.paid dan olinadi.
             rent = {"due": rb_due, "paid": rb_paid, "debt": rb_debt}
 
     # 4. Har magazin uchun arenda holati (rent kategoriyasidagi balansdan).

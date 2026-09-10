@@ -602,18 +602,35 @@ async def billing_summary(
     from decimal import Decimal
     from app.api.pavilions import _prefix_shop_filter
     from app.services.billing_service import compute_batch_status
-    from app.models import MonthlyBalance
+    from app.models import MonthlyBalance, RentBilling
 
     today = date.today()
     year = year or today.year
     month = month or today.month
 
     # Tanlangan oy/yil uchun billing ma'lumoti bormi? Bo'lmasa — "ma'lumot yo'q".
-    has_data = await db.scalar(
+    # DIQQAT: hisobotdagi Jami/To'langan/Qarz ARENDA raqamlari bo'lib, ular
+    # rent_billing'dan keladi; monthly_balances esa elektr/suv uchun. Faqat
+    # monthly_balances'ni tekshirish ikki tomonlama xato berardi:
+    #   - sentabrda to'liq rent_billing bor edi, lekin hisobot "ma'lumot yo'q";
+    #   - avgustga FAQAT elektr importi butun arenda hisobotini ochib yuborardi.
+    # Shuning uchun ikkala manbani ham tekshiramiz.
+    import calendar as _cal_hd
+    _hd_start = date(year, month, 1)
+    _hd_end = date(year, month, _cal_hd.monthrange(year, month)[1])
+    mb_count = await db.scalar(
         select(func.count()).select_from(MonthlyBalance).where(
             MonthlyBalance.year == year, MonthlyBalance.month == month
         )
     )
+    rb_count = await db.scalar(
+        select(func.count()).select_from(RentBilling).where(
+            RentBilling.market_id == market.id,
+            RentBilling.bill_date >= _hd_start,
+            RentBilling.bill_date <= _hd_end,
+        )
+    )
+    has_data = (mb_count or 0) + (rb_count or 0)
     if not has_data:
         return {
             "year": year,
@@ -1175,13 +1192,17 @@ async def import_electricity(
         for i in range(0, len(records), 1000):
             chunk = records[i:i + 1000]
             stmt = _pg_insert(MonthlyBalance.__table__).values(chunk)
+            upd = {
+                "paid_amount": stmt.excluded.paid_amount,
+                "market_id": stmt.excluded.market_id,
+            }
+            # To'lov reyestrida qarz ma'lumoti yo'q — mavjud due_amount ni
+            # o'chirib yubormaymiz. Qarz faqat "balance" faylidan yangilanadi.
+            if getattr(result, "mode", "balance") != "payments":
+                upd["due_amount"] = stmt.excluded.due_amount
             stmt = stmt.on_conflict_do_update(
                 index_elements=["inn", "year", "month", "category"],
-                set_={
-                    "due_amount": stmt.excluded.due_amount,
-                    "paid_amount": stmt.excluded.paid_amount,
-                    "market_id": stmt.excluded.market_id,
-                },
+                set_=upd,
             )
             await db.execute(stmt)
 
