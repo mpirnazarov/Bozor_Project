@@ -64,6 +64,9 @@ export function HomePage() {
   const [activePavilion, setActivePavilion] = useState<Pavilion | null>(null);
   const [activeShop, setActiveShop] = useState<string | null>(null);
   const [activeShopTitle, setActiveShopTitle] = useState<string | undefined>(undefined);
+  // Magazin modali qaysi davr uchun ochilgan (blok modalidan kelganda).
+  // null — joriy oy (xaritadan yoki qidiruvdan ochilgan holat).
+  const [activeShopPeriod, setActiveShopPeriod] = useState<{ year: number; month: number } | null>(null);
   const [noShopIdPavilion, setNoShopIdPavilion] = useState<string | null>(null);
   const [activeInfraShop, setActiveInfraShop] = useState<{ id: number; name: string } | null>(null);
   const [activeToilet, setActiveToilet] = useState<{ id: number; name: string } | null>(null);
@@ -171,6 +174,7 @@ export function HomePage() {
               // Oddiy magazin modali
               setActiveShop(p.meta.target_shop_id as string);
               setActiveShopTitle(p.display_name);
+              setActiveShopPeriod(null); // xaritadan — joriy oy
             } else if (p.pavilion_type === "infra") {
               // Infra lekin ID yo'q — name bo'yicha qidirish
               setActiveInfraShop({ id: 0, name: p.display_name });
@@ -187,15 +191,22 @@ export function HomePage() {
         pavilionId={activePavilion?.id ?? null}
         pavilionName={activePavilion?.display_name ?? ""}
         onClose={() => setActivePavilion(null)}
-        onSelectShop={(id) => {
+        onSelectShop={(id, y, m) => {
           // Pavilion modalni YOPMAYMIZ — magazin modali uning ustida ochiladi.
           // Magazin modali yopilganda pavilion modali ochiq qoladi.
           setActiveShop(id);
           setActiveShopTitle(undefined);
+          setActiveShopPeriod({ year: y, month: m });
         }}
       />
 
-      <ShopDetailModal shopId={activeShop} onClose={() => { setActiveShop(null); setActiveShopTitle(undefined); }} customTitle={activeShopTitle} />
+      <ShopDetailModal
+        shopId={activeShop}
+        year={activeShopPeriod?.year}
+        month={activeShopPeriod?.month}
+        onClose={() => { setActiveShop(null); setActiveShopTitle(undefined); setActiveShopPeriod(null); }}
+        customTitle={activeShopTitle}
+      />
       <InfraShopModal infraShop={activeInfraShop} onClose={() => setActiveInfraShop(null)} />
       <ToiletModal toilet={activeToilet} onClose={() => setActiveToilet(null)} />
 
@@ -247,6 +258,7 @@ export function HomePage() {
                     onClick={() => {
                       setActiveInn(null);
                       setActiveShop(s.shop_id);
+                      setActiveShopPeriod(null); // qidiruvdan — joriy oy
                     }}
                     className="rounded-md bg-slate-100 px-2 py-1 font-mono text-xs font-semibold text-slate-600 hover:bg-slate-200"
                   >

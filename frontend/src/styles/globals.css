@@ -59,6 +59,23 @@ body {
       text-sm text-ink outline-none transition-all placeholder:text-ink-faint
       focus:border-brand focus:bg-white focus:ring-4 focus:ring-[rgba(0,102,255,0.12)];
   }
+  /* Davr tanlagich — blok modalidagi oy/yil segmenti */
+  .period-switch {
+    @apply inline-flex items-center gap-0.5 rounded-full border border-slate-200/90
+      bg-white/80 p-1 shadow-soft backdrop-blur-sm;
+  }
+  .period-nav {
+    @apply grid h-8 w-8 place-items-center rounded-full text-ink-faint transition
+      hover:bg-slate-100 hover:text-ink
+      disabled:cursor-not-allowed disabled:opacity-25 disabled:hover:bg-transparent;
+  }
+  .period-value {
+    @apply min-w-[100px] select-none px-1 text-center;
+  }
+  .period-reset {
+    @apply rounded-full px-3 py-1.5 text-[11px] font-bold text-brand transition
+      hover:bg-brand/10;
+  }
   .card {
     @apply rounded-2xl border border-white/60 bg-white/90 shadow-card backdrop-blur-sm;
   }
@@ -152,6 +169,14 @@ html.dark ::-webkit-scrollbar-thumb:hover { background: #475569; background-clip
   html.dark .input {
     @apply border-white/10 bg-white/[0.05] text-slate-100 placeholder:text-slate-500
       focus:border-brand focus:bg-white/[0.08];
+  }
+
+  /* Davr tanlagich — dark */
+  html.dark .period-switch {
+    @apply border-white/10 bg-white/[0.05] shadow-none;
+  }
+  html.dark .period-nav {
+    @apply hover:bg-white/10 hover:text-white;
   }
 
   /* Chip default fonini dark uchun moslash */

@@ -13,12 +13,15 @@ interface Props {
   pavilionId: number | null;
   pavilionName: string;
   onClose: () => void;
-  onSelectShop: (shopId: string) => void;
+  /** Magazin modali AYNAN shu davr uchun ochilishi kerak — aks holda blok
+   *  modali bir oyni, magazin modali boshqasini ko'rsatadi. */
+  onSelectShop: (shopId: string, year: number, month: number) => void;
 }
 
-type ServiceKey = "all" | "rent" | "electricity" | "water";
+// "all" (Barcha) olib tashlandi — uchala xizmatni bir plitkada aralashtirish
+// chalkash edi. Sukut bo'yicha arenda ochiladi.
+type ServiceKey = "rent" | "electricity" | "water";
 const SERVICE_FILTERS: { key: ServiceKey; tkey: string }[] = [
-  { key: "all", tkey: "pav.service.all" },
   { key: "rent", tkey: "pav.service.rent" },
   { key: "electricity", tkey: "pav.service.electricity" },
   { key: "water", tkey: "pav.service.water" },
@@ -69,13 +72,22 @@ const MONTHS = [
   "Yanvar", "Fevral", "Mart", "Aprel", "May", "Iyun",
   "Iyul", "Avgust", "Sentabr", "Oktabr", "Noyabr", "Dekabr",
 ];
-const YEARS = [new Date().getFullYear(), new Date().getFullYear() - 1];
+
+function Chevron({ dir }: { dir: "left" | "right" }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" strokeWidth="2.5"
+         strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points={dir === "left" ? "15 18 9 12 15 6" : "9 18 15 12 9 6"} />
+    </svg>
+  );
+}
 
 /** partial -> unpaid (agar bayroq yoqilgan bo'lsa). Boshqa statuslar o'zgarmaydi. */
 
 
 export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop }: Props) {
-  const [service, setService] = useState<ServiceKey>("all");
+  const [service, setService] = useState<ServiceKey>("rent");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const t = useT();
 
@@ -83,8 +95,18 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
   // uchun qilinadi (masalan avgust), shuning uchun oyni almashtirib
   // ko'rish kerak bo'ladi.
   const now = new Date();
-  const [year, setYear] = useState<number>(now.getFullYear());
-  const [month, setMonth] = useState<number>(now.getMonth() + 1);
+  const curYear = now.getFullYear();
+  const curMonth = now.getMonth() + 1;
+  const [year, setYear] = useState<number>(curYear);
+  const [month, setMonth] = useState<number>(curMonth);
+
+  const isCurrentPeriod = year === curYear && month === curMonth;
+  const shiftMonth = (delta: number) => {
+    const d = new Date(year, month - 1 + delta, 1);
+    setYear(d.getFullYear());
+    setMonth(d.getMonth() + 1);
+  };
+  const goCurrentPeriod = () => { setYear(curYear); setMonth(curMonth); };
 
   const { data, isLoading, isFetching } = useQuery({
     queryKey: ["pavilion-shops", pavilionId, year, month],
@@ -98,7 +120,7 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
   });
 
   // "no_data" ni faqat arenda ko'rinishida yashiramiz (pastdagi izohga qarang)
-  const hideNoData = !!hideUnmatched && (service === "all" || service === "rent");
+  const hideNoData = !!hideUnmatched && service === "rent";
 
   // Dashboard umumiy summalari (qo'lda kiritilgan) — proporsiya uchun
   const { data: dashboard } = useQuery({
@@ -140,9 +162,6 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
       const waterPaid = waterCat ? Number(waterCat.paid) : 0;
       const waterDebt = Math.max(0, waterDue - waterPaid);
 
-      const totalDebt = rentDebt + elecDebt + waterDebt;
-      const totalPaid = rentPaid + elecPaid + waterPaid;
-
       // Rang — TANLANGAN xizmat bo'yicha. Avval bu yerda har doim uchala
       // kategoriya birgalikda hisoblanardi, shuning uchun xizmat turini
       // almashtirganda ranglar umuman o'zgarmasdi.
@@ -159,16 +178,8 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
         return { shop: s, status: statusOf(!!elecCat, elecPaid, elecDebt),
                  due: elecDue, paid: elecPaid, debt: elecDebt };
       }
-      if (service === "water") {
-        return { shop: s, status: statusOf(!!waterCat, waterPaid, waterDebt),
-                 due: waterDue, paid: waterPaid, debt: waterDebt };
-      }
-
-      // "all" — uchala xizmat birgalikda
-      const hasAny = !!rentCat || !!elecCat || !!waterCat;
-      const totalDue = rentDue + elecDue + waterDue;
-      return { shop: s, status: statusOf(hasAny, totalPaid, totalDebt),
-               due: totalDue, paid: totalPaid, debt: totalDebt };
+      return { shop: s, status: statusOf(!!waterCat, waterPaid, waterDebt),
+               due: waterDue, paid: waterPaid, debt: waterDebt };
     });
 
     // "Topilmaganlar berkitilgan" sozlamasi ARENDA uchun mo'ljallangan —
@@ -229,21 +240,44 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
       {data && (
         <>
           {/* Davr tanlash — elektr/suv importi o'tgan oy uchun bo'lishi mumkin */}
-          <div className="mb-3 flex items-center gap-2">
-            <span className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">
-              Davr
-            </span>
-            <select className="input" value={month} onChange={(e) => setMonth(Number(e.target.value))}>
-              {MONTHS.map((nm, i) => (
-                <option key={nm} value={i + 1}>{nm}</option>
-              ))}
-            </select>
-            <select className="input" value={year} onChange={(e) => setYear(Number(e.target.value))}>
-              {YEARS.map((y) => (
-                <option key={y} value={y}>{y}</option>
-              ))}
-            </select>
-            {isFetching && <span className="text-[11px] text-ink-faint">yuklanmoqda…</span>}
+          <div className="mb-3.5 flex flex-wrap items-center gap-2">
+            <div className="period-switch">
+              <button
+                type="button"
+                className="period-nav"
+                onClick={() => shiftMonth(-1)}
+                aria-label="Oldingi oy"
+              >
+                <Chevron dir="left" />
+              </button>
+              <div className="period-value">
+                <div className="font-display text-[13px] font-extrabold leading-none text-ink">
+                  {MONTHS[month - 1]}
+                </div>
+                <div className="mt-1 text-[10px] font-semibold leading-none tracking-wider text-ink-faint">
+                  {year}
+                </div>
+              </div>
+              <button
+                type="button"
+                className="period-nav"
+                onClick={() => shiftMonth(1)}
+                disabled={isCurrentPeriod}
+                aria-label="Keyingi oy"
+              >
+                <Chevron dir="right" />
+              </button>
+            </div>
+
+            {!isCurrentPeriod && (
+              <button type="button" className="period-reset" onClick={goCurrentPeriod}>
+                Joriy oyga qaytish
+              </button>
+            )}
+
+            {isFetching && (
+              <span className="text-[11px] font-semibold text-ink-faint">yuklanmoqda…</span>
+            )}
           </div>
 
           {/* Summalar */}
@@ -319,7 +353,7 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
               return (
                 <button
                   key={c.shop.shop_id}
-                  onClick={() => match && onSelectShop(c.shop.shop_id)}
+                  onClick={() => match && onSelectShop(c.shop.shop_id, year, month)}
                   disabled={!match}
                   className="flex aspect-square items-center justify-center rounded text-[10px] font-bold text-white transition-all"
                   style={match

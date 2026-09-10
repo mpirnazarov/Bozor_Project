@@ -15,13 +15,19 @@ interface Props {
   shopId: string | null;
   onClose: () => void;
   customTitle?: string;
+  /** Blok modalida tanlangan davr. Berilmasa — backend joriy oyni oladi.
+   *  Busiz blok modali avgustni, magazin modali esa sentabrni ko'rsatib,
+   *  bir xil magazin ikki xil holat ("to'lanmagan" / "ma'lumot yo'q")
+   *  bo'lib chiqardi. */
+  year?: number;
+  month?: number;
 }
 
-export function ShopDetailModal({ shopId, onClose, customTitle }: Props) {
+export function ShopDetailModal({ shopId, onClose, customTitle, year, month }: Props) {
   const t = useT();
   const { data, isLoading } = useQuery({
-    queryKey: ["shop", shopId],
-    queryFn: () => getShop(shopId!),
+    queryKey: ["shop", shopId, year, month],
+    queryFn: () => getShop(shopId!, year, month),
     enabled: !!shopId,
   });
 
