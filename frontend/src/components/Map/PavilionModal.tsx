@@ -96,7 +96,6 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
   });
 
   // "no_data" ni faqat arenda ko'rinishida yashiramiz (pastdagi izohga qarang)
-  const hideNoData = !!hideUnmatched && service === "rent";
 
   // Dashboard umumiy summalari (qo'lda kiritilgan) — proporsiya uchun
   const { data: dashboard } = useQuery({
@@ -108,14 +107,19 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
   const computed = useMemo(() => {
     if (!data) return [];
     const list = data.shops.map((s) => {
+      // "Topilmagan" = bo'sh yozuv: na INN, na ijara summasi bor. Faqat
+      // SHULAR berkitiladi. Shu oyda to'lov fayli kelmagan (lekin INN va
+      // ijarasi bor) magazin "topilmagan" EMAS — u ro'yxatda qolishi shart.
+      const emptyRecord = !s.inn && Number(s.monthly_rent ?? 0) <= 0;
+
       // 1. Bo'sh do'kon — kulrang "vacant"
       if (s.is_vacant) {
-        return { shop: s, status: "vacant" as ShopStatus, due: 0, paid: 0, debt: 0 };
+        return { shop: s, emptyRecord, status: "vacant" as ShopStatus, due: 0, paid: 0, debt: 0 };
       }
 
       // 2. INN yo'q — egasiz (qizil)
       if (!s.inn) {
-        return { shop: s, status: "unpaid" as ShopStatus, due: 0, paid: 0, debt: 0 };
+        return { shop: s, emptyRecord, status: "unpaid" as ShopStatus, due: 0, paid: 0, debt: 0 };
       }
 
       const billing = data.billing[s.shop_id];
@@ -147,23 +151,25 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
         !present ? "no_data" : debt <= 0 ? "paid" : paid > 0 ? "partial" : "unpaid";
 
       if (service === "rent") {
-        return { shop: s, status: statusOf(!!rentCat, rentPaid, rentDebt),
+        return { shop: s, emptyRecord, status: statusOf(!!rentCat, rentPaid, rentDebt),
                  due: rentDue, paid: rentPaid, debt: rentDebt };
       }
       if (service === "electricity") {
-        return { shop: s, status: statusOf(!!elecCat, elecPaid, elecDebt),
+        return { shop: s, emptyRecord, status: statusOf(!!elecCat, elecPaid, elecDebt),
                  due: elecDue, paid: elecPaid, debt: elecDebt };
       }
-      return { shop: s, status: statusOf(!!waterCat, waterPaid, waterDebt),
+      return { shop: s, emptyRecord, status: statusOf(!!waterCat, waterPaid, waterDebt),
                due: waterDue, paid: waterPaid, debt: waterDebt };
     });
 
-    // "Topilmaganlar berkitilgan" sozlamasi ARENDA uchun mo'ljallangan —
-    // billingga ulanmagan magazinni ro'yxatdan olib tashlaydi. Elektr/suvda
-    // esa "ma'lumot yo'q" aynan KO'RINISHI kerak: aks holda shu oyda elektr
-    // importi bo'lmagan bo'lsa ro'yxat butunlay bo'sh qolardi.
-    return hideNoData ? list.filter((c) => c.status !== "no_data") : list;
-  }, [data, service, hideNoData]);
+    // "Topilmaganlar berkitilgan" — FAQAT bo'sh yozuvlarni (na INN, na ijara)
+    // olib tashlaydi. Avval bu filtr `status !== "no_data"` bo'yicha ishlardi;
+    // eski kod hech qachon no_data yaratmagani uchun u amalda hech narsa
+    // qilmasdi. "Ma'lumot yo'q" holati joriy qilingach esa u birdan INN va
+    // ijarasi bor haqiqiy magazinlarni ham yashira boshladi (1-PAVILON,
+    // sentabr: 35 magazin, 188 mln so'm).
+    return hideUnmatched ? list.filter((c) => !c.emptyRecord) : list;
+  }, [data, service, hideUnmatched]);
 
   // Tepadagi summalar HAR DOIM umumiy (barcha xizmatlar bo'yicha) bo'ladi.
   // MUHIM: endi har magazinning JAMI'si — o'zining belgilangan summasi
@@ -211,10 +217,13 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
 
   // Har xizmat ostida ham BARCHA magazinlar soni ko'rsatiladi (191 = 191).
   // Filtr tanlanganda magazin tushib qolmaydi — billing satri bo'lmasa ham ko'rinadi.
+  // Xizmat chiplaridagi son ro'yxatdagi HAQIQIY magazin soniga teng bo'lishi
+  // shart. Avval bu yerda doim `data.shops.length` turardi, shuning uchun
+  // "Arenda 191" va "Hammasi 156" bir-biriga qarama-qarshi chiqardi.
   const serviceCounts = useMemo(() => {
-    const n = data?.shops.length ?? 0;
-    return { all: n, rent: n, electricity: n, water: n } as Record<string, number>;
-  }, [data]);
+    const n = computed.length;
+    return { rent: n, electricity: n, water: n } as Record<string, number>;
+  }, [computed]);
 
   return (
     <Modal open={!!pavilionId} onClose={onClose} title={pavilionName} maxWidth="max-w-3xl">
@@ -275,7 +284,7 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
           <div className="mb-3">
             <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-ink-faint">{t("pav.paymentStatus")}</div>
             <div className="flex flex-wrap items-center gap-1.5">
-              {STATUS_FILTERS.filter((f) => !(hideNoData && f.key === "no_data")).map((f) => (
+              {STATUS_FILTERS.map((f) => (
                 <button
                   key={f.key}
                   onClick={() => setStatusFilter(f.key)}
