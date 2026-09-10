@@ -64,6 +64,13 @@ function demoSplit(totalDue: number, seed: number): { debt: number; paid: number
 // Keyinroq avtomatik hisobga o'tkazish uchun shu qiymatni `false` qiling.
 const USE_DASHBOARD_PROPORTION = false;
 
+// Davr tanlagichi uchun
+const MONTHS = [
+  "Yanvar", "Fevral", "Mart", "Aprel", "May", "Iyun",
+  "Iyul", "Avgust", "Sentabr", "Oktabr", "Noyabr", "Dekabr",
+];
+const YEARS = [new Date().getFullYear(), new Date().getFullYear() - 1];
+
 /** partial -> unpaid (agar bayroq yoqilgan bo'lsa). Boshqa statuslar o'zgarmaydi. */
 
 
@@ -72,9 +79,16 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const t = useT();
 
+  // Davr — sukut bo'yicha joriy oy. Elektr/suv importi ba'zan o'tgan oy
+  // uchun qilinadi (masalan avgust), shuning uchun oyni almashtirib
+  // ko'rish kerak bo'ladi.
+  const now = new Date();
+  const [year, setYear] = useState<number>(now.getFullYear());
+  const [month, setMonth] = useState<number>(now.getMonth() + 1);
+
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ["pavilion-shops", pavilionId],
-    queryFn: () => getPavilionShops(pavilionId!),
+    queryKey: ["pavilion-shops", pavilionId, year, month],
+    queryFn: () => getPavilionShops(pavilionId!, year, month),
     enabled: !!pavilionId,
   });
 
@@ -82,6 +96,9 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
     queryKey: ["hide-unmatched"],
     queryFn: getHideUnmatched,
   });
+
+  // "no_data" ni faqat arenda ko'rinishida yashiramiz (pastdagi izohga qarang)
+  const hideNoData = !!hideUnmatched && (service === "all" || service === "rent");
 
   // Dashboard umumiy summalari (qo'lda kiritilgan) — proporsiya uchun
   const { data: dashboard } = useQuery({
@@ -126,33 +143,40 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
       const totalDebt = rentDebt + elecDebt + waterDebt;
       const totalPaid = rentPaid + elecPaid + waterPaid;
 
-      // Rang — har doim uchala kategoriya bo'yicha
-      const colorStatus: ShopStatus =
-        totalDebt <= 0 ? "paid" :
-        totalPaid > 0 ? "partial" :
-        "unpaid";
+      // Rang — TANLANGAN xizmat bo'yicha. Avval bu yerda har doim uchala
+      // kategoriya birgalikda hisoblanardi, shuning uchun xizmat turini
+      // almashtirganda ranglar umuman o'zgarmasdi.
+      // Kategoriya yo'q bo'lsa (masalan shu oyda elektr importi bo'lmagan)
+      // — "ma'lumot yo'q", "to'lanmagan" EMAS.
+      const statusOf = (present: boolean, paid: number, debt: number): ShopStatus =>
+        !present ? "no_data" : debt <= 0 ? "paid" : paid > 0 ? "partial" : "unpaid";
 
-      // Ko'rsatiladigan raqamlar — tanlangan service bo'yicha
       if (service === "rent") {
-        return { shop: s, status: colorStatus, due: rentDue, paid: rentPaid, debt: rentDebt };
+        return { shop: s, status: statusOf(!!rentCat, rentPaid, rentDebt),
+                 due: rentDue, paid: rentPaid, debt: rentDebt };
       }
       if (service === "electricity") {
-        return { shop: s, status: colorStatus, due: elecDue, paid: elecPaid, debt: elecDebt };
+        return { shop: s, status: statusOf(!!elecCat, elecPaid, elecDebt),
+                 due: elecDue, paid: elecPaid, debt: elecDebt };
       }
       if (service === "water") {
-        return { shop: s, status: colorStatus, due: waterDue, paid: waterPaid, debt: waterDebt };
+        return { shop: s, status: statusOf(!!waterCat, waterPaid, waterDebt),
+                 due: waterDue, paid: waterPaid, debt: waterDebt };
       }
 
-      // "all" — jami
+      // "all" — uchala xizmat birgalikda
+      const hasAny = !!rentCat || !!elecCat || !!waterCat;
       const totalDue = rentDue + elecDue + waterDue;
-      return { shop: s, status: colorStatus, due: totalDue, paid: totalPaid, debt: totalDebt };
+      return { shop: s, status: statusOf(hasAny, totalPaid, totalDebt),
+               due: totalDue, paid: totalPaid, debt: totalDebt };
     });
 
-    // Bo'sh va no_data ni chiqarib tashlaymiz (faqat hideUnmatched=true bo'lsa)
-    return hideUnmatched
-      ? list.filter((c) => c.status !== "no_data")
-      : list;
-  }, [data, service, hideUnmatched]);
+    // "Topilmaganlar berkitilgan" sozlamasi ARENDA uchun mo'ljallangan —
+    // billingga ulanmagan magazinni ro'yxatdan olib tashlaydi. Elektr/suvda
+    // esa "ma'lumot yo'q" aynan KO'RINISHI kerak: aks holda shu oyda elektr
+    // importi bo'lmagan bo'lsa ro'yxat butunlay bo'sh qolardi.
+    return hideNoData ? list.filter((c) => c.status !== "no_data") : list;
+  }, [data, service, hideNoData]);
 
   // Tepadagi summalar HAR DOIM umumiy (barcha xizmatlar bo'yicha) bo'ladi.
   // MUHIM: endi har magazinning JAMI'si — o'zining belgilangan summasi
@@ -204,6 +228,24 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
 
       {data && (
         <>
+          {/* Davr tanlash — elektr/suv importi o'tgan oy uchun bo'lishi mumkin */}
+          <div className="mb-3 flex items-center gap-2">
+            <span className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">
+              Davr
+            </span>
+            <select className="input" value={month} onChange={(e) => setMonth(Number(e.target.value))}>
+              {MONTHS.map((nm, i) => (
+                <option key={nm} value={i + 1}>{nm}</option>
+              ))}
+            </select>
+            <select className="input" value={year} onChange={(e) => setYear(Number(e.target.value))}>
+              {YEARS.map((y) => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+            {isFetching && <span className="text-[11px] text-ink-faint">yuklanmoqda…</span>}
+          </div>
+
           {/* Summalar */}
           <div className="mb-4 grid grid-cols-3 gap-2.5">
             <div className="rounded-xl bg-surface-muted p-3">
@@ -247,7 +289,7 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
           <div className="mb-3">
             <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-ink-faint">{t("pav.paymentStatus")}</div>
             <div className="flex flex-wrap items-center gap-1.5">
-              {STATUS_FILTERS.filter((f) => !(hideUnmatched && f.key === "no_data")).map((f) => (
+              {STATUS_FILTERS.filter((f) => !(hideNoData && f.key === "no_data")).map((f) => (
                 <button
                   key={f.key}
                   onClick={() => setStatusFilter(f.key)}
