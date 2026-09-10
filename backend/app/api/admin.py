@@ -78,6 +78,31 @@ async def update_hide_unmatched(
     return {"hidden": body.hidden}
 
 
+class _ReportDetailBody(BaseModel):
+    enabled: bool
+
+
+@router.put("/report-detail")
+async def update_report_detail(
+    body: _ReportDetailBody,
+    admin: AdminUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    """Hisobotdagi xizmatlar taqsimotini yoqish/o'chirish (DB'da saqlanadi)."""
+    from app.models.settings import REPORT_DETAIL_KEY
+
+    setting = await db.get(Setting, REPORT_DETAIL_KEY)
+    if setting is None:
+        setting = Setting(key=REPORT_DETAIL_KEY, value={"enabled": body.enabled}, updated_by=admin.id)
+        db.add(setting)
+    else:
+        setting.value = {"enabled": body.enabled}
+        setting.updated_by = admin.id
+    await write_audit(db, admin.id, "update_report_detail", "settings", REPORT_DETAIL_KEY, {"enabled": body.enabled})
+    await db.commit()
+    return {"enabled": body.enabled}
+
+
 class _ThemeBody(BaseModel):
     theme: str
 
@@ -692,20 +717,10 @@ async def billing_summary(
             )
         )).scalars())
         shops_with_billing = [s for s in shops if s in rb_shop_ids]
-        if not shops_with_billing:
-            # billing yo'q — yagona qiymat
-            blocks_out.append({
-                "pavilion_id": pav.id,
-                "name": pav.display_name,
-                "layer_id": pav.map_layer_id,
-                "layer_name": layer_name.get(pav.map_layer_id),
-                "prefix": prefix,
-                "shop_count": len(shops),
-                "total_due": 0.0,
-                "total_paid": 0.0,
-                "total_debt": 0.0,
-            })
-            continue
+        # DIQQAT: avval bu yerda `continue` bor edi — hech bir magazinida shu oy
+        # uchun rent_billing bo'lmagan blok Jami'ga UMUMAN qo'shilmasdi (magazin
+        # soni ham, ijarasi ham). Endi bunday blok ham hisoblanadi: JAMI
+        # monthly_rent'dan olinadi, TO'LANGAN esa 0.
 
         # JAMI = barcha do'konlarning monthly_rent yig'indisi
         monthly_rents = dict((await db.execute(
@@ -720,8 +735,10 @@ async def billing_summary(
         )
 
         # TO'LANGAN = rent_billing.paid summasi (billing bor do'konlar)
-        billing = await compute_batch_status(db, shops_with_billing, year, month)
-        paid = sum((b.total_paid for b in billing.values()), Decimal(0))
+        paid = Decimal(0)
+        if shops_with_billing:
+            billing = await compute_batch_status(db, shops_with_billing, year, month)
+            paid = sum((b.total_paid for b in billing.values()), Decimal(0))
         debt = max(Decimal(0), due - paid)
 
         blocks_out.append({
@@ -751,6 +768,49 @@ async def billing_summary(
         # grand debt ham oxirida hisoblanadi
         grand["shop_count"] += len(shops)
 
+    # ===== BLOKKA BIRIKTIRILMAGAN MAGAZINLAR =====
+    # Yuqoridagi halqa faqat `shop_prefix` i bor bloklarni ko'radi. Prefiksga
+    # tushmagan magazinlar (masalan "01-2-0-*", "05-5-2-*", "33-1-1-*") butunlay
+    # hisobotdan tushib qolardi — 2026-09 holatida 466 magazin, 1.1 mlrd so'm.
+    # Ularni alohida "Boshqa" qatori sifatida qo'shamiz.
+    rest_q = select(Shop.shop_id).where(
+        Shop.market_id == market.id,
+        Shop.is_active.is_(True),
+    )
+    if seen_shops:
+        rest_q = rest_q.where(Shop.shop_id.notin_(seen_shops))
+    rest_shops = list((await db.execute(rest_q)).scalars())
+    if rest_shops:
+        rest_rents = dict((await db.execute(
+            select(Shop.shop_id, Shop.monthly_rent).where(
+                Shop.shop_id.in_(rest_shops), Shop.market_id == market.id,
+            )
+        )).all())
+        rest_due = sum((Decimal(str(v or 0)) for v in rest_rents.values()), Decimal(0))
+        rest_billing = await compute_batch_status(db, rest_shops, year, month)
+        rest_paid = sum((b.total_paid for b in rest_billing.values()), Decimal(0))
+        blocks_out.append({
+            "pavilion_id": None,
+            "name": "Boshqa (blokka biriktirilmagan)",
+            "layer_id": None,
+            "layer_name": None,
+            "prefix": None,
+            "shop_count": len(rest_shops),
+            "total_due": float(rest_due),
+            "total_paid": float(rest_paid),
+            "total_debt": float(max(Decimal(0), rest_due - rest_paid)),
+        })
+        if None not in layer_agg:
+            layer_agg[None] = {"due": Decimal(0), "paid": Decimal(0), "debt": Decimal(0),
+                               "shop_count": 0, "block_count": 0}
+        layer_agg[None]["due"] += rest_due
+        layer_agg[None]["paid"] += rest_paid
+        layer_agg[None]["shop_count"] += len(rest_shops)
+        layer_agg[None]["block_count"] += 1
+        grand["due"] += rest_due
+        grand["paid"] += rest_paid
+        grand["shop_count"] += len(rest_shops)
+
     layers_out = []
     for lk, a in layer_agg.items():
         layer_debt = max(Decimal(0), a["due"] - a["paid"])
@@ -765,6 +825,73 @@ async def billing_summary(
         })
     layers_out.sort(key=lambda x: (x["layer_id"] is None, x["layer_id"] or 0))
 
+    # ===== XIZMATLAR BO'YICHA TAQSIMOT =====
+    # Bloklar jadvali FAQAT arendani ko'rsata oladi: elektr/suv INN darajasida
+    # yuritiladi (bir ijarachi bir nechta blokda bo'lishi mumkin), infra
+    # do'konlar va xojatxonalar esa xaritadagi bloklarga umuman tegishli emas.
+    # Shuning uchun ular bozor darajasida alohida qatorlar sifatida beriladi.
+    from app.models import InfraShop, InfraBilling, ToiletRevenue, Toilet
+
+    def _svc(key: str, name: str, due: Decimal, paid: Decimal) -> dict:
+        return {
+            "key": key, "name": name,
+            "total_due": float(due),
+            "total_paid": float(paid),
+            "total_debt": float(max(Decimal(0), due - paid)),
+        }
+
+    services: list[dict] = [_svc("rent", "Arenda", grand["due"], grand["paid"])]
+
+    # Elektr / suv — monthly_balances (INN bo'yicha).
+    # due_amount = QOLGAN QARZ, shuning uchun hisob = to'langan + qarz.
+    for cat, label in (("electricity", "Elektr"), ("water", "Suv")):
+        row = (await db.execute(
+            select(
+                func.coalesce(func.sum(MonthlyBalance.paid_amount), 0),
+                func.coalesce(func.sum(MonthlyBalance.due_amount), 0),
+            ).where(
+                MonthlyBalance.year == year,
+                MonthlyBalance.month == month,
+                MonthlyBalance.category == cat,
+            )
+        )).one()
+        c_paid, c_debt = Decimal(str(row[0] or 0)), Decimal(str(row[1] or 0))
+        services.append(_svc(cat, label, c_paid + c_debt, c_paid))
+
+    # Infra do'konlar — alohida jadval, bloklarga kirmaydi
+    infra_due = Decimal(str((await db.scalar(
+        select(func.coalesce(func.sum(InfraShop.monthly_rent), 0)).where(
+            InfraShop.market_id == market.id, InfraShop.is_active.is_(True)
+        )
+    )) or 0))
+    infra_paid = Decimal(str((await db.scalar(
+        select(func.coalesce(func.sum(InfraBilling.paid_amount), 0))
+        .select_from(InfraBilling)
+        .join(InfraShop, InfraShop.id == InfraBilling.shop_id)
+        .where(
+            InfraBilling.year == year, InfraBilling.month == month,
+            InfraBilling.category == "rent",
+            InfraShop.market_id == market.id,
+        )
+    )) or 0))
+    services.append(_svc("infra", "Infra do'konlar", infra_due, infra_paid))
+
+    # Xojatxonalar — bu qarzdorlik emas, TUSHUM. Hisob = tushum, qarz 0.
+    wc_paid = Decimal(str((await db.scalar(
+        select(func.coalesce(func.sum(ToiletRevenue.amount), 0))
+        .select_from(ToiletRevenue)
+        .join(Toilet, Toilet.id == ToiletRevenue.toilet_id)
+        .where(
+            ToiletRevenue.revenue_date >= _hd_start,
+            ToiletRevenue.revenue_date <= _hd_end,
+            Toilet.market_id == market.id,
+        )
+    )) or 0))
+    services.append(_svc("toilet", "Xojatxona (tushum)", wc_paid, wc_paid))
+
+    svc_due = sum((Decimal(str(s["total_due"])) for s in services), Decimal(0))
+    svc_paid = sum((Decimal(str(s["total_paid"])) for s in services), Decimal(0))
+
     return {
         "year": year,
         "month": month,
@@ -778,6 +905,14 @@ async def billing_summary(
         },
         "layers": layers_out,
         "blocks": blocks_out,
+        # Barcha xizmatlar bo'yicha umumiy holat (arenda + elektr + suv +
+        # infra + xojatxona). Bloklar jadvali faqat arendani qamraydi.
+        "services": services,
+        "grand_total": {
+            "total_due": float(svc_due),
+            "total_paid": float(svc_paid),
+            "total_debt": float(max(Decimal(0), svc_due - svc_paid)),
+        },
     }
 
 

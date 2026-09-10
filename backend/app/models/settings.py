@@ -38,3 +38,7 @@ THEME_SETTINGS_KEY = "app_theme"
 # Topilmagan (bazada balansi yo'q) magazinlarni berkitish. Admin yoqsa,
 # region modalida no_data magazinlar va "Topilmadi" filtri ko'rinmaydi.
 HIDE_UNMATCHED_KEY = "hide_unmatched"
+
+# Oylik hisobotda xizmatlar bo'yicha batafsil taqsimot (arenda, elektr, suv,
+# infra, xojatxona) ko'rsatilsinmi. DEFAULT — YOQILGAN.
+REPORT_DETAIL_KEY = "report_detail"

@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { RefreshCw, EyeOff, Eye } from "lucide-react";
+import { RefreshCw, EyeOff, Eye, ListChecks, List } from "lucide-react";
 import { getDashboard } from "@/api/dashboard";
-import { updateDashboard, getHideUnmatched, setHideUnmatched } from "@/api/admin";
+import {
+  updateDashboard, getHideUnmatched, setHideUnmatched,
+  getReportDetail, setReportDetail,
+} from "@/api/admin";
 import { fmtUZS } from "@/lib/utils";
 import { useT } from "@/i18n/useT";
 
@@ -45,6 +48,17 @@ export function DashboardEditor() {
       qc.invalidateQueries({ queryKey: ["hide-unmatched"] });
       qc.invalidateQueries({ queryKey: ["pavilion-shops"] });
     },
+  });
+
+  // Oylik hisobotdagi xizmatlar taqsimoti (default: YOQILGAN)
+  const { data: reportDetail } = useQuery({
+    queryKey: ["report-detail"],
+    queryFn: getReportDetail,
+  });
+  const detailOn = reportDetail ?? true;
+  const detailMutation = useMutation({
+    mutationFn: (v: boolean) => setReportDetail(v),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["report-detail"] }),
   });
 
   // "Real hisobla" — monthly_balances'dan jonli hisoblab, formani to'ldiradi
@@ -127,6 +141,17 @@ export function DashboardEditor() {
         >
           {hideUnmatched ? <EyeOff size={15} /> : <Eye size={15} />}
           {hideUnmatched ? t("admin.hideUnmatchedOn") : t("admin.hideUnmatched")}
+        </button>
+
+        {/* Oylik hisobotda xizmatlar taqsimoti (arenda/elektr/suv/infra/xojatxona) */}
+        <button
+          className={detailOn ? "btn-primary" : "btn-ghost"}
+          onClick={() => detailMutation.mutate(!detailOn)}
+          disabled={detailMutation.isPending}
+          title="Oylik hisobotda xizmatlar bo'yicha batafsil jadval ko'rsatilsinmi"
+        >
+          {detailOn ? <ListChecks size={15} /> : <List size={15} />}
+          {detailOn ? "Hisobot: batafsil ✓" : "Hisobot: qisqa"}
         </button>
       </div>
 

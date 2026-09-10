@@ -9,7 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.deps import CurrentMarket
-from app.models.settings import HIDE_UNMATCHED_KEY, THEME_SETTINGS_KEY, Setting
+from app.models.settings import (
+    HIDE_UNMATCHED_KEY,
+    REPORT_DETAIL_KEY,
+    THEME_SETTINGS_KEY,
+    Setting,
+)
 from app.services.support_service import get_support_status
 
 router = APIRouter()
@@ -60,3 +65,15 @@ async def get_hide_unmatched(db: Annotated[AsyncSession, Depends(get_db)]) -> di
     s = await db.get(Setting, HIDE_UNMATCHED_KEY)
     hidden = bool(s.value.get("hidden")) if s and isinstance(s.value, dict) else False
     return {"hidden": hidden}
+
+
+@router.get("/report-detail")
+async def get_report_detail(db: Annotated[AsyncSession, Depends(get_db)]) -> dict:
+    """Hisobotda xizmatlar bo'yicha batafsil taqsimot ko'rsatilsinmi.
+
+    DEFAULT — YOQILGAN (sozlama yozuvi bo'lmasa ham true qaytadi).
+    """
+    s = await db.get(Setting, REPORT_DETAIL_KEY)
+    if s and isinstance(s.value, dict) and "enabled" in s.value:
+        return {"enabled": bool(s.value.get("enabled"))}
+    return {"enabled": True}

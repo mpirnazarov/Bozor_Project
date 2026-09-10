@@ -185,12 +185,20 @@ export async function setHideUnmatched(hidden: boolean): Promise<boolean> {
 
 // === Billing summary (oy/yil bo'yicha bloklar/layoutlar hisoboti) ===
 export interface BillingSummaryBlock {
-  pavilion_id: number;
+  // "Boshqa (blokka biriktirilmagan)" qatorida pavilion_id/prefix bo'lmaydi
+  pavilion_id: number | null;
   name: string;
   layer_id: number | null;
   layer_name: string | null;
-  prefix: string;
+  prefix: string | null;
   shop_count: number;
+  total_due: number;
+  total_paid: number;
+  total_debt: number;
+}
+export interface BillingSummaryService {
+  key: string;
+  name: string;
   total_due: number;
   total_paid: number;
   total_debt: number;
@@ -217,6 +225,25 @@ export interface BillingSummary {
   };
   layers: BillingSummaryLayer[];
   blocks: BillingSummaryBlock[];
+  // Barcha xizmatlar bo'yicha taqsimot (arenda, elektr, suv, infra, xojatxona).
+  // Bloklar jadvali faqat arendani qamraydi.
+  services?: BillingSummaryService[];
+  grand_total?: {
+    total_due: number;
+    total_paid: number;
+    total_debt: number;
+  };
+}
+
+// === Hisobotda xizmatlar taqsimoti (batafsil) ===
+export async function getReportDetail(): Promise<boolean> {
+  const { data } = await apiClient.get<{ enabled: boolean }>("/settings/report-detail");
+  return data.enabled;
+}
+
+export async function setReportDetail(enabled: boolean): Promise<boolean> {
+  const { data } = await apiClient.put<{ enabled: boolean }>("/admin/report-detail", { enabled });
+  return data.enabled;
 }
 
 export async function getBillingSummary(year: number, month: number): Promise<BillingSummary> {

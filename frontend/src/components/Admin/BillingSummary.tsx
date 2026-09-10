@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getBillingSummary } from "@/api/admin";
+import { getBillingSummary, getReportDetail } from "@/api/admin";
 import { fmtUZS } from "@/lib/utils";
 import { useT } from "@/i18n/useT";
 
@@ -19,6 +19,17 @@ export function BillingSummary() {
     queryKey: ["billing-summary", year, month],
     queryFn: () => getBillingSummary(year, month),
   });
+
+  // Batafsil taqsimot — admin sozlamasi (default: yoqilgan)
+  const { data: reportDetail } = useQuery({
+    queryKey: ["report-detail"],
+    queryFn: getReportDetail,
+  });
+  const showDetail = reportDetail ?? true;
+
+  // Umumiy summa BARCHA xizmatlar bo'yicha; eski javobda grand_total
+  // bo'lmasa arendaga qaytamiz.
+  const overall = data?.grand_total ?? data?.total ?? { total_due: 0, total_paid: 0, total_debt: 0 };
 
   const years = [now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2];
 
@@ -60,18 +71,70 @@ export function BillingSummary() {
 
       {data && data.has_data && (
         <>
-          {/* Umumiy summalar */}
-          <div className="mb-6 grid grid-cols-3 gap-3">
-            <SummaryCard label={t("common.total") || "Jami"} value={data.total.total_due} tone="ink" />
-            <SummaryCard label={t("common.paid") || "To'langan"} value={data.total.total_paid} tone="paid" />
-            {data.total.total_paid > data.total.total_due
-              ? <SummaryCard label="Avans" value={data.total.total_paid - data.total.total_due} tone="avans" />
-              : <SummaryCard label={t("common.debt") || "Qarzdorlik"} value={data.total.total_debt} tone="debt" />
+          {/* Umumiy summalar — BARCHA xizmatlar bo'yicha (arenda + elektr +
+              suv + infra + xojatxona). Avval faqat arenda ko'rsatilardi. */}
+          <div className="mb-2 grid grid-cols-3 gap-3">
+            <SummaryCard label={t("common.total") || "Jami"} value={overall.total_due} tone="ink" />
+            <SummaryCard label={t("common.paid") || "To'langan"} value={overall.total_paid} tone="paid" />
+            {overall.total_paid > overall.total_due
+              ? <SummaryCard label="Avans" value={overall.total_paid - overall.total_due} tone="avans" />
+              : <SummaryCard label={t("common.debt") || "Qarzdorlik"} value={overall.total_debt} tone="debt" />
             }
           </div>
           <div className="mb-6 text-sm text-ink-soft">
             {MONTHS[month - 1]} {year} · {data.total.block_count} blok · {data.total.shop_count} magazin
+            {data.services && (
+              <> · shundan arenda <b className="text-ink">{fmtUZS(data.total.total_due)}</b></>
+            )}
           </div>
+
+          {/* Xizmatlar bo'yicha taqsimot — admin sozlamasidan o'chirsa bo'ladi */}
+          {showDetail && data.services && data.services.length > 0 && (
+            <div className="mb-6">
+              <h3 className="mb-2 text-sm font-bold uppercase tracking-wide text-ink-faint">
+                Xizmatlar bo'yicha
+              </h3>
+              <div className="overflow-x-auto rounded-2xl border border-white/60 bg-white/70 shadow-soft">
+                <table className="w-full min-w-[520px] text-sm">
+                  <thead>
+                    <tr className="text-left text-[11px] uppercase tracking-wide text-ink-faint">
+                      <th className="px-4 py-2.5 font-bold">Xizmat</th>
+                      <th className="px-4 py-2.5 text-right font-bold">Hisob</th>
+                      <th className="px-4 py-2.5 text-right font-bold">To'langan</th>
+                      <th className="px-4 py-2.5 text-right font-bold">Qarzdorlik</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.services.map((s) => (
+                      <tr key={s.key} className="border-t border-slate-200/60">
+                        <td className="px-4 py-2.5 font-semibold text-ink">{s.name}</td>
+                        <td className="tabnum px-4 py-2.5 text-right text-ink">{fmtUZS(s.total_due)}</td>
+                        <td className="tabnum px-4 py-2.5 text-right font-semibold text-status-paid">
+                          {fmtUZS(s.total_paid)}
+                        </td>
+                        <td className="tabnum px-4 py-2.5 text-right font-semibold text-status-unpaid">
+                          {s.total_debt > 0 ? fmtUZS(s.total_debt) : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-slate-200 font-extrabold text-ink">
+                      <td className="px-4 py-2.5">JAMI</td>
+                      <td className="tabnum px-4 py-2.5 text-right">{fmtUZS(overall.total_due)}</td>
+                      <td className="tabnum px-4 py-2.5 text-right text-status-paid">{fmtUZS(overall.total_paid)}</td>
+                      <td className="tabnum px-4 py-2.5 text-right text-status-unpaid">{fmtUZS(overall.total_debt)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              <p className="mt-2 text-[11px] text-ink-faint">
+                Elektr va suv INN darajasida, infra do'konlar va xojatxonalar esa
+                xaritadagi bloklarga tegishli emas — shuning uchun ular quyidagi
+                bloklar jadvaliga kirmaydi. Xojatxona qatori tushumni bildiradi.
+              </p>
+            </div>
+          )}
 
           {/* Layoutlar (qavatlar) bo'yicha */}
           {data.layers.length > 1 && (

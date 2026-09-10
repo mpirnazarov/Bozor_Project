@@ -20,6 +20,7 @@ ACTION_LABELS: dict[str, str] = {
     "update_shop": "Magazin tahrirlandi",
     "update_theme": "Mavzu o'zgartirildi",
     "update_hide_unmatched": "Topilmagan magazinlar sozlamasi o'zgartirildi",
+    "update_report_detail": "Hisobot batafsilligi o'zgartirildi",
     "update_market": "Bozor tahrirlandi",
     "toggle_market": "Bozor holati o'zgartirildi",
     "update_market_theme": "Bozor mavzusi o'zgartirildi",
@@ -56,6 +57,7 @@ def resource_label(resource_type: str | None, resource_id: str | None) -> str:
     settings_names = {
         "app_theme": "Mavzu (Dark/Light)",
         "hide_unmatched": "Topilmagan magazinlarni berkitish",
+        "report_detail": "Hisobotda xizmatlar taqsimoti",
         "dashboard_stats": "Dashboard summalari",
     }
     if resource_type == "settings" and resource_id in settings_names:
