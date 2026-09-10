@@ -47,26 +47,52 @@ export function InnDetailModal({ inn, onClose, onSelectShop }: Props) {
     enabled: !!inn,
   });
 
+  // DIQQAT: elektr va suv monthly_balances'da INN DARAJASIDA saqlanadi —
+  // magazinlarga bo'linmaydi. Backend o'sha bitta qiymatni INN ning HAR
+  // magaziniga biriktiradi, shuning uchun ularni qo'shib bo'lmaydi
+  // (4 magazinli INN da summa 4 barobar ko'p chiqardi). Bu xizmatlar uchun
+  // bitta umumiy qator ko'rsatamiz.
+  const innLevel = service !== "rent";
+
+  const statusOf = (paid: number, debt: number): ShopStatus =>
+    debt <= 0 ? "paid" : paid > 0 ? "partial" : "unpaid";
+
   const rows = useMemo(() => {
     if (!data) return [];
-    return data.shops.map((s) => {
-      const b = data.billing[s.shop_id];
-      const cat = b?.categories.find((c) => c.category === service);
 
-      // Arenda uchun kategoriya bo'lmasa magazinning belgilangan summasi
-      // ko'rsatiladi; elektr/suvda esa ma'lumot yo'qligi rost aytiladi.
+    if (innLevel) {
+      const cat = data.shops
+        .map((s) => data.billing[s.shop_id]?.categories.find((c) => c.category === service))
+        .find(Boolean);
+      if (!cat) return [];
+      const due = Number(cat.due);
+      const paid = Number(cat.paid);
+      const debt = Math.max(0, due - paid);
+      return [{
+        key: "inn-level",
+        label: `Barcha magazinlar (${data.shops.length}) — INN bo'yicha`,
+        shopId: null as string | null,
+        due, paid, debt, present: true, status: statusOf(paid, debt),
+      }];
+    }
+
+    return data.shops.map((s) => {
+      const cat = data.billing[s.shop_id]?.categories.find((c) => c.category === "rent");
+      // Kategoriya bo'lmasa magazinning belgilangan summasi ko'rsatiladi,
+      // lekin holat "ma'lumot yo'q" bo'ladi — to'lov ma'lumoti yo'q.
       const present = !!cat;
-      const due = cat ? Number(cat.due) : service === "rent" ? Number(s.monthly_rent ?? 0) : 0;
+      const due = cat ? Number(cat.due) : Number(s.monthly_rent ?? 0);
       const paid = cat ? Number(cat.paid) : 0;
       const debt = Math.max(0, due - paid);
-
-      const status: ShopStatus = !present
-        ? "no_data"
-        : debt <= 0 ? "paid" : paid > 0 ? "partial" : "unpaid";
-
-      return { shopId: s.shop_id, due, paid, debt, status, present };
+      return {
+        key: s.shop_id,
+        label: s.shop_id,
+        shopId: s.shop_id as string | null,
+        due, paid, debt, present,
+        status: present ? statusOf(paid, debt) : ("no_data" as ShopStatus),
+      };
     });
-  }, [data, service]);
+  }, [data, service, innLevel]);
 
   const totals = useMemo(() => {
     const acc = { due: 0, paid: 0 };
@@ -149,13 +175,25 @@ export function InnDetailModal({ inn, onClose, onSelectShop }: Props) {
                 </tr>
               </thead>
               <tbody>
+                {rows.length === 0 && (
+                  <tr className="border-t border-slate-200/70">
+                    <td colSpan={5} className="px-3 py-4 text-center text-ink-faint">
+                      Bu davr uchun ma'lumot yo'q
+                    </td>
+                  </tr>
+                )}
                 {rows.map((r) => (
                   <tr
-                    key={r.shopId}
-                    onClick={() => onSelectShop(r.shopId, year, month)}
-                    className="cursor-pointer border-t border-slate-200/70 transition hover:bg-brand/[0.04]"
+                    key={r.key}
+                    onClick={() => r.shopId && onSelectShop(r.shopId, year, month)}
+                    className={
+                      "border-t border-slate-200/70 transition " +
+                      (r.shopId ? "cursor-pointer hover:bg-brand/[0.04]" : "")
+                    }
                   >
-                    <td className="px-3 py-2 font-mono font-semibold text-ink">{r.shopId}</td>
+                    <td className={"px-3 py-2 font-semibold text-ink " + (r.shopId ? "font-mono" : "")}>
+                      {r.label}
+                    </td>
                     <td className="tabnum px-3 py-2 text-right text-ink">
                       {r.present || r.due > 0 ? fmtUZS(r.due) : "—"}
                     </td>
@@ -182,7 +220,9 @@ export function InnDetailModal({ inn, onClose, onSelectShop }: Props) {
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-slate-200 bg-surface-muted font-bold text-ink">
-                  <td className="px-3 py-2">Jami ({rows.length})</td>
+                  <td className="px-3 py-2">
+                    {innLevel ? "Jami" : `Jami (${rows.length})`}
+                  </td>
                   <td className="tabnum px-3 py-2 text-right">{fmtUZS(totals.due)}</td>
                   <td className="tabnum px-3 py-2 text-right text-status-paid">{fmtUZS(totals.paid)}</td>
                   <td className="tabnum px-3 py-2 text-right text-status-unpaid">{fmtUZS(totals.debt)}</td>
@@ -193,7 +233,9 @@ export function InnDetailModal({ inn, onClose, onSelectShop }: Props) {
           </div>
 
           <p className="text-[11px] text-ink-faint">
-            Magazin qatorini bosing — batafsil ma'lumot shu davr uchun ochiladi.
+            {innLevel
+              ? "Elektr va suv hisobi INN darajasida yuritiladi — magazinlar bo'yicha bo'linmaydi, shuning uchun bitta umumiy qator ko'rsatiladi."
+              : "Magazin qatorini bosing — batafsil ma'lumot shu davr uchun ochiladi."}
           </p>
         </div>
       )}
