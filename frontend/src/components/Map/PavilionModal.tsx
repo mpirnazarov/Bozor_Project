@@ -201,8 +201,15 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
       if (!b) continue;
       acc.due += Number(b.total_due);
       acc.paid += Number(b.total_paid);
-      acc.debt += Number(b.total_debt);
     }
+    // QARZDORLIK = JAMI − TO'LANGAN.
+    // Avval har magazinning `total_debt` i qo'shilardi, u esa rent_billing
+    // faylidagi qarz — boshqa bazadan hisoblangan va faqat shu oyda yozuvi
+    // BOR magazinlarda mavjud. Natijada yozuvi yo'q magazinlarning ijarasi
+    // Jami'ga kirar, lekin Qarzga kirmasdi va uchala raqam bir-biriga
+    // to'g'ri kelmasdi (masalan 13-BLOK: 323 mln − 8.9 mln ≠ 243 mln).
+    // Adminka hisoboti ham shu formulani ishlatadi — endi ikkalasi bir xil.
+    acc.debt = Math.max(0, acc.due - acc.paid);
     // PREZENTATSIYA REJIMI: qarz/to'langanni proporsiyaga yaqin random qilamiz.
     // Jami (due) o'zgarmaydi — faqat uning ichida debt/paid taqsimoti.
     if (DEMO_MODE && acc.due > 0) {
