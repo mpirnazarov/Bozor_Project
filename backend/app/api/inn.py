@@ -22,11 +22,20 @@ router = APIRouter()
 async def search_inn(
     _user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
-    q: str = Query(..., min_length=1, description="INN yoki nom"),
+    q: str = Query(..., min_length=1, description="INN, nom yoki magazin ID"),
     limit: int = Query(20, ge=1, le=100),
 ) -> list[InnSearchResult]:
-    """INN yoki nom bo'yicha qidirish (nom uchun fuzzy ILIKE)."""
+    """INN, kontragent nomi YOKI magazin ID bo'yicha qidirish (fuzzy ILIKE).
+
+    Magazin ID bo'yicha qidiruv EXISTS orqali qilinadi — outerjoin'ga shart
+    qo'yilsa `shop_count` faqat mos kelgan magazinlarni sanab qolardi.
+    """
     pattern = f"%{q.strip()}%"
+    shop_match = (
+        select(Shop.id)
+        .where(Shop.inn == Counterparty.inn, Shop.shop_id.ilike(pattern))
+        .exists()
+    )
     stmt = (
         select(
             Counterparty.inn,
@@ -38,6 +47,7 @@ async def search_inn(
             or_(
                 Counterparty.inn.ilike(pattern),
                 Counterparty.name.ilike(pattern),
+                shop_match,
             )
         )
         .group_by(Counterparty.inn, Counterparty.name)
@@ -79,16 +89,31 @@ async def get_inn(
     inn: str,
     _user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
+    year: int | None = Query(None),
+    month: int | None = Query(None, ge=1, le=12),
 ) -> InnDetailOut:
-    """INN bo'yicha kontragent + uning barcha magazinlari."""
+    """INN bo'yicha kontragent + magazinlari + tanlangan oy billing holati.
+
+    Davr berilmasa — joriy oy. Billing xarita modallari bilan bir xil
+    manbadan (compute_batch_status) olinadi, shuning uchun bir magazin
+    turli ekranlarda bir xil raqamni ko'rsatadi.
+    """
+    from datetime import date as _date
+    from app.services.billing_service import compute_batch_status
+
     cp = await db.get(Counterparty, inn)
     if cp is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Kontragent topilmadi")
+
+    today = _date.today()
+    year = year or today.year
+    month = month or today.month
 
     result = await db.execute(
         select(Shop).where(Shop.inn == inn).order_by(Shop.shop_id)
     )
     shops = [ShopOut.model_validate(s) for s in result.scalars()]
+    billing = await compute_batch_status(db, [s.shop_id for s in shops], year, month)
 
     return InnDetailOut(
         counterparty=CounterpartyOut(
@@ -99,4 +124,7 @@ async def get_inn(
             phone=cp.phone,
         ),
         shops=shops,
+        year=year,
+        month=month,
+        billing=billing,
     )

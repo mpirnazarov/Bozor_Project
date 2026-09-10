@@ -8,7 +8,18 @@ export async function searchInn(q: string): Promise<InnSearchResult[]> {
   return Array.isArray(data) ? data : [];
 }
 
-export async function getInn(inn: string): Promise<InnDetail> {
-  const { data } = await apiClient.get<InnDetail>(`/inn/${encodeURIComponent(inn)}`);
+export async function getInn(
+  inn: string,
+  year?: number,
+  month?: number,
+): Promise<InnDetail> {
+  // Davr berilmasa — backend joriy oyni oladi.
+  const params: Record<string, number> = {};
+  if (year != null) params.year = year;
+  if (month != null) params.month = month;
+  const { data } = await apiClient.get<InnDetail>(
+    `/inn/${encodeURIComponent(inn)}`,
+    { params },
+  );
   return data;
 }

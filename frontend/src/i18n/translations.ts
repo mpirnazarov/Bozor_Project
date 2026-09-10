@@ -60,7 +60,7 @@ const uz: Dict = {
 
   // INN search
   "inn.title": "Kontragent qidiruv",
-  "inn.placeholder": "INN yoki nom bo'yicha qidirish...",
+  "inn.placeholder": "INN, nom yoki magazin ID bo'yicha qidirish...",
   "inn.searching": "Qidirilmoqda...",
   "inn.shops": "ta",
 
@@ -255,7 +255,7 @@ const ru: Dict = {
   "home.center": "Центр",
 
   "inn.title": "Поиск контрагента",
-  "inn.placeholder": "Поиск по ИНН или названию...",
+  "inn.placeholder": "Поиск по ИНН, названию или ID магазина...",
   "inn.searching": "Поиск...",
   "inn.shops": "шт",
 
@@ -442,7 +442,7 @@ const en: Dict = {
   "home.center": "Center",
 
   "inn.title": "Counterparty search",
-  "inn.placeholder": "Search by INN or name...",
+  "inn.placeholder": "Search by INN, name or shop ID...",
   "inn.searching": "Searching...",
   "inn.shops": "pcs",
 

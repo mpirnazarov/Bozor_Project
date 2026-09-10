@@ -9,15 +9,14 @@ import { HeaderStats } from "@/components/Dashboard/HeaderStats";
 import { MarketInvoicesSection } from "@/components/MarketInvoicesSection";
 import { getMarketInvoices } from "@/api/dashboard";
 import { InnSearch } from "@/components/INN/InnSearch";
+import { InnDetailModal } from "@/components/INN/InnDetailModal";
 import { MapView } from "@/components/Map/MapView";
 import { PavilionModal } from "@/components/Map/PavilionModal";
 import { ShopDetailModal } from "@/components/Map/ShopDetailModal";
 import { ToiletModal } from "@/components/Map/ToiletModal";
 import { InfraShopModal } from "@/components/Map/InfraShopModal";
 import { useQuery } from "@tanstack/react-query";
-import { getInn } from "@/api/inn";
 import { getMarketSupportStatus } from "@/api/owner";
-import { Modal } from "@/components/ui/Modal";
 import type { Pavilion } from "@/types/api";
 
 export function HomePage() {
@@ -73,12 +72,6 @@ export function HomePage() {
   const [activeInn, setActiveInn] = useState<string | null>(null);
   // Logo/i-tugma toggle: default i (Info), bosilganda logo (Store), yana bosilganda i
   const [showLogo, setShowLogo] = useState(false);
-
-  const { data: innDetail } = useQuery({
-    queryKey: ["inn", activeInn],
-    queryFn: () => getInn(activeInn!),
-    enabled: !!activeInn,
-  });
 
   return (
     <div className="min-h-screen">
@@ -227,49 +220,17 @@ export function HomePage() {
         </div>
       )}
 
-      <Modal
-        open={!!activeInn}
+      <InnDetailModal
+        inn={activeInn}
         onClose={() => setActiveInn(null)}
-        title={innDetail?.counterparty.name ?? "Yuklanmoqda..."}
-        maxWidth="max-w-lg"
-      >
-        {innDetail && (
-          <div className="space-y-3">
-            <div className="card p-3 text-sm">
-              <div className="flex justify-between py-1">
-                <span className="text-slate-400">INN</span>
-                <span className="font-mono font-semibold">{innDetail.counterparty.inn}</span>
-              </div>
-              <div className="flex justify-between py-1">
-                <span className="text-slate-400">Shartnoma</span>
-                <span className="font-semibold">
-                  {innDetail.counterparty.contract_no ?? "—"}
-                </span>
-              </div>
-            </div>
-            <div>
-              <div className="mb-1.5 text-xs font-bold text-slate-500">
-                Magazinlar ({innDetail.shops.length})
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {innDetail.shops.map((s) => (
-                  <button
-                    key={s.shop_id}
-                    onClick={() => {
-                      setActiveInn(null);
-                      setActiveShop(s.shop_id);
-                      setActiveShopPeriod(null); // qidiruvdan — joriy oy
-                    }}
-                    className="rounded-md bg-slate-100 px-2 py-1 font-mono text-xs font-semibold text-slate-600 hover:bg-slate-200"
-                  >
-                    {s.shop_id}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-      </Modal>
+        onSelectShop={(id, y, m) => {
+          // INN modalini yopmaymiz — magazin modali uning ustida ochiladi,
+          // va AYNAN jadvalda ko'rilgan davr uchun.
+          setActiveShop(id);
+          setActiveShopTitle(undefined);
+          setActiveShopPeriod({ year: y, month: m });
+        }}
+      />
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { getHideUnmatched } from "@/api/admin";
 import { getDashboard } from "@/api/dashboard";
 import { STATUS_COLORS, fmtUZS } from "@/lib/utils";
 import { Modal, Spinner } from "@/components/ui/Modal";
+import { PeriodSwitch } from "@/components/ui/PeriodSwitch";
 import { useT } from "@/i18n/useT";
 import type { ShopStatus } from "@/types/api";
 
@@ -67,21 +68,6 @@ function demoSplit(totalDue: number, seed: number): { debt: number; paid: number
 // Keyinroq avtomatik hisobga o'tkazish uchun shu qiymatni `false` qiling.
 const USE_DASHBOARD_PROPORTION = false;
 
-// Davr tanlagichi uchun
-const MONTHS = [
-  "Yanvar", "Fevral", "Mart", "Aprel", "May", "Iyun",
-  "Iyul", "Avgust", "Sentabr", "Oktabr", "Noyabr", "Dekabr",
-];
-
-function Chevron({ dir }: { dir: "left" | "right" }) {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-         stroke="currentColor" strokeWidth="2.5"
-         strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <polyline points={dir === "left" ? "15 18 9 12 15 6" : "9 18 15 12 9 6"} />
-    </svg>
-  );
-}
 
 /** partial -> unpaid (agar bayroq yoqilgan bo'lsa). Boshqa statuslar o'zgarmaydi. */
 
@@ -95,18 +81,8 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
   // uchun qilinadi (masalan avgust), shuning uchun oyni almashtirib
   // ko'rish kerak bo'ladi.
   const now = new Date();
-  const curYear = now.getFullYear();
-  const curMonth = now.getMonth() + 1;
-  const [year, setYear] = useState<number>(curYear);
-  const [month, setMonth] = useState<number>(curMonth);
-
-  const isCurrentPeriod = year === curYear && month === curMonth;
-  const shiftMonth = (delta: number) => {
-    const d = new Date(year, month - 1 + delta, 1);
-    setYear(d.getFullYear());
-    setMonth(d.getMonth() + 1);
-  };
-  const goCurrentPeriod = () => { setYear(curYear); setMonth(curMonth); };
+  const [year, setYear] = useState<number>(now.getFullYear());
+  const [month, setMonth] = useState<number>(now.getMonth() + 1);
 
   const { data, isLoading, isFetching } = useQuery({
     queryKey: ["pavilion-shops", pavilionId, year, month],
@@ -247,44 +223,13 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
       {data && (
         <>
           {/* Davr tanlash — elektr/suv importi o'tgan oy uchun bo'lishi mumkin */}
-          <div className="mb-3.5 flex flex-wrap items-center gap-2">
-            <div className="period-switch">
-              <button
-                type="button"
-                className="period-nav"
-                onClick={() => shiftMonth(-1)}
-                aria-label="Oldingi oy"
-              >
-                <Chevron dir="left" />
-              </button>
-              <div className="period-value">
-                <div className="font-display text-[13px] font-extrabold leading-none text-ink">
-                  {MONTHS[month - 1]}
-                </div>
-                <div className="mt-1 text-[10px] font-semibold leading-none tracking-wider text-ink-faint">
-                  {year}
-                </div>
-              </div>
-              <button
-                type="button"
-                className="period-nav"
-                onClick={() => shiftMonth(1)}
-                disabled={isCurrentPeriod}
-                aria-label="Keyingi oy"
-              >
-                <Chevron dir="right" />
-              </button>
-            </div>
-
-            {!isCurrentPeriod && (
-              <button type="button" className="period-reset" onClick={goCurrentPeriod}>
-                Joriy oyga qaytish
-              </button>
-            )}
-
-            {isFetching && (
-              <span className="text-[11px] font-semibold text-ink-faint">yuklanmoqda…</span>
-            )}
+          <div className="mb-3.5">
+            <PeriodSwitch
+              year={year}
+              month={month}
+              busy={isFetching}
+              onChange={(y, m) => { setYear(y); setMonth(m); }}
+            />
           </div>
 
           {/* Summalar */}

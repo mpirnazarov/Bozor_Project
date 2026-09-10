@@ -137,4 +137,7 @@ export interface InnSearchResult {
 export interface InnDetail {
   counterparty: Counterparty;
   shops: Shop[];
+  year: number;
+  month: number;
+  billing: Record<string, BillingStatus>;
 }

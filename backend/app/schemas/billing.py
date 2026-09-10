@@ -94,3 +94,8 @@ class InnSearchResult(BaseModel):
 class InnDetailOut(BaseModel):
     counterparty: CounterpartyOut
     shops: list[ShopOut]
+    # Tanlangan davr va shu davrdagi har magazin billing holati —
+    # modaldagi jadval (hisob / to'langan / qarz) shundan quriladi.
+    year: int = 0
+    month: int = 0
+    billing: dict[str, BillingStatusOut] = {}
