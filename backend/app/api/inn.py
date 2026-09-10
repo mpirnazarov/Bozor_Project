@@ -4,6 +4,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.database import get_db
 from app.deps import CurrentUser
@@ -31,9 +32,14 @@ async def search_inn(
     qo'yilsa `shop_count` faqat mos kelgan magazinlarni sanab qolardi.
     """
     pattern = f"%{q.strip()}%"
+    # ALIAS majburiy: Shop tashqi so'rovda outerjoin bilan allaqachon bor.
+    # Aliassiz SQLAlchemy subquery'dagi shops'ni ham korrelatsiya qilib,
+    # uni FROM'siz qoldiradi va so'rov 500 bilan yiqiladi.
+    shop_alias = aliased(Shop)
     shop_match = (
-        select(Shop.id)
-        .where(Shop.inn == Counterparty.inn, Shop.shop_id.ilike(pattern))
+        select(shop_alias.id)
+        .where(shop_alias.inn == Counterparty.inn, shop_alias.shop_id.ilike(pattern))
+        .correlate(Counterparty)
         .exists()
     )
     stmt = (
