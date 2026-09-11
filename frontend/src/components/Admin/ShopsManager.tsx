@@ -223,24 +223,53 @@ function StatBox({ label, value, tone, icon }: {
   );
 }
 
+interface VacantUploadOut {
+  preview: boolean;
+  file_shop_ids: number;
+  vacant_before: number;
+  vacant_after: number;
+  to_mark: number;
+  to_unmark: number;
+  unchanged: number;
+  not_found: string[];
+  unmark_sample: string[];
+}
+
+/**
+ * Bo'sh do'konlar ro'yxati — TO'LIQ ALMASHTIRISH.
+ *
+ * Fayl butun bozor bo'yicha to'liq ro'yxat bo'lishi shart: faylda bo'lmagan
+ * har bir do'kondan "bo'sh" belgisi olib tashlanadi. Shuning uchun avval
+ * `preview` bilan nima o'zgarishi hisoblanadi va foydalanuvchi tasdiqlaydi.
+ */
 function VacantShopsUploader() {
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<{ marked_vacant: number; marked_not_vacant: number; not_found: string[] } | null>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<VacantUploadOut | null>(null);
+  const [done, setDone] = useState<VacantUploadOut | null>(null);
   const [err, setErr] = useState("");
   const [inputRef, setInputRef] = useState<HTMLInputElement | null>(null);
 
-  async function handleFile(file: File) {
-    setBusy(true); setErr(""); setResult(null);
+  function reset() { setFile(null); setPreview(null); setDone(null); setErr(""); }
+
+  async function send(f: File, isPreview: boolean) {
+    setBusy(true); setErr("");
     try {
       const form = new FormData();
-      form.append("file", file);
+      form.append("file", f);
       const { apiClient } = await import("@/api/client");
-      const { data } = await apiClient.post("/admin/vacant-shops/upload", form, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      setResult(data);
-      qc.invalidateQueries({ queryKey: ["shops"] });
+      const { data } = await apiClient.post<VacantUploadOut>(
+        `/admin/vacant-shops/upload?preview=${isPreview}`, form,
+        { headers: { "Content-Type": "multipart/form-data" } },
+      );
+      if (isPreview) { setPreview(data); setDone(null); }
+      else {
+        setDone(data); setPreview(null); setFile(null);
+        qc.invalidateQueries({ queryKey: ["shops"] });
+        qc.invalidateQueries({ queryKey: ["shops-list-vacant"] });
+        qc.invalidateQueries({ queryKey: ["pavilion-shops"] });
+      }
     } catch (e: unknown) {
       const ex = e as { response?: { data?: { detail?: string } } };
       setErr(ex?.response?.data?.detail ?? "Xatolik yuz berdi");
@@ -256,36 +285,86 @@ function VacantShopsUploader() {
       </div>
       <p className="text-xs text-ink-faint">
         CSV yoki Excel (.xlsx) yuklang — bitta ustun: <b>shop_id</b>.<br />
-        Fayldagi do'konlar <b>bo'sh</b> deb belgilanadi, qolganlaridan bo'sh belgisi olib tashlanadi.
+        <b className="text-status-unpaid">Diqqat:</b> bu to'liq almashtirish —
+        faylda bo'lmagan do'konlardan bo'sh belgisi olib tashlanadi. Fayl butun
+        bozor bo'yicha to'liq ro'yxat bo'lsin.
       </p>
+
       <input
         ref={setInputRef}
         type="file"
         accept=".csv,.xlsx"
         className="hidden"
-        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ""; }}
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          if (f) { reset(); setFile(f); send(f, true); }
+        }}
       />
-      <button
-        className="btn-primary w-full py-2 text-sm disabled:opacity-50"
-        disabled={busy}
-        onClick={() => inputRef?.click()}
-      >
-        {busy ? "Yuklanmoqda..." : "Fayl tanlash va yuklash"}
-      </button>
+
+      {!preview && (
+        <button
+          className="btn-primary w-full py-2 text-sm disabled:opacity-50"
+          disabled={busy}
+          onClick={() => inputRef?.click()}
+        >
+          {busy ? "Tekshirilmoqda..." : "Fayl tanlash"}
+        </button>
+      )}
+
       {err && <div className="rounded-xl bg-status-unpaid/10 px-3 py-2 text-sm text-status-unpaid">{err}</div>}
-      {result && (
-        <div className="rounded-xl bg-status-paid/10 px-3 py-2 text-sm">
-          <div className="font-bold text-status-paid">✓ Muvaffaqiyatli</div>
-          <div className="mt-1 text-ink-soft">
-            Bo'sh belgilandi: <b>{result.marked_vacant}</b> ta ·
-            Bo'sh belgisi olib tashlandi: <b>{result.marked_not_vacant}</b> ta
+
+      {/* 1-qadam: nima o'zgarishini ko'rsatamiz, hech narsa yozilmaydi */}
+      {preview && file && (
+        <div className="space-y-2.5 rounded-xl border border-slate-200/80 bg-surface-muted p-3 text-sm">
+          <div className="font-bold text-ink">{file.name} — tekshirildi</div>
+          <div className="grid grid-cols-2 gap-1.5 text-xs text-ink-soft">
+            <div>Fayldagi magazin ID: <b className="text-ink">{preview.file_shop_ids}</b></div>
+            <div>Hozir bo'sh: <b className="text-ink">{preview.vacant_before}</b></div>
+            <div>Yangi belgilanadi: <b className="text-status-paid">{preview.to_mark}</b></div>
+            <div>O'zgarmaydi: <b className="text-ink">{preview.unchanged}</b></div>
+            <div className="col-span-2">
+              Amaldan keyin bo'sh do'kon: <b className="text-ink">{preview.vacant_after}</b> ta
+            </div>
           </div>
-          {result.not_found.length > 0 && (
-            <div className="mt-1 text-status-unpaid text-xs">
-              Topilmadi: {result.not_found.slice(0, 5).join(", ")}
-              {result.not_found.length > 5 ? ` va yana ${result.not_found.length - 5} ta` : ""}
+
+          {preview.to_unmark > 0 && (
+            <div className="rounded-lg bg-status-unpaid/10 px-2.5 py-2 text-xs text-status-unpaid">
+              <b>{preview.to_unmark}</b> ta do'kondan bo'sh belgisi olinadi
+              {preview.unmark_sample.length > 0 && (
+                <>: {preview.unmark_sample.slice(0, 6).join(", ")}
+                  {preview.to_unmark > 6 ? " …" : ""}</>
+              )}
             </div>
           )}
+          {preview.not_found.length > 0 && (
+            <div className="text-xs text-ink-faint">
+              Bazada topilmadi: {preview.not_found.slice(0, 5).join(", ")}
+              {preview.not_found.length > 5 ? ` va yana ${preview.not_found.length - 5} ta` : ""}
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-2 pt-1">
+            <button className="btn-primary px-4 py-2 text-sm disabled:opacity-50"
+                    disabled={busy} onClick={() => send(file, false)}>
+              {busy ? "Saqlanmoqda..." : "Tasdiqlash va saqlash"}
+            </button>
+            <button className="btn-ghost px-4 py-2 text-sm" disabled={busy} onClick={reset}>
+              Bekor qilish
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 2-qadam natijasi */}
+      {done && (
+        <div className="rounded-xl bg-status-paid/10 px-3 py-2 text-sm">
+          <div className="font-bold text-status-paid">✓ Saqlandi</div>
+          <div className="mt-1 text-ink-soft">
+            Bo'sh belgilandi: <b>{done.to_mark}</b> ta ·
+            Belgisi olib tashlandi: <b>{done.to_unmark}</b> ta ·
+            Jami bo'sh: <b>{done.vacant_after}</b> ta
+          </div>
         </div>
       )}
     </div>

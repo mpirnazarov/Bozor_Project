@@ -103,6 +103,117 @@ async def update_report_detail(
     return {"enabled": body.enabled}
 
 
+# ===== BO'SH DO'KONLAR RO'YXATI (to'liq almashtirish, oldindan ko'rish bilan) =====
+
+class VacantShopsUploadOut(BaseModel):
+    ok: bool = True
+    # True bo'lsa — bazaga HECH NARSA yozilmadi, faqat hisob-kitob
+    preview: bool = False
+    file_shop_ids: int = 0       # fayldagi unikal magazin ID
+    vacant_before: int = 0       # amaldan oldin bo'sh do'konlar
+    vacant_after: int = 0        # amaldan keyin bo'ladi/bo'ldi
+    to_mark: int = 0             # yangi "bo'sh" belgilanadi
+    to_unmark: int = 0           # "bo'sh" belgisi OLIB TASHLANADI
+    unchanged: int = 0           # allaqachon bo'sh, o'zgarmaydi
+    not_found: list[str] = []    # faylda bor, bazada yo'q
+    unmark_sample: list[str] = []  # belgisi olinadiganlardan namuna
+
+
+def _read_shop_ids(content: bytes, filename: str) -> set[str]:
+    """Fayldan (xlsx/csv) magazin ID larini o'qiydi — barcha kataklardan."""
+    from io import BytesIO
+    import csv as _csv
+
+    import openpyxl as _xl
+
+    fname = (filename or "").lower()
+    ids: set[str] = set()
+    if fname.endswith((".xlsx", ".xlsm")):
+        ws = _xl.load_workbook(BytesIO(content), read_only=True, data_only=True).active
+        rows = ws.iter_rows(values_only=True)
+    elif fname.endswith(".csv"):
+        text = content.decode("utf-8-sig", errors="replace")
+        rows = _csv.reader(text.splitlines())
+    else:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "Faqat .xlsx yoki .csv fayl qabul qilinadi"
+        )
+    for row in rows:
+        for cell in row:
+            val = str(cell or "").strip()
+            if val and val.lower() not in ("shop_id", "magazin id", "magazin"):
+                ids.add(val)
+    return ids
+
+
+@router.post("/vacant-shops/upload", response_model=VacantShopsUploadOut)
+async def upload_vacant_shops(
+    admin: AdminUser,
+    market: CurrentMarket,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    file: UploadFile = File(...),
+    preview: bool = Query(True, description="True — faqat hisob, yozilmaydi"),
+) -> VacantShopsUploadOut:
+    """Bo'sh do'konlar ro'yxatini yuklaydi (.xlsx yoki .csv).
+
+    DIQQAT: bu TO'LIQ ALMASHTIRISH — fayldagi magazinlar "bo'sh" bo'ladi,
+    fayldan TASHQARIDAGI barcha magazinlardan "bo'sh" belgisi OLIB
+    TASHLANADI. Shuning uchun fayl butun bozor bo'yicha to'liq ro'yxat
+    bo'lishi shart.
+
+    `preview=true` (sukut) — hech narsa yozilmaydi, faqat nima
+    o'zgarishi hisoblanadi. Yozish uchun `preview=false` bilan qayta
+    yuboriladi.
+    """
+    content = await file.read()
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Fayl juda katta (10 MB)")
+
+    file_ids = _read_shop_ids(content, file.filename or "")
+    if not file_ids:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Faylda birorta magazin ID topilmadi. Bo'sh fayl yuklansa "
+            "BARCHA do'konlardan bo'sh belgisi olinib ketardi — to'xtatildi.",
+        )
+
+    all_shops = list((await db.execute(
+        select(Shop).where(Shop.market_id == market.id)
+    )).scalars())
+    shop_ids = {s.shop_id for s in all_shops}
+    vacant_now = {s.shop_id for s in all_shops if getattr(s, "is_vacant", False)}
+    in_file = shop_ids & file_ids
+
+    to_mark = sorted(in_file - vacant_now)
+    to_unmark = sorted(vacant_now - in_file)
+    not_found = sorted(file_ids - shop_ids)
+
+    if not preview:
+        for s in all_shops:
+            want = s.shop_id in file_ids
+            if bool(getattr(s, "is_vacant", False)) != want:
+                s.is_vacant = want
+        await write_audit(
+            db, admin.id, "upload_vacant_shops", "shops", file.filename or "file",
+            {"marked": len(to_mark), "unmarked": len(to_unmark),
+             "not_found": len(not_found)},
+        )
+        await db.commit()
+
+    return VacantShopsUploadOut(
+        ok=True,
+        preview=preview,
+        file_shop_ids=len(file_ids),
+        vacant_before=len(vacant_now),
+        vacant_after=len(in_file),
+        to_mark=len(to_mark),
+        to_unmark=len(to_unmark),
+        unchanged=len(in_file & vacant_now),
+        not_found=not_found[:100],
+        unmark_sample=to_unmark[:20],
+    )
+
+
 # ===== MAGAZIN EGASI/NARXI O'ZGARISHLARI TARIXI (shop_periods) =====
 
 class ShopPeriodRow(BaseModel):
