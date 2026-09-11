@@ -930,6 +930,8 @@ class ShopOwnerImportOut(BaseModel):
     skipped_count: int = 0
     detected_columns: dict = {}
     snapshot_id: int | None = None
+    # Egasi/narxi o'zgargani uchun ochilgan yangi davrlar (shop_periods)
+    periods_opened: int = 0
 
 
 @router.post("/import/shop-owners", response_model=ShopOwnerImportOut)
@@ -1000,6 +1002,7 @@ async def import_shop_owners(
         skipped_count=len(result.skipped),
         detected_columns=result.detected_columns,
         snapshot_id=snap.id,
+        periods_opened=result.periods_opened,
     )
 
 

@@ -21,6 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Counterparty, Shop
+from app.services.shop_period_service import apply_shop_change
 
 
 # Ustun nomlari (kichik harf, bo'sh joy/belgilarsiz solishtiriladi)
@@ -105,6 +106,8 @@ class ShopImportResult:
     errors: list = field(default_factory=list)
     detected_columns: dict = field(default_factory=dict)
     snapshot_rows: list = field(default_factory=list)  # rollback uchun
+    # Egasi/narxi o'zgargani uchun ochilgan yangi davrlar soni
+    periods_opened: int = 0
 
 
 async def import_shop_owners_excel(
@@ -207,6 +210,16 @@ async def import_shop_owners_excel(
                 existing.notes = f"QR: {qr}"
             existing.source_sheet = source
             res.updated += 1
+
+            # Egasi yoki narxi o'zgargan bo'lsa — yangi DAVR ochamiz.
+            # Eski davr shu kundan bir kun oldin yopiladi, shuning uchun
+            # o'tgan oy hisobotlari o'zgarishsiz qoladi.
+            if await apply_shop_change(
+                db, market_id=market_id, shop_id=shop_id,
+                inn=existing.inn, monthly_rent=existing.monthly_rent,
+                counterparty_name=name, source=f"import: {source}",
+            ):
+                res.periods_opened += 1
         else:
             snapshot_rows.append({
                 "key": {"shop_id": shop_id, "market_id": market_id},
@@ -239,6 +252,14 @@ async def import_shop_owners_excel(
             ))
             res.inserted += 1
             await db.flush()
+
+            # Yangi magazin — birinchi davri ham shu kundan ochiladi
+            if await apply_shop_change(
+                db, market_id=market_id, shop_id=shop_id,
+                inn=inn, monthly_rent=rent,
+                counterparty_name=name, source=f"import: {source}",
+            ):
+                res.periods_opened += 1
 
         # Kontragent (mavjud do'kon uchun yangilash)
         if inn:
