@@ -247,3 +247,13 @@ html.dark [role="dialog"] {
   color: #e8eef7;
 }
 html.dark .bg-surface-muted { background-color: rgba(255,255,255,0.05) !important; }
+
+/* "Ma'lumot yo'q" holati rangi (#1f2937) qorong'i fonda ko'rinmay qolardi —
+   dark rejimda yoritilgan kulrangga almashtiriladi (yorug' rejim tegilmaydi). */
+html.dark .chip[data-status="no_data"][aria-pressed="false"] {
+  background-color: rgba(255,255,255,0.07) !important;
+  color: #94a3b8 !important;
+}
+html.dark .chip[data-status="no_data"][aria-pressed="false"] .chip-dot { background: #94a3b8 !important; }
+html.dark .chip[data-status="no_data"][aria-pressed="true"] { background-color: #4b5563 !important; }
+html.dark [data-tile-status="no_data"] { background-color: #4b5563 !important; }

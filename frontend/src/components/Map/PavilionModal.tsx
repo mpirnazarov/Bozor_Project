@@ -319,12 +319,14 @@ export function PavilionModal({ pavilionId, pavilionName, shopPrefix, onClose, o
                   key={f.key}
                   onClick={() => setStatusFilter(f.key)}
                   className="chip"
+                  data-status={f.key}
+                  aria-pressed={statusFilter === f.key}
                   style={statusFilter === f.key
                     ? { background: f.color ?? "#0066ff", color: "#fff" }
                     : { background: "var(--chip-off-bg)", color: f.color ?? "var(--chip-off-fg)" }}
                 >
                   {f.color && (
-                    <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: f.color }} />
+                    <span className="chip-dot inline-block h-2.5 w-2.5 rounded-sm" style={{ background: f.color }} />
                   )}
                   {t(f.tkey)}
                   <span className="ml-0.5 rounded-full bg-black/10 px-1.5 text-[10px] tabnum">
@@ -344,6 +346,7 @@ export function PavilionModal({ pavilionId, pavilionName, shopPrefix, onClose, o
               return (
                 <button
                   key={c.shop.shop_id}
+                  data-tile-status={match ? c.status : "off"}
                   onClick={() => match && onSelectShop(c.shop.shop_id, year, month)}
                   disabled={!match}
                   className="flex aspect-square items-center justify-center rounded text-[10px] font-bold text-white transition-all"
