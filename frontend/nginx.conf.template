@@ -4,6 +4,11 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
+    # Xarita rasmi 1 MB dan katta bo'lishi mumkin — nginx sukut bo'yicha
+    # 1 MB da to'xtatib, backendga yetkazmasdan 413 qaytarardi.
+    # Backend chegarasi 8 MB (maps.py: MAX_IMAGE_BYTES).
+    client_max_body_size 10m;
+
     # API so'rovlarini backend'ga uzatish (same-domain -> Safari cookie ishlaydi)
     location /api/ {
         # Runtime DNS resolver (Railway external domen uchun)
