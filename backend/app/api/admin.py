@@ -214,6 +214,92 @@ async def upload_vacant_shops(
     )
 
 
+# ===== DO'KON VA INFRA RO'YXATI (bitta Excel faylda) =====
+
+class ShopsInfraImportOut(BaseModel):
+    ok: bool = True
+    preview: bool = True
+    rows_read: int = 0
+    shops_new: int = 0
+    shops_updated: int = 0
+    infra_new: int = 0
+    infra_updated: int = 0
+    cp_new: int = 0
+    cp_updated: int = 0
+    inn_count: int = 0
+    jshshir_count: int = 0
+    no_id: int = 0
+    bad_id: list[str] = []
+    shops_total: float = 0
+    infra_total: float = 0
+    detected_columns: dict = {}
+    skipped: list[dict] = []
+    sample: list[dict] = []
+
+
+@router.post("/import/shops-infra", response_model=ShopsInfraImportOut)
+async def import_shops_infra(
+    admin: AdminUser,
+    market: CurrentMarket,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    file: UploadFile = File(...),
+    prefix: str = Query("", description="Magazin ID oldiga qo'shiladi, masalan CH-ATROF-"),
+    preview: bool = Query(True, description="True — faqat hisob, yozilmaydi"),
+) -> ShopsInfraImportOut:
+    """Do'kon va infra ro'yxatini bitta fayldan import qiladi.
+
+    `Infra summasi` to'ldirilgan qator — infra do'kon, `Ijara summasi`
+    to'ldirilgani — oddiy do'kon. Ega raqami xonalar soniga qarab
+    INN (9) yoki JSHSHIR (14) deb belgilanadi.
+
+    `preview=true` (sukut) — bazaga hech narsa yozilmaydi.
+    """
+    from app.services.shops_infra_import_service import (
+        StructureError as _SIErr, import_shops_infra as _run,
+    )
+
+    if not file.filename or not file.filename.lower().endswith((".xlsx", ".xlsm")):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Faqat .xlsx fayl")
+    content = await file.read()
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Fayl juda katta (10 MB)")
+
+    try:
+        res = await _run(db, content, market.id, prefix=prefix.strip(), preview=preview)
+    except _SIErr as exc:
+        await db.rollback()
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        await db.rollback()
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"Import xatosi: {type(exc).__name__}: {exc}",
+        ) from exc
+
+    if not preview:
+        await write_audit(
+            db, admin.id, "import_shops_infra", "shops", file.filename or "file",
+            {"prefix": prefix, "shops_new": res.shops_new, "infra_new": res.infra_new,
+             "cp_new": res.cp_new},
+        )
+        await db.commit()
+    else:
+        await db.rollback()
+
+    return ShopsInfraImportOut(
+        ok=True, preview=preview,
+        rows_read=res.rows_read,
+        shops_new=res.shops_new, shops_updated=res.shops_updated,
+        infra_new=res.infra_new, infra_updated=res.infra_updated,
+        cp_new=res.cp_new, cp_updated=res.cp_updated,
+        inn_count=res.inn_count, jshshir_count=res.jshshir_count,
+        no_id=res.no_id, bad_id=res.bad_id[:20],
+        shops_total=float(res.shops_total), infra_total=float(res.infra_total),
+        detected_columns=res.detected_columns,
+        skipped=res.skipped[:50], sample=res.sample,
+    )
+
+
 # ===== MAGAZIN EGASI/NARXI O'ZGARISHLARI TARIXI (shop_periods) =====
 
 class ShopPeriodRow(BaseModel):

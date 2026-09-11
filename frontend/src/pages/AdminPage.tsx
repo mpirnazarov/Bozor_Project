@@ -10,6 +10,7 @@ import { DashboardEditor } from "@/components/Admin/DashboardEditor";
 import { MapEditor } from "@/components/Admin/MapEditor";
 import { ShopsManager } from "@/components/Admin/ShopsManager";
 import { ShopOwnerImport } from "@/components/Admin/ShopOwnerImport";
+import { ShopsInfraImport } from "@/components/Admin/ShopsInfraImport";
 import { PaymentImport } from "@/components/Admin/PaymentImport";
 import { AuditLogView } from "@/components/Admin/AuditLogView";
 import { DocumentsView } from "@/components/Admin/DocumentsView";
@@ -100,6 +101,7 @@ export function AdminPage() {
             <div className="space-y-5">
               <PaymentImport />
               <ShopOwnerImport />
+              <ShopsInfraImport />
             </div>
           </Tabs.Content>
           <Tabs.Content value="documents">

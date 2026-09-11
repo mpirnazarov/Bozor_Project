@@ -22,6 +22,7 @@ ACTION_LABELS: dict[str, str] = {
     "update_hide_unmatched": "Topilmagan magazinlar sozlamasi o'zgartirildi",
     "update_report_detail": "Hisobot batafsilligi o'zgartirildi",
     "upload_vacant_shops": "Bo'sh do'konlar ro'yxati yangilandi",
+    "import_shops_infra": "Do'kon va infra ro'yxati import qilindi",
     "update_market": "Bozor tahrirlandi",
     "toggle_market": "Bozor holati o'zgartirildi",
     "update_market_theme": "Bozor mavzusi o'zgartirildi",
