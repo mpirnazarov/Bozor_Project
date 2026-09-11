@@ -110,7 +110,11 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
       // "Topilmagan" = bo'sh yozuv: na INN, na ijara summasi bor. Faqat
       // SHULAR berkitiladi. Shu oyda to'lov fayli kelmagan (lekin INN va
       // ijarasi bor) magazin "topilmagan" EMAS — u ro'yxatda qolishi shart.
-      const emptyRecord = !s.inn && Number(s.monthly_rent ?? 0) <= 0;
+      // BO'SH DO'KON ham hech qachon berkitilmaydi: unda INN ham, ijara ham
+      // bo'lmasligi TABIIY, shuning uchun filtr aynan "Bo'sh do'kon"
+      // toifasini yo'q qilib yuborardi (164 tadan 148 tasi ko'rinmasdi).
+      const emptyRecord =
+        !s.is_vacant && !s.inn && Number(s.monthly_rent ?? 0) <= 0;
 
       // 1. Bo'sh do'kon — kulrang "vacant"
       if (s.is_vacant) {
