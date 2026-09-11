@@ -139,7 +139,7 @@ export function InnDetailModal({ inn, onClose, onSelectShop }: Props) {
                 className="chip"
                 style={service === s.key
                   ? { background: "#0066ff", color: "#fff" }
-                  : { background: "#f1f5f9", color: "#475569" }}
+                  : { background: "var(--chip-off-bg)", color: "var(--chip-off-fg)" }}
               >
                 {s.label}
               </button>
@@ -152,11 +152,11 @@ export function InnDetailModal({ inn, onClose, onSelectShop }: Props) {
               <div className="text-[11px] font-semibold text-ink-faint">Jami</div>
               <div className="tabnum text-base font-extrabold text-ink">{fmtUZS(totals.due)}</div>
             </div>
-            <div className="rounded-xl p-3" style={{ background: "rgba(22,163,74,0.08)" }}>
+            <div className="rounded-xl p-3" style={{ background: "var(--tint-paid)" }}>
               <div className="text-[11px] font-semibold text-ink-faint">To'langan</div>
               <div className="tabnum text-base font-extrabold text-status-paid">{fmtUZS(totals.paid)}</div>
             </div>
-            <div className="rounded-xl p-3" style={{ background: "rgba(220,38,38,0.08)" }}>
+            <div className="rounded-xl p-3" style={{ background: "var(--tint-debt)" }}>
               <div className="text-[11px] font-semibold text-ink-faint">Qarzdor</div>
               <div className="tabnum text-base font-extrabold text-status-unpaid">{fmtUZS(totals.debt)}</div>
             </div>

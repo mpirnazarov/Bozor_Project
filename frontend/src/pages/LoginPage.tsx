@@ -91,7 +91,9 @@ export function LoginPage() {
             )}
             <button
               type="submit"
-              className="btn group w-full bg-white py-3 text-brand-dark hover:bg-white"
+              className="btn group w-full py-3 text-brand-dark"
+              // Login sahifasi doim yorug' — dark override tegmasin
+              style={{ background: "#fff" }}
               disabled={loading}
             >
               {loading ? t("login.loading") : (

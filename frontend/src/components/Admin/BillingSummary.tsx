@@ -164,8 +164,12 @@ export function BillingSummary() {
 }
 
 function SummaryCard({ label, value, tone }: { label: string; value: number; tone: "ink" | "paid" | "debt" | "avans" }) {
-  const bg = tone === "paid" ? "rgba(22,163,74,0.08)" : tone === "debt" ? "rgba(220,38,38,0.08)" : tone === "avans" ? "rgba(37,99,235,0.08)" : "var(--surface-muted, #f1f5f9)";
-  const color = tone === "paid" ? "text-status-paid" : tone === "debt" ? "text-status-unpaid" : tone === "avans" ? "text-blue-600" : "text-ink";
+  // Ranglar globals.css dagi o'zgaruvchilardan — dark rejimda avtomatik almashadi.
+  const bg = tone === "paid" ? "var(--tint-paid)"
+    : tone === "debt" ? "var(--tint-debt)"
+    : tone === "avans" ? "var(--tint-avans)"
+    : "var(--surface-muted)";
+  const color = tone === "paid" ? "text-status-paid" : tone === "debt" ? "text-status-unpaid" : tone === "avans" ? "text-brand" : "text-ink";
   return (
     <div className="rounded-2xl p-4" style={{ background: bg }}>
       <div className="text-[11px] font-semibold text-ink-faint">{label}</div>

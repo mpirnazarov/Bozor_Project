@@ -277,11 +277,11 @@ export function PavilionModal({ pavilionId, pavilionName, shopPrefix, onClose, o
               <div className="text-[11px] font-semibold text-ink-faint">{t("common.total")}</div>
               <div className="tabnum text-base font-extrabold text-ink">{fmtUZS(totals.due)}</div>
             </div>
-            <div className="rounded-xl p-3" style={{ background: "rgba(22,163,74,0.08)" }}>
+            <div className="rounded-xl p-3" style={{ background: "var(--tint-paid)" }}>
               <div className="text-[11px] font-semibold text-ink-faint">{t("common.paid")}</div>
               <div className="tabnum text-base font-extrabold text-status-paid">{fmtUZS(totals.paid)}</div>
             </div>
-            <div className="rounded-xl p-3" style={{ background: "rgba(220,38,38,0.08)" }}>
+            <div className="rounded-xl p-3" style={{ background: "var(--tint-debt)" }}>
               <div className="text-[11px] font-semibold text-ink-faint">{t("common.debt")}</div>
               <div className="tabnum text-base font-extrabold text-status-unpaid">{fmtUZS(totals.debt)}</div>
             </div>
@@ -298,7 +298,7 @@ export function PavilionModal({ pavilionId, pavilionName, shopPrefix, onClose, o
                   className="chip"
                   style={service === f.key
                     ? { background: "#0066ff", color: "#fff" }
-                    : { background: "#f1f5f9", color: "#475569" }}
+                    : { background: "var(--chip-off-bg)", color: "var(--chip-off-fg)" }}
                 >
                   {t(f.tkey)}
                   <span className="ml-0.5 rounded-full bg-black/10 px-1.5 text-[10px] tabnum">
@@ -321,7 +321,7 @@ export function PavilionModal({ pavilionId, pavilionName, shopPrefix, onClose, o
                   className="chip"
                   style={statusFilter === f.key
                     ? { background: f.color ?? "#0066ff", color: "#fff" }
-                    : { background: "#f1f5f9", color: f.color ?? "#475569" }}
+                    : { background: "var(--chip-off-bg)", color: f.color ?? "var(--chip-off-fg)" }}
                 >
                   {f.color && (
                     <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: f.color }} />
@@ -349,7 +349,7 @@ export function PavilionModal({ pavilionId, pavilionName, shopPrefix, onClose, o
                   className="flex aspect-square items-center justify-center rounded text-[10px] font-bold text-white transition-all"
                   style={match
                     ? { background: color, opacity: 1, cursor: "pointer" }
-                    : { background: "#e2e8f0", color: "#94a3b8", opacity: 0.5, cursor: "not-allowed" }}
+                    : { background: "var(--tile-off-bg)", color: "var(--tile-off-fg)", opacity: 0.5, cursor: "not-allowed" }}
                   title={`${c.shop.shop_id} — ${t("pav.status." + c.status)}`}
                 >
                   {num}
