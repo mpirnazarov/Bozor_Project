@@ -4,6 +4,7 @@ Status INN darajasida hisoblanadi: magazinning INN'i bo'yicha joriy oy
 monthly_balances yig'indisidan kelib chiqadi (bitta INN'da bir nechta magazin
 bo'lishi mumkin — barchasi shu INN balansini ulashadi).
 """
+import datetime as _d_mod
 from collections import defaultdict
 from decimal import Decimal
 
@@ -57,6 +58,43 @@ async def _balances_by_inn(
     for bal in result.scalars():
         grouped[bal.inn].append(bal)
     return grouped
+
+
+async def _apply_periods(
+    db: AsyncSession,
+    shop_ids: list[str],
+    market_of: dict[str, int | None],
+    shop_inn: dict[str, str | None],
+    shop_rent: dict[str, Decimal],
+    year: int,
+    month: int,
+) -> None:
+    """`shop_inn` va `shop_rent` ni SHU OY uchun amal qilgan qiymatlar bilan
+    almashtiradi (shop_periods). Yozuvi bo'lmagan magazin tegilmaydi.
+
+    Sana sifatida OY OXIRI olinadi: oy davomida ega/narx o'zgarsa, shu oy
+    yangi qiymat bilan yopiladi, oldingi oylar esa eski qiymatda qoladi.
+    """
+    import calendar as _cal_p
+
+    from app.services.shop_period_service import periods_at
+
+    on_date = _d_mod.date(year, month, _cal_p.monthrange(year, month)[1])
+    by_market: dict[int, list[str]] = {}
+    for sid in shop_ids:
+        mid = market_of.get(sid)
+        if mid is not None:
+            by_market.setdefault(mid, []).append(sid)
+
+    for mid, sids in by_market.items():
+        try:
+            periods = await periods_at(db, mid, sids, on_date)
+        except Exception:  # noqa: BLE001
+            # Jadval hali yaratilmagan bo'lsa (eski deploy) — bugungi holatda qolamiz
+            return
+        for sid, p in periods.items():
+            shop_inn[sid] = p.inn
+            shop_rent[sid] = Decimal(str(p.monthly_rent or 0))
 
 
 async def _latest_rent_billing(
@@ -219,15 +257,24 @@ async def compute_batch_status(
     if not shop_ids:
         return {}
 
-    # shop_id -> (inn, monthly_rent)
+    # shop_id -> (inn, monthly_rent) — BUGUNGI holat (zaxira qiymat sifatida)
     rows = await db.execute(
-        select(Shop.shop_id, Shop.inn, Shop.monthly_rent).where(Shop.shop_id.in_(shop_ids))
+        select(Shop.shop_id, Shop.inn, Shop.monthly_rent, Shop.market_id)
+        .where(Shop.shop_id.in_(shop_ids))
     )
     shop_inn: dict[str, str | None] = {}
     shop_rent: dict[str, Decimal] = {}
-    for sid, inn, rent in rows.all():
+    market_of: dict[str, int | None] = {}
+    for sid, inn, rent, mid in rows.all():
         shop_inn[sid] = inn
         shop_rent[sid] = Decimal(str(rent or 0))
+        market_of[sid] = mid
+
+    # DAVR bo'yicha holat: so'ralgan OY OXIRIDA amal qilgan ega va narx.
+    # Bugungi `shops` qiymati faqat davr yozuvi bo'lmasa ishlatiladi.
+    # Shu sababli egasi/narxi keyin o'zgarsa ham o'tgan oy hisoboti
+    # o'zgarmaydi (shop_periods jadvali, 0020-migratsiya).
+    await _apply_periods(db, shop_ids, market_of, shop_inn, shop_rent, year, month)
 
     inns = [inn for inn in shop_inn.values() if inn]
     by_inn = await _balances_by_inn(db, list(set(inns)), year, month)
@@ -290,6 +337,18 @@ async def compute_shop_status(
     db: AsyncSession, shop_id: str, inn: str | None, year: int, month: int
 ) -> BillingStatusOut:
     """Bitta magazin uchun billing statusi."""
+    # DAVR: shu oy oxirida amal qilgan ega/narx (bo'lmasa — bugungi holat)
+    _mid = await db.scalar(select(Shop.market_id).where(Shop.shop_id == shop_id))
+    _inn_map: dict[str, str | None] = {shop_id: inn}
+    _rent_map: dict[str, Decimal] = {shop_id: Decimal(0)}
+    await _apply_periods(
+        db, [shop_id], {shop_id: _mid}, _inn_map, _rent_map, year, month
+    )
+    period_inn = _inn_map.get(shop_id)
+    period_rent = _rent_map.get(shop_id) or Decimal(0)
+    if period_inn is not None or period_rent > 0:
+        inn = period_inn
+
     # Eski balanslar (elektr/suv uchun ham kerak)
     balances: list[MonthlyBalance] = []
     debt_share = Decimal(0)
@@ -306,8 +365,12 @@ async def compute_shop_status(
         )
         debt_share = inn_debt / max(int(cnt or 1), 1)
 
-    # Magazinning belgilangan summasi (JAMI uchun — barqaror manba)
-    rent = await db.scalar(select(Shop.monthly_rent).where(Shop.shop_id == shop_id))
+    # Magazinning belgilangan summasi (JAMI uchun — barqaror manba).
+    # Davr yozuvi bo'lsa — o'shanikini olamiz.
+    if period_rent > 0:
+        rent = period_rent
+    else:
+        rent = await db.scalar(select(Shop.monthly_rent).where(Shop.shop_id == shop_id))
     monthly_rent = Decimal(str(rent or 0))
 
     # rent_billing (eng oxirgi sana) bo'lsa — qarz/to'langan shundan,

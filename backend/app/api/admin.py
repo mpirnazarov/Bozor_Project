@@ -627,6 +627,7 @@ async def billing_summary(
     from decimal import Decimal
     from app.api.pavilions import _prefix_shop_filter
     from app.services.billing_service import compute_batch_status
+    from app.services.shop_period_service import rent_map_for_month
     from app.models import MonthlyBalance, RentBilling
 
     today = date.today()
@@ -722,13 +723,19 @@ async def billing_summary(
         # soni ham, ijarasi ham). Endi bunday blok ham hisoblanadi: JAMI
         # monthly_rent'dan olinadi, TO'LANGAN esa 0.
 
-        # JAMI = barcha do'konlarning monthly_rent yig'indisi
+        # JAMI = barcha do'konlarning SHU OYDAGI ijara summasi yig'indisi.
+        # Narx keyin o'zgarsa ham o'tgan oy hisoboti o'zgarmasligi uchun
+        # qiymat shop_periods dan olinadi (bo'lmasa — bugungi monthly_rent).
         monthly_rents = dict((await db.execute(
             select(Shop.shop_id, Shop.monthly_rent).where(
                 Shop.shop_id.in_(shops),
                 Shop.market_id == market.id,
             )
         )).all())
+        monthly_rents = await rent_map_for_month(
+            db, market.id, shops, year, month,
+            {k: Decimal(str(v or 0)) for k, v in monthly_rents.items()},
+        )
         due = sum(
             (Decimal(str(v or 0)) for v in monthly_rents.values()),
             Decimal(0)
@@ -786,6 +793,10 @@ async def billing_summary(
                 Shop.shop_id.in_(rest_shops), Shop.market_id == market.id,
             )
         )).all())
+        rest_rents = await rent_map_for_month(
+            db, market.id, rest_shops, year, month,
+            {k: Decimal(str(v or 0)) for k, v in rest_rents.items()},
+        )
         rest_due = sum((Decimal(str(v or 0)) for v in rest_rents.values()), Decimal(0))
         rest_billing = await compute_batch_status(db, rest_shops, year, month)
         rest_paid = sum((b.total_paid for b in rest_billing.values()), Decimal(0))

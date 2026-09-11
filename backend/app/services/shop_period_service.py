@@ -126,3 +126,31 @@ async def periods_at(
         # valid_from bo'yicha o'sish tartibida — oxirgi mos keluvchi qoladi
         out[p.shop_id] = p
     return out
+
+
+async def rent_map_for_month(
+    db: AsyncSession,
+    market_id: int,
+    shop_ids: list[str],
+    year: int,
+    month: int,
+    fallback: dict[str, Decimal],
+) -> dict[str, Decimal]:
+    """Shu OY uchun amal qilgan ijara summalari (oy oxiridagi holat).
+
+    Davr yozuvi bo'lmagan magazin uchun `fallback` (bugungi monthly_rent)
+    qiymati qoladi. Jadval hali yaratilmagan bo'lsa ham xato bermaydi.
+    """
+    import calendar as _cal
+
+    out = dict(fallback)
+    if not shop_ids:
+        return out
+    on_date = date(year, month, _cal.monthrange(year, month)[1])
+    try:
+        periods = await periods_at(db, market_id, shop_ids, on_date)
+    except Exception:  # noqa: BLE001
+        return out
+    for sid, p in periods.items():
+        out[sid] = _dec(p.monthly_rent)
+    return out
