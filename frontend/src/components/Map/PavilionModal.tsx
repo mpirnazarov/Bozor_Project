@@ -151,7 +151,14 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
         !present ? "no_data" : debt <= 0 ? "paid" : paid > 0 ? "partial" : "unpaid";
 
       if (service === "rent") {
-        return { shop: s, emptyRecord, status: statusOf(!!rentCat, rentPaid, rentDebt),
+        // ARENDA uchun "ma'lumot yo'q" faqat summasi ham noma'lum bo'lganda.
+        // Arenda kategoriyasi bo'lmasa ham magazinning belgilangan summasi
+        // (monthly_rent) ma'lum — bu holda to'lov YOZUVI yo'q, ya'ni
+        // "to'lanmagan". Magazin modali ham aynan shu fallback'ni ishlatadi
+        // (ShopDetailModal), shuning uchun avval plitka "Ma'lumot yo'q" deb,
+        // modal esa arenda summasini ko'rsatib ziddiyat chiqarardi.
+        const rentKnown = !!rentCat || monthlyRent > 0;
+        return { shop: s, emptyRecord, status: statusOf(rentKnown, rentPaid, rentDebt),
                  due: rentDue, paid: rentPaid, debt: rentDebt };
       }
       if (service === "electricity") {
