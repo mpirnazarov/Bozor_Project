@@ -266,6 +266,8 @@ export interface ShopOwnerImportResult {
   skipped_count: number;
   detected_columns: Record<string, number>;
   snapshot_id: number | null;
+  /** Egasi/narxi o'zgargani uchun ochilgan yangi davrlar soni */
+  periods_opened?: number;
 }
 
 export async function importShopOwners(file: File): Promise<ShopOwnerImportResult> {
@@ -275,6 +277,35 @@ export async function importShopOwners(file: File): Promise<ShopOwnerImportResul
     "/admin/import/shop-owners", form,
     { headers: { "Content-Type": "multipart/form-data" } },
   );
+  return data;
+}
+
+// === Magazin egasi/narxi o'zgarishlari tarixi (shop_periods) ===
+export interface ShopPeriodRow {
+  shop_id: string;
+  valid_from: string;
+  valid_to: string | null;
+  inn: string | null;
+  counterparty_name: string | null;
+  monthly_rent: number;
+  prev_inn: string | null;
+  prev_counterparty_name: string | null;
+  prev_monthly_rent: number | null;
+  source: string | null;
+}
+export interface ShopPeriodsOut {
+  items: ShopPeriodRow[];
+  total: number;
+  page: number;
+  per_page: number;
+}
+
+export async function getShopPeriods(
+  q?: string, page = 1, per_page = 50,
+): Promise<ShopPeriodsOut> {
+  const params: Record<string, string | number> = { page, per_page };
+  if (q && q.trim()) params.q = q.trim();
+  const { data } = await apiClient.get<ShopPeriodsOut>("/admin/shop-periods", { params });
   return data;
 }
 

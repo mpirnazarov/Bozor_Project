@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -101,6 +101,98 @@ async def update_report_detail(
     await write_audit(db, admin.id, "update_report_detail", "settings", REPORT_DETAIL_KEY, {"enabled": body.enabled})
     await db.commit()
     return {"enabled": body.enabled}
+
+
+# ===== MAGAZIN EGASI/NARXI O'ZGARISHLARI TARIXI (shop_periods) =====
+
+class ShopPeriodRow(BaseModel):
+    shop_id: str
+    valid_from: str
+    valid_to: str | None = None
+    inn: str | None = None
+    counterparty_name: str | None = None
+    monthly_rent: float = 0
+    # Oldingi davr qiymatlari (nimadan nimaga o'zgargani ko'rinishi uchun)
+    prev_inn: str | None = None
+    prev_counterparty_name: str | None = None
+    prev_monthly_rent: float | None = None
+    source: str | None = None
+
+
+class ShopPeriodsOut(BaseModel):
+    items: list[ShopPeriodRow] = []
+    total: int = 0
+    page: int = 1
+    per_page: int = 50
+
+
+# Migratsiya boshlang'ich davrni shu sana bilan yozgan — u "o'zgarish" emas
+_SEED_FROM = date(2000, 1, 1)
+
+
+@router.get("/shop-periods", response_model=ShopPeriodsOut)
+async def list_shop_periods(
+    _admin: AdminUser,
+    market: CurrentMarket,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    q: str | None = Query(None, description="Magazin ID, INN yoki kontragent"),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=200),
+) -> ShopPeriodsOut:
+    """Egasi yoki ijara narxi o'zgarishlari ro'yxati (yangisidan eskisiga).
+
+    Boshlang'ich (migratsiya) davrlari ko'rsatilmaydi — faqat haqiqiy
+    o'zgarishlar.
+    """
+    from app.models.shop_period import ShopPeriod
+
+    base = select(ShopPeriod).where(
+        ShopPeriod.market_id == market.id,
+        ShopPeriod.valid_from > _SEED_FROM,
+    )
+    if q and q.strip():
+        pat = f"%{q.strip()}%"
+        base = base.where(or_(
+            ShopPeriod.shop_id.ilike(pat),
+            ShopPeriod.inn.ilike(pat),
+            ShopPeriod.counterparty_name.ilike(pat),
+        ))
+
+    total = await db.scalar(select(func.count()).select_from(base.subquery())) or 0
+    rows = list((await db.execute(
+        base.order_by(ShopPeriod.valid_from.desc(), ShopPeriod.id.desc())
+        .offset((page - 1) * per_page).limit(per_page)
+    )).scalars())
+
+    # Oldingi davrlarni bitta so'rovda olamiz (valid_to = valid_from - 1 kun)
+    prev_map: dict[tuple[str, date], "ShopPeriod"] = {}
+    if rows:
+        shop_ids = list({r.shop_id for r in rows})
+        for p in (await db.execute(
+            select(ShopPeriod).where(
+                ShopPeriod.market_id == market.id,
+                ShopPeriod.shop_id.in_(shop_ids),
+                ShopPeriod.valid_to.is_not(None),
+            )
+        )).scalars():
+            prev_map[(p.shop_id, p.valid_to)] = p
+
+    items: list[ShopPeriodRow] = []
+    for r in rows:
+        prev = prev_map.get((r.shop_id, r.valid_from - timedelta(days=1)))
+        items.append(ShopPeriodRow(
+            shop_id=r.shop_id,
+            valid_from=r.valid_from.isoformat(),
+            valid_to=r.valid_to.isoformat() if r.valid_to else None,
+            inn=r.inn,
+            counterparty_name=r.counterparty_name,
+            monthly_rent=float(r.monthly_rent or 0),
+            prev_inn=prev.inn if prev else None,
+            prev_counterparty_name=prev.counterparty_name if prev else None,
+            prev_monthly_rent=float(prev.monthly_rent or 0) if prev else None,
+            source=r.source,
+        ))
+    return ShopPeriodsOut(items=items, total=int(total), page=page, per_page=per_page)
 
 
 class _ThemeBody(BaseModel):

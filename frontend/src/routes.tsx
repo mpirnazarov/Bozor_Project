@@ -15,6 +15,7 @@ import { InfraPage } from "@/pages/InfraPage";
 import { ManagersPage } from "@/pages/ManagersPage";
 import { ShopsListPage } from "@/pages/ShopsListPage";
 import { ImportHistoryPage } from "@/pages/ImportHistoryPage";
+import { ShopHistoryPage } from "@/pages/ShopHistoryPage";
 
 const ADMIN_ROLES = ["admin", "super_admin", "market_admin"];
 
@@ -62,6 +63,7 @@ export function AppRoutes() {
       <Route path="/managers" element={<Protected adminOnly><ManagersPage /></Protected>} />
       <Route path="/shops-list" element={<Protected adminOnly><ShopsListPage /></Protected>} />
       <Route path="/import-history" element={<Protected adminOnly><ImportHistoryPage /></Protected>} />
+      <Route path="/shop-history" element={<Protected adminOnly><ShopHistoryPage /></Protected>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

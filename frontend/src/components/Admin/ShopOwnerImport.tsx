@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
+import { Link } from "react-router-dom";
 import { useMutation } from "@tanstack/react-query";
-import { Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, Undo2, ChevronDown, ChevronRight } from "lucide-react";
+import { Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, Undo2, ChevronDown, ChevronRight, History } from "lucide-react";
 import { importShopOwners, type ShopOwnerImportResult } from "@/api/admin";
 
 export function ShopOwnerImport() {
@@ -24,9 +25,15 @@ export function ShopOwnerImport() {
 
   return (
     <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-soft">
-      <div className="mb-1 flex items-center gap-2">
-        <FileSpreadsheet size={18} className="text-brand" />
-        <h3 className="text-base font-bold text-ink">Magazin egalarini yangilash (Excel)</h3>
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <FileSpreadsheet size={18} className="text-brand" />
+          <h3 className="text-base font-bold text-ink">Magazin egalarini yangilash (Excel)</h3>
+        </div>
+        {/* Egasi/narxi o'zgarishlari alohida sahifada ko'rinadi */}
+        <Link to="/shop-history" className="btn-ghost px-3 py-1.5 text-xs">
+          <History size={14} /> O'zgarishlar tarixi
+        </Link>
       </div>
       <p className="mb-4 text-sm text-ink-soft">
         Excel ustunlari: <b>Magazin ID</b> (Магазин №), <b>QR №</b>, <b>Kontragent</b> (Ижарачи), <b>Summa</b> (Сумма).
@@ -81,6 +88,7 @@ export function ShopOwnerImport() {
             <Stat label="Yangi magazin" value={result.inserted} />
             <Stat label="Egasi yangilandi" value={result.counterparties_updated} />
             <Stat label="Yangi egasi" value={result.counterparties_created} />
+            <Stat label="Tarixga yozildi" value={result.periods_opened ?? 0} />
             {result.skipped_count > 0 && <Stat label="O'tkazib yuborilgan" value={result.skipped_count} />}
           </div>
 
