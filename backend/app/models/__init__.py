@@ -13,6 +13,7 @@ from app.models.monthly_balance import (
 from app.models.pavilion import Pavilion
 from app.models.map_layer import MapLayer
 from app.models.rent_billing import RentBilling
+from app.models.shop_period import ShopPeriod
 from app.models.support_payment import SupportPayment, SUPPORT_MONTHLY_FEE, SUPPORT_FREE_MONTHS, SUPPORT_DUE_DAY
 from app.models.invoice import Invoice
 from app.models.invoice_payment import InvoicePayment
@@ -27,6 +28,7 @@ __all__ = [
     "InvoicePayment",
     "MapLayer",
     "RentBilling",
+    "ShopPeriod",
     "UserRole",
     "Market",
     "Counterparty",
