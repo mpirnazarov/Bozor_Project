@@ -10,7 +10,14 @@ from app.database import Base
 class Counterparty(Base):
     __tablename__ = "counterparties"
 
+    # Raqamning O'ZI shu ustunda kalit bo'lib qoladi (yuridik shaxsda INN,
+    # jismoniy shaxsda JSHSHIR), turi esa `id_type` da saqlanadi. Shu sababli
+    # `shops.inn` / `infra_shops.inn` FK lari o'zgarishsiz ishlaydi.
     inn: Mapped[str] = mapped_column(String(20), primary_key=True)
+    # 'inn' — 9 xonali (yuridik shaxs), 'jshshir' — 14 xonali (jismoniy shaxs)
+    id_type: Mapped[str] = mapped_column(
+        String(10), nullable=False, default="inn", server_default="inn"
+    )
     name: Mapped[str] = mapped_column(String(500), nullable=False)
     contract_no: Mapped[str | None] = mapped_column(String(100), nullable=True)
     contract_date: Mapped[date | None] = mapped_column(Date, nullable=True)

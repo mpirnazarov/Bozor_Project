@@ -12,6 +12,12 @@ class InfraShop(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     market_id: Mapped[int] = mapped_column(Integer, ForeignKey("markets.id", ondelete="CASCADE"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(300), nullable=False)
+    # Ega — kontragent raqami (INN yoki JSHSHIR). Avval infra do'konning
+    # egasini saqlaydigan joy yo'q edi.
+    inn: Mapped[str | None] = mapped_column(
+        String(20), ForeignKey("counterparties.inn", ondelete="SET NULL"),
+        nullable=True, index=True,
+    )
     contract_no: Mapped[str | None] = mapped_column(String(150), nullable=True)
     contract_date: Mapped[str | None] = mapped_column(String(20), nullable=True)
     monthly_rent: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False, default=0)
