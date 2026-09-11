@@ -198,8 +198,11 @@ async def import_shop_owners_excel(
             })
             seen_keys.add(key)
 
-            if name is not None:
-                existing.shop_type = name
+            # DIQQAT: avval bu yerda `existing.shop_type = name` bor edi —
+            # ijarachi NOMI magazin TURI maydoniga yozilardi va
+            # "Turg'un savdo shahobchasi" kabi qiymatlar yo'qolardi.
+            # Kontragent nomi `counterparties` jadvalida saqlanadi,
+            # shuning uchun bu yerda shop_type ga tegilmaydi.
             if inn:
                 existing.inn = inn
             if rent and rent > 0:
@@ -243,7 +246,8 @@ async def import_shop_owners_excel(
                 shop_id=shop_id,
                 market_id=market_id,
                 inn=inn,
-                shop_type=name,
+                # shop_type — magazin TURI; ijarachi nomi bu yerga yozilmaydi
+                shop_type=None,
                 monthly_rent=rent,
                 area=area,
                 notes=f"QR: {qr}" if qr else None,
