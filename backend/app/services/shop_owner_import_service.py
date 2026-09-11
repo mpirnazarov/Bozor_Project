@@ -191,6 +191,23 @@ async def import_shop_owners_excel(
             select(Shop).where(Shop.shop_id == shop_id, Shop.market_id == market_id)
         )).scalar_one_or_none()
 
+        # KONTRAGENT — magazindan OLDIN yaratiladi/yangilanadi.
+        # `shops.inn` -> `counterparties.inn` FK bog'lanishi bor, shuning
+        # uchun magazin yangilanishi bazaga yuborilishidan (flush) oldin
+        # kontragent mavjud bo'lishi SHART. Avval bu blok pastda edi va
+        # yangi INN ga o'tkazilgan magazin ForeignKeyViolationError berardi.
+        if inn:
+            cp = cp_map.get(inn)
+            if cp is None:
+                new_cp = Counterparty(inn=inn, name=name or f"INN {inn}")
+                db.add(new_cp)
+                await db.flush()  # FK uchun yozuv bazada bo'lishi kerak
+                cp_map[inn] = new_cp
+                res.counterparties_created += 1
+            elif name and cp.name != name:
+                cp.name = name
+                res.counterparties_updated += 1
+
         if existing:
             snapshot_rows.append({
                 "key": {"shop_id": shop_id, "market_id": market_id},
@@ -213,34 +230,13 @@ async def import_shop_owners_excel(
                 existing.notes = f"QR: {qr}"
             existing.source_sheet = source
             res.updated += 1
-
-            # Egasi yoki narxi o'zgargan bo'lsa — yangi DAVR ochamiz.
-            # Eski davr shu kundan bir kun oldin yopiladi, shuning uchun
-            # o'tgan oy hisobotlari o'zgarishsiz qoladi.
-            if await apply_shop_change(
-                db, market_id=market_id, shop_id=shop_id,
-                inn=existing.inn, monthly_rent=existing.monthly_rent,
-                counterparty_name=name, source=f"import: {source}",
-            ):
-                res.periods_opened += 1
+            final_inn, final_rent = existing.inn, existing.monthly_rent
         else:
             snapshot_rows.append({
                 "key": {"shop_id": shop_id, "market_id": market_id},
                 "before": None,  # yangi yaratildi -> revert: o'chiriladi
             })
             seen_keys.add(key)
-
-            # Kontragentni AVVAL yaratamiz (FK constraint uchun)
-            if inn:
-                cp = cp_map.get(inn)
-                if cp is None:
-                    new_cp = Counterparty(inn=inn, name=name or f"INN {inn}")
-                    db.add(new_cp)
-                    await db.flush()  # FK uchun ID kerak
-                    cp_map[inn] = new_cp
-                    res.counterparties_created += 1
-                elif name and cp.name != name:
-                    cp.name = name
 
             db.add(Shop(
                 shop_id=shop_id,
@@ -256,27 +252,17 @@ async def import_shop_owners_excel(
             ))
             res.inserted += 1
             await db.flush()
+            final_inn, final_rent = inn, rent
 
-            # Yangi magazin — birinchi davri ham shu kundan ochiladi
-            if await apply_shop_change(
-                db, market_id=market_id, shop_id=shop_id,
-                inn=inn, monthly_rent=rent,
-                counterparty_name=name, source=f"import: {source}",
-            ):
-                res.periods_opened += 1
-
-        # Kontragent (mavjud do'kon uchun yangilash)
-        if inn:
-            cp = cp_map.get(inn)
-            if cp is None:
-                new_cp = Counterparty(inn=inn, name=name or f"INN {inn}")
-                db.add(new_cp)
-                await db.flush()
-                cp_map[inn] = new_cp
-                res.counterparties_created += 1
-            elif name and cp.name != name:
-                cp.name = name
-                res.counterparties_updated += 1
+        # Egasi yoki narxi o'zgargan bo'lsa — yangi DAVR ochamiz. Eski davr
+        # shu kundan bir kun oldin yopiladi, shuning uchun o'tgan oy
+        # hisobotlari o'zgarishsiz qoladi.
+        if await apply_shop_change(
+            db, market_id=market_id, shop_id=shop_id,
+            inn=final_inn, monthly_rent=final_rent,
+            counterparty_name=name, source=f"import: {source}",
+        ):
+            res.periods_opened += 1
 
     res.snapshot_rows = snapshot_rows
     return res
