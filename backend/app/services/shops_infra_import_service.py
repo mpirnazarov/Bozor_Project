@@ -5,6 +5,13 @@ Fayl ko'rinishi (Chorsu "ATROF" namunasi):
   № | Tadbirkorlar ro`yxati | JSHSHIR | Telefon | Kv.metr | Infra stavkasi |
   Infra summasi | kv.metr | Ijara stavkasi | Ijara summasi | Komunal | ...
 
+Faylda infra ustunlari bo'lmasligi ham mumkin (masalan Chorsu "Milliy
+kiyimlar" — faqat ijara). Unda hamma qator oddiy do'kon bo'ladi.
+
+Magazin raqami: agar faylda alohida "Do'kon raqami" ustuni bo'lsa — o'sha,
+aks holda "№" ustuni ishlatiladi (Milliy kiyimlarda ular farq qiladi:
+№ 96 -> do'kon 98).
+
 Qoidalar:
   * `Infra summasi` to'ldirilgan  -> INFRA do'kon (`infra_shops`)
   * `Ijara summasi` to'ldirilgan  -> oddiy do'kon (`shops`)
@@ -71,6 +78,7 @@ def id_kind(num: str) -> str | None:
 @dataclass
 class Row:
     no: str
+    shop_no: str   # "Do'kon raqami" ustuni; bo'lmasa `no` bilan bir xil
     name: str
     ident: str
     id_type: str | None
@@ -129,9 +137,14 @@ def _find_columns(rows: list) -> tuple[int, dict[str, int]]:
                 col["name"] = j
             elif "telefon" in c:
                 col["phone"] = j
+            elif ("дукон" in c or "do'kon" in c or "dukon" in c) and (
+                "рак" in c or "raqam" in c or "nomer" in c
+            ):
+                col["shop_no"] = j
             elif c in ("№", "n", "no", "nomer"):
                 col["no"] = j
-        if "infra_sum" in col and "rent_sum" in col and "ident" in col:
+        # Infra ustunlari majburiy emas — faqat ijarali fayl ham bo'ladi
+        if ("infra_sum" in col or "rent_sum" in col) and "ident" in col:
             if "infra_rate" in col and col["infra_rate"] > 0:
                 col["infra_area"] = col["infra_rate"] - 1
             if "rent_rate" in col and col["rent_rate"] > 0:
@@ -139,7 +152,7 @@ def _find_columns(rows: list) -> tuple[int, dict[str, int]]:
             return i, col
     raise StructureError(
         "Excel strukturasi mos kelmadi. Kerakli ustunlar: "
-        "Tadbirkorlar ro'yxati, JSHSHIR, Infra summasi, Ijara summasi."
+        "Tadbirkorlar ro'yxati, JSHSHIR va Ijara summasi (yoki Infra summasi)."
     )
 
 
@@ -162,6 +175,7 @@ def parse_file(content: bytes) -> tuple[list[Row], dict]:
     for r in rows[hdr + 1:]:
         r = list(r)
         no = str(cell(r, "no") or "").strip()
+        shop_no = str(cell(r, "shop_no") or "").strip() or no
         name = str(cell(r, "name") or "").strip()
         if not no and not name:
             continue
@@ -171,13 +185,13 @@ def parse_file(content: bytes) -> tuple[list[Row], dict]:
             continue  # summasi yo'q — o'tkazamiz
         ident = _digits(cell(r, "ident"))
         out.append(Row(
-            no=no, name=name, ident=ident, id_type=id_kind(ident),
+            no=no, shop_no=shop_no, name=name, ident=ident, id_type=id_kind(ident),
             phone=str(cell(r, "phone") or "").strip(),
             infra_area=_dec(cell(r, "infra_area")), infra_sum=infra_sum,
             rent_area=_dec(cell(r, "rent_area")), rent_sum=rent_sum,
             kind="infra" if infra_sum > 0 else "shop",
         ))
-    labels = {"no": "№", "name": "Tadbirkor", "ident": "JSHSHIR/INN", "phone": "Telefon",
+    labels = {"no": "№", "shop_no": "Do'kon raqami", "name": "Tadbirkor", "ident": "JSHSHIR/INN", "phone": "Telefon",
               "infra_area": "Infra kv.m", "infra_rate": "Infra stavkasi",
               "infra_sum": "Infra summasi", "rent_area": "Ijara kv.m",
               "rent_rate": "Ijara stavkasi", "rent_sum": "Ijara summasi"}
@@ -199,7 +213,7 @@ async def import_shops_infra(
     shop_rows = [r for r in parsed if r.kind == "shop"]
     infra_rows = [r for r in parsed if r.kind == "infra"]
 
-    shop_ids = [f"{prefix}{r.no}" for r in shop_rows]
+    shop_ids = [f"{prefix}{r.shop_no}" for r in shop_rows]
     existing_shops = {
         s.shop_id: s for s in (await db.execute(
             select(Shop).where(Shop.market_id == market_id, Shop.shop_id.in_(shop_ids))
@@ -224,7 +238,7 @@ async def import_shops_infra(
     for r in parsed:
         if not r.ident:
             res.no_id += 1
-            res.skipped.append({"no": r.no, "name": r.name, "reason": "ID yo'q"})
+            res.skipped.append({"no": r.shop_no, "name": r.name, "reason": "ID yo'q"})
         elif r.id_type is None:
             res.bad_id.append(f"{r.no}: {r.ident} ({len(r.ident)} xonali)")
         elif r.id_type == "inn":
@@ -233,7 +247,7 @@ async def import_shops_infra(
             res.jshshir_count += 1
 
     for r in shop_rows:
-        if f"{prefix}{r.no}" in existing_shops:
+        if f"{prefix}{r.shop_no}" in existing_shops:
             res.shops_updated += 1
         res.shops_total += r.rent_sum
     for r in infra_rows:
@@ -249,7 +263,7 @@ async def import_shops_infra(
     res.cp_updated = len({r.ident for r in parsed if r.ident and r.ident in existing_cp})
 
     res.sample = [
-        {"no": r.no, "shop_id": (f"{prefix}{r.no}" if r.kind == "shop" else None),
+        {"no": r.shop_no, "shop_id": (f"{prefix}{r.shop_no}" if r.kind == "shop" else None),
          "name": r.name, "ident": r.ident, "id_type": r.id_type or "—",
          "kind": r.kind, "summa": float(r.infra_sum if r.kind == "infra" else r.rent_sum)}
         for r in parsed[:15]
@@ -281,7 +295,7 @@ async def import_shops_infra(
     await db.flush()
 
     for r in shop_rows:
-        sid = f"{prefix}{r.no}"
+        sid = f"{prefix}{r.shop_no}"
         s = existing_shops.get(sid)
         if s is None:
             db.add(Shop(

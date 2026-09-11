@@ -68,10 +68,13 @@ export function ShopsInfraImport() {
         <h3 className="text-base font-bold text-ink">Do'kon va infra ro'yxati (Excel)</h3>
       </div>
       <p className="mb-4 text-sm text-ink-soft">
-        Ustunlar: <b>№</b>, <b>Tadbirkorlar ro'yxati</b>, <b>JSHSHIR</b>, <b>Telefon</b>,
-        {" "}<b>Kv.metr</b>, <b>Infra stavkasi/summasi</b>, <b>Ijara stavkasi/summasi</b>.<br />
+        Ustunlar: <b>№</b>, <b>Do'kon raqami</b> (ixtiyoriy), <b>Tadbirkorlar ro'yxati</b>,
+        {" "}<b>JSHSHIR</b>, <b>Telefon</b>, <b>Kv.metr</b>, <b>Infra stavkasi/summasi</b>,
+        {" "}<b>Ijara stavkasi/summasi</b>.<br />
         <b>Infra summasi</b> to'ldirilgan qator — infra do'kon, <b>Ijara summasi</b> —
-        oddiy do'kon. Ega raqami xonalar soniga qarab ajratiladi:
+        oddiy do'kon; faqat ijarali fayl ham bo'ladi. Magazin ID uchun
+        {" "}<b>Do'kon raqami</b> ustuni ishlatiladi, u bo'lmasa <b>№</b>.
+        {" "}Ega raqami xonalar soniga qarab ajratiladi:
         {" "}<b>9 xonali → INN</b>, <b>14 xonali → JSHSHIR</b>.
         {" "}<span className="text-ink-faint">Komunal, Poteriya va Jami to'lov o'qilmaydi.</span>
       </p>
