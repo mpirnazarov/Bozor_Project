@@ -13,6 +13,9 @@ import type { ShopStatus } from "@/types/api";
 interface Props {
   pavilionId: number | null;
   pavilionName: string;
+  /** Blokning meta.shop_prefix qiymati — plitkadagi raqamni to'g'ri
+   *  ko'rsatish uchun (masalan CH-ML-112-a -> "112-a"). */
+  shopPrefix?: string;
   onClose: () => void;
   /** Magazin modali AYNAN shu davr uchun ochilishi kerak — aks holda blok
    *  modali bir oyni, magazin modali boshqasini ko'rsatadi. */
@@ -68,11 +71,27 @@ function demoSplit(totalDue: number, seed: number): { debt: number; paid: number
 // Keyinroq avtomatik hisobga o'tkazish uchun shu qiymatni `false` qiling.
 const USE_DASHBOARD_PROPORTION = false;
 
+/** Plitkada ko'rsatiladigan magazin raqami.
+ *
+ *  Odatda oxirgi "-" dan keyingi qism kifoya (04-1-1-001 -> "001").
+ *  Lekin raqamning O'ZIDA "-" bo'lishi mumkin (CH-ML-112-a, CH-ML-110-111) —
+ *  bunda blok prefiksi kesiladi, aks holda "a" deb ko'rinib qolardi.
+ */
+function shopNumber(shopId: string, prefix?: string): string {
+  for (const part of (prefix ?? "").split(/[/,]/)) {
+    const base = part.trim().replace(/-+$/, "");
+    if (!base || !shopId.startsWith(base)) continue;
+    const rest = shopId.slice(base.length).replace(/^-+/, "");
+    if (rest && rest.includes("-")) return rest;
+  }
+  return shopId.split("-").pop() ?? shopId;
+}
+
 
 /** partial -> unpaid (agar bayroq yoqilgan bo'lsa). Boshqa statuslar o'zgarmaydi. */
 
 
-export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop }: Props) {
+export function PavilionModal({ pavilionId, pavilionName, shopPrefix, onClose, onSelectShop }: Props) {
   const [service, setService] = useState<ServiceKey>("rent");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const t = useT();
@@ -319,7 +338,7 @@ export function PavilionModal({ pavilionId, pavilionName, onClose, onSelectShop 
           {/* Magazinlar to'plami — filtr highlight qiladi, qolganlari seriy */}
           <div className="grid grid-cols-[repeat(auto-fill,minmax(40px,1fr))] gap-1">
             {computed.map((c) => {
-              const num = c.shop.shop_id.split("-").pop();
+              const num = shopNumber(c.shop.shop_id, shopPrefix);
               const match = statusFilter === "all" || c.status === statusFilter;
               const color = STATUS_COLORS[c.status];
               return (

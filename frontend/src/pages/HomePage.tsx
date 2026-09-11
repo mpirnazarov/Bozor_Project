@@ -183,6 +183,7 @@ export function HomePage() {
       <PavilionModal
         pavilionId={activePavilion?.id ?? null}
         pavilionName={activePavilion?.display_name ?? ""}
+        shopPrefix={(activePavilion?.meta?.shop_prefix as string | undefined) ?? undefined}
         onClose={() => setActivePavilion(null)}
         onSelectShop={(id, y, m) => {
           // Pavilion modalni YOPMAYMIZ — magazin modali uning ustida ochiladi.
