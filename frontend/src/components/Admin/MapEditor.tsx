@@ -62,6 +62,9 @@ export function MapEditor() {
   const [mode, setMode] = useState<Mode>("select");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [points, setPoints] = useState<Pt[]>([]);
+  // Ko'p qismli region (masalan "ATROF" halqasi) qo'shimcha polygonlari.
+  // Muharrirda chizilmaydi, lekin saqlaganda yo'qolib ketmasligi kerak.
+  const [extraPolys, setExtraPolys] = useState<string[]>([]);
   const [name, setName] = useState("");
   const [labelText, setLabelText] = useState("");
   const [shopPrefix, setShopPrefix] = useState("");
@@ -92,6 +95,7 @@ export function MapEditor() {
     const p = pavilions?.find((x) => x.id === selectedId);
     if (!p) return;
     setPoints(parsePoints(p.polygon_points));
+    setExtraPolys((p.meta?.extra_polygons as string[] | undefined) ?? []);
     setName(p.display_name);
     setLabelText(p.display_text ?? "");
     setShopPrefix((p.meta?.shop_prefix as string | undefined) ?? "");
@@ -207,6 +211,7 @@ export function MapEditor() {
   function startNew() {
     setSelectedId(null);
     setPoints([]);
+    setExtraPolys([]);
     setName("");
     setLabelText("");
     setShopPrefix("");
@@ -223,6 +228,7 @@ export function MapEditor() {
   function startNewHidden() {
     setSelectedId(null);
     setPoints([]);
+    setExtraPolys([]);
     setName("");
     setLabelText("");
     setShopPrefix("");
@@ -280,6 +286,7 @@ export function MapEditor() {
       meta: {
         shop_prefix: isHidden ? undefined : (shopPrefix.trim() || undefined),
         show_label: showLabel,
+        extra_polygons: extraPolys.length > 0 ? extraPolys : undefined,
         is_hidden: isHidden,
         click_action: isInfra ? "shop_modal" : clickAction,
         target_shop_id: clickAction === "shop_modal" ? (targetShopId.trim() || undefined) : undefined,
@@ -581,24 +588,30 @@ export function MapEditor() {
               const pts = parsePoints(p.polygon_points);
               if (pts.length < 3) return null;
               const hidden = p.meta?.is_hidden === true;
+              // Ko'p qismli region — qo'shimcha polygonlari ham chiziladi
+              const more = (p.meta?.extra_polygons as string[] | undefined) ?? [];
               return (
-                <polygon
-                  key={p.id}
-                  points={pointsToStr(pts)}
-                  fill={hidden ? "#ffffff" : p.fill_color}
-                  fillOpacity={hidden ? 0.7 : 0.35}
-                  stroke={hidden ? "#94a3b8" : p.stroke_color}
-                  strokeWidth={2}
-                  strokeDasharray={hidden ? "6 4" : undefined}
-                  vectorEffect="non-scaling-stroke"
-                  style={{ cursor: "pointer", pointerEvents: mode === "draw" ? "none" : "auto" }}
-                  onClick={(e) => {
-                    if (mode === "select" && !pan.current.moved) {
-                      e.stopPropagation();
-                      setSelectedId(p.id);
-                    }
-                  }}
-                />
+                <g key={p.id}>
+                {[pointsToStr(pts), ...more].map((poly, i) => (
+                  <polygon
+                    key={i}
+                    points={poly}
+                    fill={hidden ? "#ffffff" : p.fill_color}
+                    fillOpacity={hidden ? 0.7 : 0.35}
+                    stroke={hidden ? "#94a3b8" : p.stroke_color}
+                    strokeWidth={2}
+                    strokeDasharray={hidden ? "6 4" : undefined}
+                    vectorEffect="non-scaling-stroke"
+                    style={{ cursor: "pointer", pointerEvents: mode === "draw" ? "none" : "auto" }}
+                    onClick={(e) => {
+                      if (mode === "select" && !pan.current.moved) {
+                        e.stopPropagation();
+                        setSelectedId(p.id);
+                      }
+                    }}
+                  />
+                ))}
+                </g>
               );
             })}
 
