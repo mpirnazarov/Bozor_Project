@@ -3,11 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getBillingSummary, getReportDetail } from "@/api/admin";
 import { fmtUZS } from "@/lib/utils";
 import { useT } from "@/i18n/useT";
-
-const MONTHS = [
-  "Yanvar", "Fevral", "Mart", "Aprel", "May", "Iyun",
-  "Iyul", "Avgust", "Sentabr", "Oktabr", "Noyabr", "Dekabr",
-];
+import { MONTHS, PeriodSwitch } from "@/components/ui/PeriodSwitch";
 
 export function BillingSummary() {
   const t = useT();
@@ -15,7 +11,7 @@ export function BillingSummary() {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, isFetching } = useQuery({
     queryKey: ["billing-summary", year, month],
     queryFn: () => getBillingSummary(year, month),
   });
@@ -31,28 +27,16 @@ export function BillingSummary() {
   // bo'lmasa arendaga qaytamiz.
   const overall = data?.grand_total ?? data?.total ?? { total_due: 0, total_paid: 0, total_debt: 0 };
 
-  const years = [now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2];
-
   return (
     <div>
-      {/* Oy/yil tanlash */}
-      <div className="mb-5 flex flex-wrap items-end gap-3">
-        <div>
-          <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-ink-faint">
-            {t("summary.year") || "Yil"}
-          </label>
-          <select className="input" value={year} onChange={(e) => setYear(Number(e.target.value))}>
-            {years.map((y) => <option key={y} value={y}>{y}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-ink-faint">
-            {t("summary.month") || "Oy"}
-          </label>
-          <select className="input" value={month} onChange={(e) => setMonth(Number(e.target.value))}>
-            {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
-          </select>
-        </div>
+      {/* Davr tanlash — blok/INN modallaridagi bilan bir xil ko'rinish */}
+      <div className="mb-5">
+        <PeriodSwitch
+          year={year}
+          month={month}
+          busy={isFetching}
+          onChange={(y, m) => { setYear(y); setMonth(m); }}
+        />
       </div>
 
       {isLoading && <div className="py-10 text-center text-ink-soft">Yuklanmoqda...</div>}
